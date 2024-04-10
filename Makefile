@@ -19,3 +19,4 @@ linux: fm
 
 clean:
 	rm -f fm fm.exe
+
