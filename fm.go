@@ -23,14 +23,18 @@ func run_fm(){
 
 	print_msg(10, 10, "Hello World")
 	termbox.Flush()
-	termbox.PollEvent()
 
 
-	termbox.Close()
+	// wait for Esc key...
+	for {
+		evt := termbox.PollEvent()
+		if evt.Type == termbox.EventKey && evt.Key == termbox.KeyEsc {
+			termbox.Close() 
+			break } }
+
 }
 
 func main(){
-	run_fm()
-}
+	run_fm() }
 
 // vim:set sw=4 ts=4 :
