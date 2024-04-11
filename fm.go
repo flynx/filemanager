@@ -7,13 +7,21 @@
 *		- keep position on update
 *			- wait for cur-line in update buffer
 *			- redraw relative to current line
+*		- command to filter/format line on update (cursor in/out/...)
 *	- key bindings:
 *		- reasonable defaults
 *		- config
 *		- action 
 *	- navigation:
-*		- cursor / line / pattern
+*		- cursor -- a-la vim
+*		- line -- a-la FAR
+*		- page -- a-la more/less
+*		- pattern -- a-la info
+*	- selection
+*	- copy/paste
 *	- 
+*
+* XXX need a way to show a box over the curent terminal content...
 *
 */
 
@@ -21,6 +29,9 @@ package main
 
 import "os"
 import "fmt"
+import "bufio"
+
+import "reflect"
 
 import "github.com/nsf/termbox-go"
 import "github.com/mattn/go-runewidth"
@@ -34,22 +45,46 @@ var ROWS, COLS int
 var COL_OFFSET = 0
 var ROW_OFFSET = 0
 
-var CURRENT_ROW= 0
+// current row relative to viewport...
+var CURRENT_ROW = 0
 var CURRENT_ROW_BUF []rune
+
+var SCROLL_THRESHOLD_TOP = 3
+var SCROLL_THRESHOLD_BOTTOM = 3
 
 // XXX cursor mode...
 //		- cursor
 //		- line
+//		- page
 //		- pattern
 
 
-var TEXT_BUFFER = [][]rune {
-	{'h','e','l','l','o',},
-	{'\t','w','o','r','l','d','\t','!',},
-	{},
-	{},
-	{'e','n','d','.'},
-}
+var TEXT_BUFFER = [][]rune{}
+
+// XXX need to set max line width...
+func file2buffer(filename string){
+	file, err := os.Open(filename)
+	if err != nil {
+		fmt.Println(err)
+		return }
+
+	defer file.Close()
+	CURRENT_ROW = 0
+	TEXT_BUFFER = [][]rune{}
+	n := 0
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan(){
+		line := scanner.Text()
+		TEXT_BUFFER = append(TEXT_BUFFER, []rune{})
+		for i := 0 ; i < len(line) ; i++ {
+			TEXT_BUFFER[n] = append(TEXT_BUFFER[n], rune(line[i])) }
+		n++ }
+	// keep at least one empty line in buffer...
+	// XXX should we do this here or in the looping code???
+	if n == 0 {
+		TEXT_BUFFER = append(TEXT_BUFFER, []rune{}) } }
+
+
 func display_text_buffer(){
 	var col, row int
 	for row = 0 ; row < ROWS ; row++ {
@@ -64,6 +99,7 @@ func display_text_buffer(){
 
 			// mark current row...
 			// XXX line mode...
+			// XXX need to hide cursor...
 			if CURRENT_ROW == row {
 				// XXX make style configurable...
 				termbox.SetBg(col, row, termbox.ColorDefault | termbox.AttrReverse | termbox.AttrBold)
@@ -80,25 +116,103 @@ func display_text_buffer(){
 				if TEXT_BUFFER[buf_row][buf_col] == '\t' {
 					col_offset += TAB_SIZE - (col % TAB_SIZE)
 					if col_offset == 0 {
-						col_offset = TAB_SIZE
-					}
+						col_offset = TAB_SIZE }
 
 				// normal characters...
 				} else {
-					termbox.SetChar(col + col_offset, row, TEXT_BUFFER[buf_row][buf_col]) }
-			} 
-		}
-	}
-}
+					termbox.SetChar(col + col_offset, row, TEXT_BUFFER[buf_row][buf_col]) } } } } }
 
 
 
 func print_msg(col, row int, msg string){
 	for _, c := range msg {
 		termbox.SetChar(col, row, c)
-		col += runewidth.RuneWidth(c)
-	}
+		col += runewidth.RuneWidth(c) } }
+
+
+
+// XXX since termbox is global, is there a point in holding any local 
+//		data here???
+// XXX can this be a map???
+type Actions struct {}
+
+func (this Actions) Up() bool {
+	// XXX option to skip rows at top...
+	if CURRENT_ROW > 0 && 
+			// account for SCROLL_THRESHOLD_TOP...
+			(CURRENT_ROW > SCROLL_THRESHOLD_TOP ||
+				ROW_OFFSET == 0) {
+		CURRENT_ROW-- 
+	// scroll the buffer...
+	} else {
+		this.ScrollUp() }
+	return true }
+func (this Actions) Down() bool {
+	if CURRENT_ROW < ROWS-1 && CURRENT_ROW + ROW_OFFSET < len(TEXT_BUFFER)-1 && 
+			// account for SCROLL_THRESHOLD_BOTTOM
+			(CURRENT_ROW < ROWS - SCROLL_THRESHOLD_BOTTOM - 1 ||
+				ROW_OFFSET + ROWS == len(TEXT_BUFFER)) {
+		CURRENT_ROW++ 
+	// scroll the buffer...
+	} else {
+		this.ScrollDown() }
+	return true }
+
+func (this Actions) ScrollUp() bool {
+	if ROW_OFFSET > 0 {
+		ROW_OFFSET-- }
+	return true }
+func (this Actions) ScrollDown() bool {
+	if ROW_OFFSET + ROWS < len(TEXT_BUFFER) {
+		ROW_OFFSET++ } 
+	return true }
+
+func (this Actions) Left() bool {
+	// XXX
+	return true }
+func (this Actions) Right() bool {
+	// XXX
+	return true }
+
+func (this Actions) ScrollLeft() bool {
+	// XXX
+	return true }
+func (this Actions) ScrollRight() bool {
+	// XXX
+	return true }
+
+func (this Actions) PageUp() bool {
+	// XXX
+	return true }
+func (this Actions) PageDown() bool {
+	// XXX
+	return true }
+
+func (this Actions) Top() bool {
+	// XXX
+	return true }
+func (this Actions) Bottom() bool {
+	// XXX
+	return true }
+
+func (this Actions) ToLine(line int) bool {
+	// XXX
+	return true }
+
+
+var ACTIONS Actions
+
+// XXX load this from config...
+// XXX how do we represent other keys???
+var KEYBINDINGS = map[termbox.Key]string {
+	termbox.KeyEsc: "Exit",
+	termbox.KeyArrowUp: "Up",
+	termbox.KeyArrowDown: "Down",
+	// XXX STUB -- change keys...
+	termbox.KeyArrowLeft: "ScrollUp",
+	termbox.KeyArrowRight: "ScrollDown",
 }
+
 
 func run_fm(){
 	err := termbox.Init()
@@ -106,9 +220,14 @@ func run_fm(){
 		fmt.Println(err)
 		os.Exit(1) }
 
+	// args...
+	if len(os.Args) > 1 {
+		file2buffer(os.Args[1])
+	}
 
 	for {
 		COLS, ROWS = termbox.Size()
+
 
 		termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
 
@@ -116,26 +235,24 @@ func run_fm(){
 
 		termbox.Flush()
 
+
 		evt := termbox.PollEvent()
+		// handle mouse...
+		// XXX
+
+		// handle keyboard...
 		if evt.Type == termbox.EventKey {
-			// Esc -> exit
-			if  evt.Key == termbox.KeyEsc {
-				termbox.Close() 
-				break } 
+			if action, exists := KEYBINDINGS[evt.Key] ; exists {
+				// builtin actions...
+				if action == "Exit" {
+					termbox.Close()
+					break }
 
-			if evt.Key == termbox.KeyArrowUp {
-				// XXX option to skip rows at top...
-				if CURRENT_ROW > 0 {
-					CURRENT_ROW-- } 
-				// XXX scroll the buffer...
-			}
-
-			if evt.Key == termbox.KeyArrowDown {
-				if CURRENT_ROW < ROWS-1 && CURRENT_ROW + ROW_OFFSET < len(TEXT_BUFFER)-1 {
-					CURRENT_ROW++ } 
-				// XXX scroll the buffer...
-			}
-		} }
+				// actions...
+				res := reflect.ValueOf(&ACTIONS).MethodByName(action).Call([]reflect.Value{}) 
+				// exit if action returns false...
+				if value, ok := res[0].Interface().(bool) ; ok && !value  {
+					break } } } }
 
 }
 
