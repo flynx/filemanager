@@ -63,7 +63,7 @@ var SCROLL_THRESHOLD_BOTTOM = 3
 
 
 var TEXT_BUFFER_WIDTH = 0
-var TEXT_BUFFER = [][]rune{}
+var TEXT_BUFFER = [][]rune{ {} }
 
 func file2buffer(filename string){
 	file, err := os.Open(filename)
@@ -263,6 +263,9 @@ var KEYBINDINGS = map[termbox.Key]string {
 	termbox.KeyPgdn: "PageDown",
 	termbox.KeyHome: "Top",
 	termbox.KeyEnd: "Bottom",
+
+	// XXX test non-existing method...
+	termbox.KeyInsert: "Moo",
 }
 
 
@@ -274,8 +277,7 @@ func run_fm(){
 
 	// args...
 	if len(os.Args) > 1 {
-		file2buffer(os.Args[1])
-	}
+		file2buffer(os.Args[1]) }
 
 	for {
 		COLS, ROWS = termbox.Size()
@@ -301,8 +303,12 @@ func run_fm(){
 					break }
 
 				// actions...
-				// XXX test if action exists....
-				res := reflect.ValueOf(&ACTIONS).MethodByName(action).Call([]reflect.Value{}) 
+				method := reflect.ValueOf(&ACTIONS).MethodByName(action)
+				// test if action exists....
+				if ! method.IsValid() {
+					// XXX report error...
+					continue }
+				res := method.Call([]reflect.Value{}) 
 				// exit if action returns false...
 				if value, ok := res[0].Interface().(bool) ; ok && !value  {
 					break } } } }
