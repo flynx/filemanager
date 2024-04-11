@@ -19,9 +19,12 @@
 *		- pattern -- a-la info
 *	- selection
 *	- copy/paste
-*	- 
+*	- cells
 *
 * XXX need a way to show a box over the curent terminal content...
+* XXX might be fun to add an inline mode -- if # of lines is less that 
+*		term height Println(..) them and then play with that region of 
+*		the terminal, otherwise open normally...
 *
 */
 
@@ -59,9 +62,9 @@ var SCROLL_THRESHOLD_BOTTOM = 3
 //		- pattern
 
 
+var TEXT_BUFFER_WIDTH = 0
 var TEXT_BUFFER = [][]rune{}
 
-// XXX need to set max line width...
 func file2buffer(filename string){
 	file, err := os.Open(filename)
 	if err != nil {
@@ -69,6 +72,7 @@ func file2buffer(filename string){
 		return }
 
 	defer file.Close()
+	// XXX set this to a logical value...
 	CURRENT_ROW = 0
 	TEXT_BUFFER = [][]rune{}
 	n := 0
@@ -76,8 +80,12 @@ func file2buffer(filename string){
 	for scanner.Scan(){
 		line := scanner.Text()
 		TEXT_BUFFER = append(TEXT_BUFFER, []rune{})
-		for i := 0 ; i < len(line) ; i++ {
+		var i int
+		for i = 0 ; i < len(line) ; i++ {
 			TEXT_BUFFER[n] = append(TEXT_BUFFER[n], rune(line[i])) }
+		// set max line width...
+		if i > TEXT_BUFFER_WIDTH {
+			TEXT_BUFFER_WIDTH = i }
 		n++ }
 	// keep at least one empty line in buffer...
 	// XXX should we do this here or in the looping code???
@@ -85,6 +93,7 @@ func file2buffer(filename string){
 		TEXT_BUFFER = append(TEXT_BUFFER, []rune{}) } }
 
 
+// XXX specify a box/cell to draw in...
 func display_text_buffer(){
 	var col, row int
 	for row = 0 ; row < ROWS ; row++ {
@@ -130,12 +139,24 @@ func print_msg(col, row int, msg string){
 		col += runewidth.RuneWidth(c) } }
 
 
+type Cell struct {
+	top int
+	left int
+	bottom int
+	right int
+	cols int
+	rows int
+
+	// XXX spec fg, bg, border...
+}
+
 
 // XXX since termbox is global, is there a point in holding any local 
 //		data here???
 // XXX can this be a map???
 type Actions struct {}
 
+// vertical navigation...
 func (this Actions) Up() bool {
 	// XXX option to skip rows at top...
 	if CURRENT_ROW > 0 && 
@@ -167,6 +188,39 @@ func (this Actions) ScrollDown() bool {
 		ROW_OFFSET++ } 
 	return true }
 
+func (this Actions) PageUp() bool {
+	if ROW_OFFSET > 0 {
+		ROW_OFFSET -= ROWS 
+		if ROW_OFFSET < 0 {
+			this.Top() } 
+	} else if ROW_OFFSET == 0 {
+		this.Top() } 
+	return true }
+func (this Actions) PageDown() bool {
+	offset := len(TEXT_BUFFER) - ROWS
+	if ROW_OFFSET < offset {
+		ROW_OFFSET += ROWS 
+		if ROW_OFFSET > offset {
+			this.Bottom() } 
+	} else if ROW_OFFSET == offset {
+		this.Bottom() } 
+	return true }
+
+func (this Actions) Top() bool {
+	if ROW_OFFSET == 0 {
+		CURRENT_ROW = 0 
+	} else {
+		ROW_OFFSET = 0 }
+	return true }
+func (this Actions) Bottom() bool {
+	offset := len(TEXT_BUFFER) - ROWS 
+	if ROW_OFFSET == offset {
+		CURRENT_ROW = ROWS - 1
+	} else {
+		ROW_OFFSET = len(TEXT_BUFFER) - ROWS }
+	return true }
+
+// horizontal navigation...
 func (this Actions) Left() bool {
 	// XXX
 	return true }
@@ -181,17 +235,10 @@ func (this Actions) ScrollRight() bool {
 	// XXX
 	return true }
 
-func (this Actions) PageUp() bool {
+func (this Actions) LeftEdge() bool {
 	// XXX
 	return true }
-func (this Actions) PageDown() bool {
-	// XXX
-	return true }
-
-func (this Actions) Top() bool {
-	// XXX
-	return true }
-func (this Actions) Bottom() bool {
+func (this Actions) RightEdge() bool {
 	// XXX
 	return true }
 
@@ -211,6 +258,11 @@ var KEYBINDINGS = map[termbox.Key]string {
 	// XXX STUB -- change keys...
 	termbox.KeyArrowLeft: "ScrollUp",
 	termbox.KeyArrowRight: "ScrollDown",
+
+	termbox.KeyPgup: "PageUp",
+	termbox.KeyPgdn: "PageDown",
+	termbox.KeyHome: "Top",
+	termbox.KeyEnd: "Bottom",
 }
 
 
@@ -249,6 +301,7 @@ func run_fm(){
 					break }
 
 				// actions...
+				// XXX test if action exists....
 				res := reflect.ValueOf(&ACTIONS).MethodByName(action).Call([]reflect.Value{}) 
 				// exit if action returns false...
 				if value, ok := res[0].Interface().(bool) ; ok && !value  {
