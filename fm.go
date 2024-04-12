@@ -32,6 +32,8 @@ package main
 
 import "os"
 import "fmt"
+//import "strconv"
+//import "unicode"
 import "bufio"
 
 import "reflect"
@@ -269,9 +271,65 @@ var KEYBINDINGS = map[termbox.Key]string {
 }
 
 
+// NOTE: this mirrors termbox's Key*/Mouse* constants (0xFFFF - evt.Key = index)...
+/*
+var key_map = []string{
+	"F1", "F2", "F3", "F4", "F5", "F6", 
+	"F7", "F8", "F9", "F10", "F11", "F12",
+	"Insert", "Delete", "Home", "End", 
+	// XXX add aliases...
+	"PgUp", "PgDown",
+	"Up", "Down", "Left", "Right",
+	// mouse...
+	"MouseLeft", "MouseMiddle", "MouseRight",
+	"MouseRelease",
+	"MouseWheelUp", "MouseWheelDown",
+}
+func evtKey2Seq(evt termbox.Event) []string {
+	key_seq := []string{}
+
+	// XXX form key...
+	//		- evt.Key		- key constants (special keys) / 0
+	//		- evt.Ch		- rune / 0
+	//		- evt.Mod		- modifiers / 0
+	//		form a list of candidates (as in keyboard.js) and 
+	//		test each in order, e.g.:
+	//			alt-ctrl-a
+	//			ctrl-alt-a
+	//			ctrl-a
+	//			alt-a
+	//			a
+	// XXX need langmap to allow input in other languages -- piggyback on vim?
+	
+	shift := false
+	ctrl := false
+	alt := evt.Mod == termbox.ModAlt
+	meta := false
+	var key string
+	var mkey string
+	switch {
+		case evt.Ch != 0:
+			shift = unicode.IsUpper(evt.Ch)
+			// XXX ctrl???
+			// XXX
+			key = string(unicode.ToLower(evt.Ch))
+			// XXX get ascii key -- keymap...
+			if len(key) > 1 {
+				mkey = "" }
+		case evt.Key <= termbox.KeyF1 && evt.Key >= termbox.MouseWheelDown:
+			key := key_map[0xFFFF - evt.Key]
+		// XXX
+	}
+	//for _, key := range key_seq {
+	//	// XXX
+	//}
+
+	return key_seq }
+//*/
+
+
 func run_fm(){
-	err := termbox.Init()
-	if err != nil {
+	if err := termbox.Init(); err != nil {
 		fmt.Println(err)
 		os.Exit(1) }
 
@@ -296,6 +354,7 @@ func run_fm(){
 
 		// handle keyboard...
 		if evt.Type == termbox.EventKey {
+			// handle key...
 			if action, exists := KEYBINDINGS[evt.Key] ; exists {
 				// builtin actions...
 				if action == "Exit" {
