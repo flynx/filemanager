@@ -1,5 +1,11 @@
 /*
-* TODO:
+* TODO (stage 1):
+*	- basic navigation -- DONE
+*	- keybindings -- DONE
+*	- command to content (-c CMD or stdin)
+*	- action to command (-key:enter CMD)
+*
+*
 *	- buffer:
 *		- from stdin
 *		- from command
@@ -32,6 +38,7 @@ package main
 
 import "os"
 import "fmt"
+//import "flag"
 import "log"
 import "strings"
 import "unicode"
@@ -409,6 +416,7 @@ func fm(){
 			case *tcell.EventMouse:
 				buttons := evt.Buttons()
 				// XXX handle double click...
+				// XXX handle modifiers...
 				if buttons & tcell.Button1 != 0 || buttons & tcell.Button2 != 0 {
 					_, CURRENT_ROW = evt.Position()
 
