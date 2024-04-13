@@ -33,7 +33,7 @@ package main
 import "os"
 import "fmt"
 //import "strconv"
-//import "unicode"
+import "unicode"
 import "bufio"
 
 import "reflect"
@@ -66,6 +66,33 @@ var SCROLL_THRESHOLD_BOTTOM = 3
 
 var TEXT_BUFFER_WIDTH = 0
 var TEXT_BUFFER = [][]rune{ {} }
+
+var SELECTION_BUFFER = [][]rune{}
+
+// XXX load this from config...
+// XXX how do we represent other keys???
+var KEYBINDINGS = map[string]string {
+	"Esc": "Exit",
+	"q": "Exit",
+	//"Q": "Exit",
+	//"shift+q": "Exit",
+
+	"Up": "Up",
+	"Down": "Down",
+	// XXX this will not yet work -- do not know how to get midifier status...
+	"alt+Up": "ScrollUp",
+	"alt+Down": "ScrollDown",
+
+	"PgUp": "PageUp",
+	"PgDown": "PageDown",
+	"Home": "Top",
+	"End": "Bottom",
+
+	// XXX test non-existing method...
+	"Insert": "Moo",
+}
+
+
 
 func file2buffer(filename string){
 	file, err := os.Open(filename)
@@ -159,6 +186,7 @@ type Cell struct {
 type Actions struct {}
 
 // vertical navigation...
+// XXX changing only CURRENT_ROW can be donwe by redrawing only two lines...
 func (this Actions) Up() bool {
 	// XXX option to skip rows at top...
 	if CURRENT_ROW > 0 && 
@@ -251,28 +279,7 @@ func (this Actions) ToLine(line int) bool {
 
 var ACTIONS Actions
 
-// XXX load this from config...
-// XXX how do we represent other keys???
-var KEYBINDINGS = map[termbox.Key]string {
-	termbox.KeyEsc: "Exit",
-	termbox.KeyArrowUp: "Up",
-	termbox.KeyArrowDown: "Down",
-	// XXX STUB -- change keys...
-	termbox.KeyArrowLeft: "ScrollUp",
-	termbox.KeyArrowRight: "ScrollDown",
-
-	termbox.KeyPgup: "PageUp",
-	termbox.KeyPgdn: "PageDown",
-	termbox.KeyHome: "Top",
-	termbox.KeyEnd: "Bottom",
-
-	// XXX test non-existing method...
-	termbox.KeyInsert: "Moo",
-}
-
-
 // NOTE: this mirrors termbox's Key*/Mouse* constants (0xFFFF - evt.Key = index)...
-/*
 var key_map = []string{
 	"F1", "F2", "F3", "F4", "F5", "F6", 
 	"F7", "F8", "F9", "F10", "F11", "F12",
@@ -301,31 +308,40 @@ func evtKey2Seq(evt termbox.Event) []string {
 	//			a
 	// XXX need langmap to allow input in other languages -- piggyback on vim?
 	
-	shift := false
-	ctrl := false
-	alt := evt.Mod == termbox.ModAlt
-	meta := false
 	var key string
-	var mkey string
+	//var mkey string
+	mod := []string{}
+	shifted := false
 	switch {
 		case evt.Ch != 0:
-			shift = unicode.IsUpper(evt.Ch)
-			// XXX ctrl???
+			// shift...
+			if unicode.IsUpper(evt.Ch) {
+				shifted = true
+				mod = append(mod, "shift") }
+			// XXX alt/ctrl/meta???
 			// XXX
 			key = string(unicode.ToLower(evt.Ch))
-			// XXX get ascii key -- keymap...
-			if len(key) > 1 {
-				mkey = "" }
+			//if len(key) > 1 {
+			//	// XXX get ascii key -- keymap...
+			//	mkey = "" }
+		// XXX use a map here too...
+		case evt.Key == termbox.KeyEsc:
+			key = "Esc"
 		case evt.Key <= termbox.KeyF1 && evt.Key >= termbox.MouseWheelDown:
-			key := key_map[0xFFFF - evt.Key]
+			key = key_map[0xFFFF - evt.Key]
 		// XXX
 	}
-	//for _, key := range key_seq {
-	//	// XXX
-	//}
+
+	// XXX shuffle mod keys...
+
+	for _, m := range mod {
+		key_seq = append(key_seq, m +"+"+ key) }
+	// uppercase letter...
+	if shifted {
+		key_seq = append(key_seq, string(evt.Ch)) }
+	key_seq = append(key_seq, key)
 
 	return key_seq }
-//*/
 
 
 func run_fm(){
@@ -354,25 +370,26 @@ func run_fm(){
 
 		// handle keyboard...
 		if evt.Type == termbox.EventKey {
-			// handle key...
-			if action, exists := KEYBINDINGS[evt.Key] ; exists {
-				// builtin actions...
-				if action == "Exit" {
-					termbox.Close()
-					break }
+			for _, key := range evtKey2Seq(evt) {
+				// handle key...
+				if action, exists := KEYBINDINGS[key] ; exists {
+					// builtin actions...
+					if action == "Exit" {
+						termbox.Close()
+						return }
 
-				// actions...
-				method := reflect.ValueOf(&ACTIONS).MethodByName(action)
-				// test if action exists....
-				if ! method.IsValid() {
-					// XXX report error...
-					continue }
-				res := method.Call([]reflect.Value{}) 
-				// exit if action returns false...
-				if value, ok := res[0].Interface().(bool) ; ok && !value  {
-					break } } } }
-
-}
+					// actions...
+					method := reflect.ValueOf(&ACTIONS).MethodByName(action)
+					// test if action exists....
+					if ! method.IsValid() {
+						// XXX report error...
+						continue }
+					res := method.Call([]reflect.Value{}) 
+					// exit if action returns false...
+					if value, ok := res[0].Interface().(bool) ; ok && !value  {
+						break } 
+					// only the first match is valid -- ignore the rest...
+					break } } } } }
 
 func main(){
 	run_fm() }
