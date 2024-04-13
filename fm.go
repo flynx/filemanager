@@ -32,14 +32,13 @@ package main
 
 import "os"
 import "fmt"
-//import "strconv"
+import "log"
+import "strings"
 import "unicode"
 import "bufio"
-
 import "reflect"
 
-import "github.com/nsf/termbox-go"
-import "github.com/mattn/go-runewidth"
+import "github.com/gdamore/tcell/v2"
 
 
 
@@ -79,19 +78,18 @@ var KEYBINDINGS = map[string]string {
 
 	"Up": "Up",
 	"Down": "Down",
-	// XXX this will not yet work -- do not know how to get midifier status...
-	"alt+Up": "ScrollUp",
-	"alt+Down": "ScrollDown",
+
+	"WheelUp": "ScrollUp",
+	"WheelDown": "ScrollDown",
 
 	"PgUp": "PageUp",
-	"PgDown": "PageDown",
+	"PgDn": "PageDown",
 	"Home": "Top",
 	"End": "Bottom",
 
 	// XXX test non-existing method...
 	"Insert": "Moo",
 }
-
 
 
 func file2buffer(filename string){
@@ -122,15 +120,17 @@ func file2buffer(filename string){
 		TEXT_BUFFER = append(TEXT_BUFFER, []rune{}) } }
 
 
-// XXX specify a box/cell to draw in...
-func display_text_buffer(){
+// XXX not sure if we need style arg here...
+func drawScreen(screen tcell.Screen, style tcell.Style){
+	// XXX
+	screen.Clear()
 	var col, row int
 	for row = 0 ; row < ROWS ; row++ {
 		var buf_row = row + ROW_OFFSET
 		var col_offset = 0
 
-		if(CURRENT_ROW == row){
-			CURRENT_ROW_BUF = TEXT_BUFFER[buf_row] }
+		//if(CURRENT_ROW == row){
+		//	CURRENT_ROW_BUF = TEXT_BUFFER[buf_row] }
 
 		for col = 0 ; col < COLS ; col++ {
 			var buf_col = col + COL_OFFSET
@@ -139,47 +139,30 @@ func display_text_buffer(){
 			// XXX line mode...
 			// XXX need to hide cursor...
 			if CURRENT_ROW == row {
-				// XXX make style configurable...
-				termbox.SetBg(col, row, termbox.ColorDefault | termbox.AttrReverse | termbox.AttrBold)
+				style = style.Reverse(true)
 			} else {
-				termbox.SetBg(col, row, termbox.ColorDefault) }
+				style = style.Reverse(false) }
 
-			// XXX can't break lines before an operator???!!
-			if buf_row >= 0 && buf_row < len(TEXT_BUFFER) && 
-					buf_col >= 0 && buf_col < len(TEXT_BUFFER[buf_row]) {
+			// normalize...
+			line := []rune{}
+			if buf_row < len(TEXT_BUFFER) {
+				line = TEXT_BUFFER[buf_row] }
+			c := ' '
+			if buf_col < len(line) {
+				c = line[buf_col] } 
 
-				// XXX handle escape sequences (basic state machine -- set bg/fg/...)???
+			// tab -- offset output to next tabstop... 
+			if c == '\t' {
+				col_offset += TAB_SIZE - (col % TAB_SIZE)
+				for i := 0 ; i <= col_offset ; i++ {
+					screen.SetContent(col+i, row, ' ', nil, style) }
 
-				// tab -- offset output to next tabstop... 
-				if TEXT_BUFFER[buf_row][buf_col] == '\t' {
-					col_offset += TAB_SIZE - (col % TAB_SIZE)
-					if col_offset == 0 {
-						col_offset = TAB_SIZE }
-
-				// normal characters...
-				} else {
-					termbox.SetChar(col + col_offset, row, TEXT_BUFFER[buf_row][buf_col]) } } } } }
-
-
-
-func print_msg(col, row int, msg string){
-	for _, c := range msg {
-		termbox.SetChar(col, row, c)
-		col += runewidth.RuneWidth(c) } }
+			// normal characters...
+			} else {
+				screen.SetContent(col + col_offset, row, c, nil, style) } } } }
 
 
-type Cell struct {
-	top int
-	left int
-	bottom int
-	right int
-	cols int
-	rows int
-
-	// XXX spec fg, bg, border...
-}
-
-
+// Actions...
 // XXX since termbox is global, is there a point in holding any local 
 //		data here???
 // XXX can this be a map???
@@ -188,7 +171,6 @@ type Actions struct {}
 // vertical navigation...
 // XXX changing only CURRENT_ROW can be donwe by redrawing only two lines...
 func (this Actions) Up() bool {
-	// XXX option to skip rows at top...
 	if CURRENT_ROW > 0 && 
 			// account for SCROLL_THRESHOLD_TOP...
 			(CURRENT_ROW > SCROLL_THRESHOLD_TOP ||
@@ -209,6 +191,8 @@ func (this Actions) Down() bool {
 		this.ScrollDown() }
 	return true }
 
+// XXX should these track CURRENT_ROW relative to screen (current) or 
+//		relative to content???
 func (this Actions) ScrollUp() bool {
 	if ROW_OFFSET > 0 {
 		ROW_OFFSET-- }
@@ -276,122 +260,170 @@ func (this Actions) ToLine(line int) bool {
 	// XXX
 	return true }
 
-
 var ACTIONS Actions
 
-// NOTE: this mirrors termbox's Key*/Mouse* constants (0xFFFF - evt.Key = index)...
-var key_map = []string{
-	"F1", "F2", "F3", "F4", "F5", "F6", 
-	"F7", "F8", "F9", "F10", "F11", "F12",
-	"Insert", "Delete", "Home", "End", 
-	// XXX add aliases...
-	"PgUp", "PgDown",
-	"Up", "Down", "Left", "Right",
-	// mouse...
-	"MouseLeft", "MouseMiddle", "MouseRight",
-	"MouseRelease",
-	"MouseWheelUp", "MouseWheelDown",
-}
-func evtKey2Seq(evt termbox.Event) []string {
+func callAction(name string) bool {
+	// builtin actions...
+	if name == "Exit" {
+		return false }
+	// actions...
+	method := reflect.ValueOf(&ACTIONS).MethodByName(name)
+	// test if action exists....
+	if ! method.IsValid() {
+		log.Println("Error: Unknown action:", name) 
+		return true }
+	res := method.Call([]reflect.Value{}) 
+	// exit if action returns false...
+	if value, ok := res[0].Interface().(bool) ; ok && !value  {
+		return false } 
+	// only the first match is valid -- ignore the rest...
+	return true }
+func callHandler(key string) bool {
+	if action, exists := KEYBINDINGS[key] ; exists {
+		return callAction(action) }
+	return true }
+
+
+func evt2keySeq(evt tcell.EventKey) []string {
 	key_seq := []string{}
-
-	// XXX form key...
-	//		- evt.Key		- key constants (special keys) / 0
-	//		- evt.Ch		- rune / 0
-	//		- evt.Mod		- modifiers / 0
-	//		form a list of candidates (as in keyboard.js) and 
-	//		test each in order, e.g.:
-	//			alt-ctrl-a
-	//			ctrl-alt-a
-	//			ctrl-a
-	//			alt-a
-	//			a
-	// XXX need langmap to allow input in other languages -- piggyback on vim?
-	
-	var key string
-	//var mkey string
-	mod := []string{}
+	mods := []string{}
 	shifted := false
-	switch {
-		case evt.Ch != 0:
-			// shift...
-			if unicode.IsUpper(evt.Ch) {
-				shifted = true
-				mod = append(mod, "shift") }
-			// XXX alt/ctrl/meta???
-			// XXX
-			key = string(unicode.ToLower(evt.Ch))
-			//if len(key) > 1 {
-			//	// XXX get ascii key -- keymap...
-			//	mkey = "" }
-		// XXX use a map here too...
-		case evt.Key == termbox.KeyEsc:
-			key = "Esc"
-		case evt.Key <= termbox.KeyF1 && evt.Key >= termbox.MouseWheelDown:
-			key = key_map[0xFFFF - evt.Key]
-		// XXX
-	}
 
-	// XXX shuffle mod keys...
+	var key, Key string
 
-	for _, m := range mod {
+	mod, k, r := evt.Modifiers(), evt.Key(), evt.Rune()
+
+	// handle key and shift state...
+	if k == tcell.KeyRune {
+		if unicode.IsUpper(r) {
+			shifted = true
+			Key = string(r)
+			mods = append(mods, "shift") }
+		key = string(unicode.ToLower(r))
+	// special keys...
+	} else if k > tcell.KeyRune {
+		key = evt.Name()
+	// ascii...
+	} else {
+		if unicode.IsUpper(rune(k)) {
+			shifted = true 
+			Key = string(k)
+			mods = append(mods, "shift") } 
+		key = strings.ToLower(string(k)) } 
+
+	if mod & tcell.ModCtrl != 0 {
+		mods = append(mods, "ctrl") }
+	if mod & tcell.ModAlt != 0 {
+		mods = append(mods, "alt") }
+	if mod & tcell.ModMeta != 0 {
+		mods = append(mods, "meta") }
+	if !shifted && mod & tcell.ModShift != 0 {
+		mods = append(mods, "shift") }
+
+	// XXX generate all mod combinations...
+	// XXX sort by length...
+	// XXX
+
+	// XXX STUB...
+	for _, m := range mods {
 		key_seq = append(key_seq, m +"+"+ key) }
 	// uppercase letter...
 	if shifted {
-		key_seq = append(key_seq, string(evt.Ch)) }
+		key_seq = append(key_seq, Key) }
 	key_seq = append(key_seq, key)
 
 	return key_seq }
 
 
-func run_fm(){
-	if err := termbox.Init(); err != nil {
-		fmt.Println(err)
-		os.Exit(1) }
+func fm(){
+	defStyle := tcell.StyleDefault.
+		Background(tcell.ColorReset).
+		Foreground(tcell.ColorReset)
+	//boxStyle := tcell.StyleDefault.
+	//	Foreground(tcell.ColorWhite).
+	//	Background(tcell.ColorPurple)
+
+	// setup...
+	screen, err := tcell.NewScreen()
+	if err != nil {
+		log.Fatalf("%+v", err) }
+	if err := screen.Init(); err != nil {
+		log.Fatalf("%+v", err) }
+	screen.SetStyle(defStyle)
+	screen.EnableMouse()
+	screen.EnablePaste()
+	screen.Clear()
+
+	// handle panics...
+	quit := func() {
+		maybePanic := recover()
+		screen.Fini()
+		if maybePanic != nil {
+			panic(maybePanic) } }
+	defer quit()
 
 	// args...
+	// XXX
 	if len(os.Args) > 1 {
 		file2buffer(os.Args[1]) }
 
 	for {
-		COLS, ROWS = termbox.Size()
 
+		COLS, ROWS = screen.Size()
 
-		termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
+		// XXX rename...
+		drawScreen(screen, defStyle)
 
-		display_text_buffer()
+		screen.Show()
 
-		termbox.Flush()
+		evt := screen.PollEvent()
 
+		switch evt := evt.(type) {
+			case *tcell.EventResize:
+				// keep the selection in the same spot...
+				COLS, ROWS = screen.Size()
+				offset := ROWS - SCROLL_THRESHOLD_BOTTOM - 1 
+				// bottom...
+				if CURRENT_ROW > offset {
+					// if window too small keep selection in the middle...
+					if ROWS < SCROLL_THRESHOLD_TOP + SCROLL_THRESHOLD_BOTTOM {
+						// make this proportional...
+						r := (SCROLL_THRESHOLD_TOP + SCROLL_THRESHOLD_BOTTOM + 1) / SCROLL_THRESHOLD_BOTTOM
+						offset = ROWS / r }
+					delta := CURRENT_ROW - offset
+					// move selection and content together...
+					CURRENT_ROW = offset
+					ROW_OFFSET += delta 
+				} else {
+					// XXX do we need this???
+					screen.Sync() }
 
-		evt := termbox.PollEvent()
-		// handle mouse...
-		// XXX
+			case *tcell.EventKey:
+				for _, key := range evt2keySeq(*evt) {
+					if ! callHandler(key) {
+						return } }
+				// defaults...
+				if evt.Key() == tcell.KeyEscape || evt.Key() == tcell.KeyCtrlC {
+					return }
 
-		// handle keyboard...
-		if evt.Type == termbox.EventKey {
-			for _, key := range evtKey2Seq(evt) {
-				// handle key...
-				if action, exists := KEYBINDINGS[key] ; exists {
-					// builtin actions...
-					if action == "Exit" {
-						termbox.Close()
+			case *tcell.EventMouse:
+				buttons := evt.Buttons()
+				// XXX handle double click...
+				if buttons & tcell.Button1 != 0 || buttons & tcell.Button2 != 0 {
+					_, CURRENT_ROW = evt.Position()
+
+				} else if buttons & tcell.WheelUp != 0 {
+					if ! callHandler("WheelUp") {
 						return }
 
-					// actions...
-					method := reflect.ValueOf(&ACTIONS).MethodByName(action)
-					// test if action exists....
-					if ! method.IsValid() {
-						// XXX report error...
-						continue }
-					res := method.Call([]reflect.Value{}) 
-					// exit if action returns false...
-					if value, ok := res[0].Interface().(bool) ; ok && !value  {
-						break } 
-					// only the first match is valid -- ignore the rest...
-					break } } } } }
+				} else if buttons & tcell.WheelDown != 0 {
+					if ! callHandler("WheelDown") {
+						return } }
+
+		} } }
+
 
 func main(){
-	run_fm() }
+	fm() }
 
-// vim:set sw=4 ts=4 :
+// vim:set sw=4 ts=4 nowrap :
