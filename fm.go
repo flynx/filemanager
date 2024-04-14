@@ -21,7 +21,8 @@
 *		- status
 *		- title
 *		- borders
-*	- config / defaults
+*		- colors (???)
+*	- config file / defaults
 *
 *
 * Data flow
@@ -61,9 +62,8 @@ package main
 
 import "os"
 import "os/exec"
-import "path"
+//import "path"
 import "fmt"
-//import "flag"
 import "log"
 import "bytes"
 import "strings"
@@ -72,6 +72,7 @@ import "bufio"
 import "reflect"
 import "regexp"
 
+import "github.com/jessevdk/go-flags"
 import "github.com/gdamore/tcell/v2"
 
 
@@ -305,12 +306,7 @@ func (this Actions) Update() bool {
 var ACTIONS Actions
 
 var ENV = map[string]string {}
-
-//func buildEnv(){}
-//func readEnv(){}
-
 var isVarCommand = regexp.MustCompile(`^[a-zA-Z_]+=`)
-
 func callAction(action string) bool {
 	// builtin actions...
 	if action == "Exit" {
@@ -386,6 +382,7 @@ func callHandler(key string) bool {
 	return true }
 
 
+// XXX modifier building in is not done yet...
 func evt2keySeq(evt tcell.EventKey) []string {
 	key_seq := []string{}
 	mods := []string{}
@@ -468,8 +465,8 @@ func fm(){
 	// XXX
 
 	// file...
-	if len(os.Args) > 1 {
-		file, err := os.Open(os.Args[1])
+	if INPUT_FILE != "" {
+		file, err := os.Open(INPUT_FILE)
 		if err != nil {
 			fmt.Println(err)
 			return }
@@ -542,16 +539,34 @@ func fm(){
 		} } }
 
 
+var INPUT_FILE string
+
 func main(){
+	// command line args...
+	var opts struct {
+		InputFile string `short:"i" long:"input" value-name:"FILE" description:"Input file"`
+		LogFile string `short:"l" long:"log" value-name:"FILE" description:"Log file"`
+	}
+	_, err := flags.Parse(&opts)
+	if err != nil {
+		if flags.WroteHelp(err) {
+			return }
+		// XXX
+		os.Exit(1) }
+
+	// globals...
+	INPUT_FILE = opts.InputFile
+
     // open log file
-    logFile, err := os.OpenFile(
-		"./"+ path.Base(os.Args[0]) +".log", 
-		os.O_APPEND|os.O_RDWR|os.O_CREATE, 0644)
-    if err != nil {
-        log.Panic(err) }
-    defer logFile.Close()
-    // Set log out put and enjoy :)
-    log.SetOutput(logFile)
+	if opts.LogFile != "" {
+		logFile, err := os.OpenFile(
+			opts.LogFile,
+			os.O_APPEND|os.O_RDWR|os.O_CREATE, 0644)
+		if err != nil {
+			log.Panic(err) }
+		defer logFile.Close()
+		// Set log out put and enjoy :)
+		log.SetOutput(logFile) }
 
 	fm() }
 
