@@ -547,15 +547,17 @@ func main(){
 		InputFile string `short:"i" long:"input" value-name:"FILE" description:"Input file"`
 		LogFile string `short:"l" long:"log" value-name:"FILE" description:"Log file"`
 	}
-	_, err := flags.Parse(&opts)
+	args, err := flags.Parse(&opts)
 	if err != nil {
 		if flags.WroteHelp(err) {
 			return }
-		// XXX
+		log.Println("Error:", err)
 		os.Exit(1) }
 
 	// globals...
 	INPUT_FILE = opts.InputFile
+	if INPUT_FILE == "" && len(args) > 0 {
+		INPUT_FILE = args[0] }
 
     // open log file
 	if opts.LogFile != "" {
