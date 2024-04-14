@@ -9,7 +9,7 @@
 *			-c CMD
 *		- update (action: re-run startup command)
 *		- action
-*			config -- DONE
+*			keybinding -- DONE
 *			-key:<key> CMD
 *		- transform (line -> screen line)
 *		- output (???)
