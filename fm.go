@@ -1,10 +1,33 @@
 /*
-* TODO (stage 1):
+* TODO (stage 1: basics):
 *	- basic navigation -- DONE
 *	- keybindings -- DONE
-*	- command to content (-c CMD or stdin)
-*	- action to command (-key:enter CMD)
+*	- shell commands
+*		- shared state (env) -- DONE
+*		- startup
+*			pipe -- DONE
+*			-c CMD
+*		- update (action: re-run startup command)
+*		- action
+*			config -- DONE
+*			-key:<key> CMD
+*		- transform (line -> screen line)
+*		- output (???)
 *
+*
+* TODO (stage 2: features):
+*	- CLI flags/API
+*	- UI:
+*		- status
+*		- title
+*		- borders
+*	- config / defaults
+*
+*
+* Data flow
+*	list
+*		filter
+*		transform (line)
 *
 *	- buffer:
 *		- from stdin
@@ -37,17 +60,23 @@
 package main
 
 import "os"
+import "os/exec"
+import "path"
 import "fmt"
 //import "flag"
 import "log"
+import "bytes"
 import "strings"
 import "unicode"
 import "bufio"
 import "reflect"
+import "regexp"
 
 import "github.com/gdamore/tcell/v2"
 
 
+// XXX need to account 
+var SHELL = "bash -c"
 
 var TAB_SIZE = 8
 
@@ -94,18 +123,19 @@ var KEYBINDINGS = map[string]string {
 	"Home": "Top",
 	"End": "Bottom",
 
+	"Enter": "! echo \"$LINE\" >> moo.log",
+
+	"x": "X=! ls -l \"$LINE\"",
+	"a": "A=! A=${A:-1} echo $(( A + 1 ))",
+	"w": "! echo $A >> sum.log",
+
 	// XXX test non-existing method...
 	"Insert": "Moo",
 }
 
 
-func file2buffer(filename string){
-	file, err := os.Open(filename)
-	if err != nil {
-		fmt.Println(err)
-		return }
+func file2buffer(file *os.File){
 
-	defer file.Close()
 	// XXX set this to a logical value...
 	CURRENT_ROW = 0
 	TEXT_BUFFER = [][]rune{}
@@ -136,8 +166,8 @@ func drawScreen(screen tcell.Screen, style tcell.Style){
 		var buf_row = row + ROW_OFFSET
 		var col_offset = 0
 
-		//if(CURRENT_ROW == row){
-		//	CURRENT_ROW_BUF = TEXT_BUFFER[buf_row] }
+		if(CURRENT_ROW == row){
+			CURRENT_ROW_BUF = TEXT_BUFFER[buf_row] }
 
 		for col = 0 ; col < COLS ; col++ {
 			var buf_col = col + COL_OFFSET
@@ -267,23 +297,88 @@ func (this Actions) ToLine(line int) bool {
 	// XXX
 	return true }
 
+// actions...
+func (this Actions) Update() bool {
+	// XXX re-run startup command in curent env...
+	return true }
+
 var ACTIONS Actions
 
-func callAction(name string) bool {
+var ENV = map[string]string {}
+
+//func buildEnv(){}
+//func readEnv(){}
+
+var isVarCommand = regexp.MustCompile(`^[a-zA-Z_]+=`)
+
+func callAction(action string) bool {
 	// builtin actions...
-	if name == "Exit" {
+	if action == "Exit" {
 		return false }
-	// actions...
-	method := reflect.ValueOf(&ACTIONS).MethodByName(name)
-	// test if action exists....
-	if ! method.IsValid() {
-		log.Println("Error: Unknown action:", name) 
+
+	// NAME=ACTION...
+	name := ""
+	if isVarCommand.Match([]byte(action)) {
+		parts := regexp.MustCompile("=").Split(action, 2)
+		name, action = parts[0], parts[1] }
+	// empty value -> remove from env...
+	if name != "" && action == "" {
+		delete(ENV, name) 
 		return true }
-	res := method.Call([]reflect.Value{}) 
-	// exit if action returns false...
-	if value, ok := res[0].Interface().(bool) ; ok && !value  {
-		return false } 
-	// only the first match is valid -- ignore the rest...
+
+	// !ACTION | <ACTION | @ACTION...
+	if action[0] == '!' || action[0] == '<' || action[0] == '@' {
+		prefix, code := action[0], action[1:]
+		var stdout bytes.Buffer
+		var stderr bytes.Buffer
+		shell := strings.Fields(SHELL)
+		// XXX this is ugly, split slice and unpack instead of just unpack...
+		cmd := exec.Command(shell[0], append(shell[1:], code)...)
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		// pass data to command via env...
+		// XXX handle this globally/func...
+		env := []string{}
+		for k, v := range ENV {
+			env = append(env, k +"="+ v) }
+		cmd.Env = append(cmd.Environ(), 
+			append(env,
+				"LINE="+ string(CURRENT_ROW_BUF[:]))...)
+
+		// run the command...
+		// XXX this should be async???
+		//		...option??
+		if err := cmd.Run(); err != nil {
+			log.Println("Error executing: \""+ code +"\":", err) 
+			// XXX should we break here???
+			return true }
+
+		// handle output...
+		if prefix == '@' {
+			// XXX ...
+
+		} else if prefix == '!' {
+			// XXX read stdout int env...
+
+		} else if prefix == '<' {
+			// XXX pass stdout to file2buffer(..)...
+		}
+
+		// handle env...
+		if name != "" {
+			ENV[name] = stdout.String() } 
+
+	// ACTION...
+	} else {
+		method := reflect.ValueOf(&ACTIONS).MethodByName(action)
+		// test if action exists....
+		if ! method.IsValid() {
+			log.Println("Error: Unknown action:", action) 
+			return true }
+		res := method.Call([]reflect.Value{}) 
+		// exit if action returns false...
+		if value, ok := res[0].Interface().(bool) ; ok && !value  {
+			return false } }
 	return true }
 func callHandler(key string) bool {
 	if action, exists := KEYBINDINGS[key] ; exists {
@@ -308,7 +403,7 @@ func evt2keySeq(evt tcell.EventKey) []string {
 			mods = append(mods, "shift") }
 		key = string(unicode.ToLower(r))
 	// special keys...
-	} else if k > tcell.KeyRune {
+	} else if k > tcell.KeyRune || k <= tcell.KeyDEL {
 		key = evt.Name()
 	// ascii...
 	} else {
@@ -369,10 +464,26 @@ func fm(){
 			panic(maybePanic) } }
 	defer quit()
 
-	// args...
+	// XXX handle args...
 	// XXX
+
+	// file...
 	if len(os.Args) > 1 {
-		file2buffer(os.Args[1]) }
+		file, err := os.Open(os.Args[1])
+		if err != nil {
+			fmt.Println(err)
+			return }
+		defer file.Close()
+		file2buffer(file) 
+	// pipe...
+	} else {
+		stat, err := os.Stdin.Stat()
+		if err != nil {
+			log.Fatalf("%+v", err) }
+		if stat.Mode() & os.ModeNamedPipe != 0 {
+			// XXX do we need to close this??
+			//defer os.Stdin.Close()
+			file2buffer(os.Stdin) } }
 
 	for {
 
@@ -432,6 +543,16 @@ func fm(){
 
 
 func main(){
+    // open log file
+    logFile, err := os.OpenFile(
+		"./"+ path.Base(os.Args[0]) +".log", 
+		os.O_APPEND|os.O_RDWR|os.O_CREATE, 0644)
+    if err != nil {
+        log.Panic(err) }
+    defer logFile.Close()
+    // Set log out put and enjoy :)
+    log.SetOutput(logFile)
+
 	fm() }
 
 // vim:set sw=4 ts=4 nowrap :
