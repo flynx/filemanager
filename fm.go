@@ -546,8 +546,11 @@ func main(){
 	var opts struct {
 		InputFile string `short:"i" long:"input" value-name:"FILE" description:"Input file"`
 		LogFile string `short:"l" long:"log" value-name:"FILE" description:"Log file"`
+		Pos struct {
+			FILE string
+		} `positional-args:"yes"`
 	}
-	args, err := flags.Parse(&opts)
+	_, err := flags.Parse(&opts)
 	if err != nil {
 		if flags.WroteHelp(err) {
 			return }
@@ -556,8 +559,8 @@ func main(){
 
 	// globals...
 	INPUT_FILE = opts.InputFile
-	if INPUT_FILE == "" && len(args) > 0 {
-		INPUT_FILE = args[0] }
+	if INPUT_FILE == "" && opts.Pos.FILE != "" {
+		INPUT_FILE = opts.Pos.FILE }
 
     // open log file
 	if opts.LogFile != "" {
