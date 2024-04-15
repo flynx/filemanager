@@ -400,12 +400,22 @@ func callAction(action string) bool {
 		env := []string{}
 		for k, v := range ENV {
 			env = append(env, k +"="+ v) }
+		// SELECTED...
 		selected := "SELECTED="
 		if SELECTION_BUFFER[CURRENT_ROW + ROW_OFFSET] {
 			selected += "1" }
+		// SELECTION...
+		// XXX revise...
+		// XXX this can get expensive for long sets of rows...
+		selection := "SELECTION=("
+		for i, sel := range SELECTION_BUFFER {
+			if sel {
+				selection += string(TEXT_BUFFER[i][:]) + "\n" } }
+		selection += ")"
 		cmd.Env = append(cmd.Environ(), 
 			append(env,
 				selected,
+				selection,
 				"COLS="+ string(COLS),
 				"LINE="+ string(TEXT_BUFFER[CURRENT_ROW][:]))...)
 
