@@ -11,9 +11,11 @@
 *		- action
 *			keybinding -- DONE
 *			-key:<key> CMD
+*			XXX command chains e.g.:
+*				"Space": "SelectToggle Down"
 *		- transform (line -> screen line)
 *		- output (???)
-*	- selection
+*	- selection -- DONE
 *	- config file / defaults
 *
 *
@@ -106,7 +108,7 @@ var CURRENT_ROW = 0
 var TEXT_BUFFER_WIDTH = 0
 var TEXT_BUFFER = [][]rune{ {} }
 
-var SELECTION_BUFFER = [][]rune{}
+var SELECTION_BUFFER = []bool{}
 
 // XXX load this from config...
 // XXX how do we represent other keys???
@@ -170,13 +172,13 @@ func file2buffer(file *os.File){
 	// XXX set this to a logical value...
 	CURRENT_ROW = 0
 	TEXT_BUFFER = [][]rune{}
-	SELECTION_BUFFER = [][]rune{}
+	SELECTION_BUFFER = []bool{}
 	n := 0
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan(){
 		line := scanner.Text()
 		TEXT_BUFFER = append(TEXT_BUFFER, []rune{})
-		SELECTION_BUFFER = append(SELECTION_BUFFER, nil)
+		SELECTION_BUFFER = append(SELECTION_BUFFER, false)
 		var i int
 		for i = 0 ; i < len(line) ; i++ {
 			TEXT_BUFFER[n] = append(TEXT_BUFFER[n], rune(line[i])) }
@@ -188,7 +190,7 @@ func file2buffer(file *os.File){
 	// XXX should we do this here or in the looping code???
 	if n == 0 {
 		TEXT_BUFFER = append(TEXT_BUFFER, []rune{}) 
-		SELECTION_BUFFER = append(SELECTION_BUFFER, nil) } }
+		SELECTION_BUFFER = append(SELECTION_BUFFER, false) } }
 
 
 // XXX not sure if we need style arg here...
@@ -199,22 +201,24 @@ func drawScreen(screen tcell.Screen, theme Theme){
 	style := theme.Default
 	for row = 0 ; row < ROWS ; row++ {
 		var buf_row = row + ROW_OFFSET
-		var col_offset = 0
 
+		// row theming...
+		style = theme.Default
+		if buf_row < len(TEXT_BUFFER) {
+			// current+selected...
+			if SELECTION_BUFFER[buf_row] &&
+					CURRENT_ROW == row {
+				style = theme.CurrentSelected
+			// mark selected...
+			} else if SELECTION_BUFFER[buf_row] {
+				style = theme.Selected
+			// current...
+			} else if CURRENT_ROW == row {
+				style = theme.Current } } 
+
+		var col_offset = 0
 		for col = 0 ; col < COLS ; col++ {
 			var buf_col = col + COL_OFFSET
-
-			// theming...
-			if CURRENT_ROW == row {
-				if SELECTION_BUFFER[CURRENT_ROW] != nil {
-					style = theme.CurrentSelected
-				} else {
-					style = theme.Current }
-			// mark selected...
-			} else if SELECTION_BUFFER[CURRENT_ROW] != nil {
-				style = theme.Selected
-			} else {
-				style = theme.Default }
 
 			// normalize...
 			line := []rune{}
@@ -336,20 +340,21 @@ func (this Actions) ToLine(line int) bool {
 // selection...
 func (this Actions) SelectToggle(rows ...int) bool {
 	if len(rows) == 0 {
-		rows = []int{CURRENT_ROW} }
-	for i := range rows {
-		if SELECTION_BUFFER[i] == nil {
-			SELECTION_BUFFER[i] = TEXT_BUFFER[i]
+		rows = []int{CURRENT_ROW + ROW_OFFSET} }
+	for _, i := range rows {
+		if SELECTION_BUFFER[i] {
+			SELECTION_BUFFER[i] = false 
 		} else {
-			SELECTION_BUFFER[i] = nil } }
+			SELECTION_BUFFER[i] = true } }
+	log.Println("SELECT!!!", rows, SELECTION_BUFFER)
 	return true }
 func (this Actions) SelectAll() bool {
-	for i, row := range TEXT_BUFFER {
-		SELECTION_BUFFER[i] = row } 
+	for i := 0; i < len(TEXT_BUFFER); i++ {
+		SELECTION_BUFFER[i] = true } 
 	return true }
 func (this Actions) SelectNone() bool {
-	for i, _ := range SELECTION_BUFFER {
-		SELECTION_BUFFER[i] = nil } 
+	for i := 0; i < len(TEXT_BUFFER); i++ {
+		SELECTION_BUFFER[i] = false } 
 	return true }
 func (this Actions) SelectInverse() bool {
 	rows := []int{}
@@ -395,8 +400,13 @@ func callAction(action string) bool {
 		env := []string{}
 		for k, v := range ENV {
 			env = append(env, k +"="+ v) }
+		selected := "SELECTED="
+		if SELECTION_BUFFER[CURRENT_ROW + ROW_OFFSET] {
+			selected += "1" }
 		cmd.Env = append(cmd.Environ(), 
 			append(env,
+				selected,
+				"COLS="+ string(COLS),
 				"LINE="+ string(TEXT_BUFFER[CURRENT_ROW][:]))...)
 
 		// run the command...
@@ -468,6 +478,10 @@ func evt2keySeq(evt tcell.EventKey) []string {
 			mods = append(mods, "shift") } 
 		key = strings.ToLower(string(k)) } 
 
+	// basic translation...
+	if key == " " {
+		key = "Space" }
+
 	if mod & tcell.ModCtrl != 0 {
 		mods = append(mods, "ctrl") }
 	if mod & tcell.ModAlt != 0 {
@@ -533,6 +547,7 @@ func fm(){
 			//defer os.Stdin.Close()
 			file2buffer(os.Stdin) } }
 
+
 	for {
 
 		COLS, ROWS = screen.Size()
@@ -568,6 +583,7 @@ func fm(){
 				for _, key := range evt2keySeq(*evt) {
 					if ! callHandler(key) {
 						return } }
+				//log.Println("KEY:", evt.Name())
 				// defaults...
 				if evt.Key() == tcell.KeyEscape || evt.Key() == tcell.KeyCtrlC {
 					return }
