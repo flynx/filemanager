@@ -13,6 +13,8 @@
 *			-key:<key> CMD
 *		- transform (line -> screen line)
 *		- output (???)
+*	- selection
+*	- config file / defaults
 *
 *
 * TODO (stage 2: features):
@@ -22,7 +24,6 @@
 *		- title
 *		- borders
 *		- colors (???)
-*	- config file / defaults
 *
 *
 * Data flow
@@ -76,6 +77,9 @@ import "github.com/jessevdk/go-flags"
 import "github.com/gdamore/tcell/v2"
 
 
+
+var INPUT_FILE string
+
 // XXX need to account 
 var SHELL = "bash -c"
 
@@ -86,12 +90,11 @@ var ROWS, COLS int
 var COL_OFFSET = 0
 var ROW_OFFSET = 0
 
-// current row relative to viewport...
-var CURRENT_ROW = 0
-var CURRENT_ROW_BUF []rune
-
 var SCROLL_THRESHOLD_TOP = 3
 var SCROLL_THRESHOLD_BOTTOM = 3
+
+// current row relative to viewport...
+var CURRENT_ROW = 0
 
 // XXX cursor mode...
 //		- cursor
@@ -126,25 +129,54 @@ var KEYBINDINGS = map[string]string {
 
 	"Enter": "! echo \"$LINE\" >> moo.log",
 
-	"x": "X=! ls -l \"$LINE\"",
-	"a": "A=! A=${A:-1} echo $(( A + 1 ))",
-	"w": "! echo $A >> sum.log",
+	//"x": "X=! ls -l \"$LINE\"",
+	//"a": "A=! A=${A:-1} echo $(( A + 1 ))",
+	//"w": "! echo $A >> sum.log",
 
-	// XXX test non-existing method...
-	"Insert": "Moo",
+	"Insert": "SelectToggle",
+	"Space": "SelectToggle",
+	"ctrl+a": "SelectAll",
+	"ctrl+i": "SelectInverse",
+	"ctrl+d": "SelectNone",
 }
 
 
-func file2buffer(file *os.File){
+type Theme struct {
+	Default tcell.Style 
+	Current tcell.Style
+	Selected tcell.Style
+	CurrentSelected tcell.Style
+}
+var THEME = Theme {
+	Default: tcell.StyleDefault.
+		Background(tcell.ColorReset).
+		Foreground(tcell.ColorReset),
+	Current: tcell.StyleDefault.
+		Background(tcell.ColorReset).
+		Foreground(tcell.ColorReset).
+		Reverse(true),
+	Selected: tcell.StyleDefault.
+		Background(tcell.ColorReset).
+		Foreground(tcell.ColorYellow),
+	CurrentSelected: tcell.StyleDefault.
+		Background(tcell.ColorReset).
+		Foreground(tcell.ColorYellow).
+		Reverse(true),
+}
 
+
+
+func file2buffer(file *os.File){
 	// XXX set this to a logical value...
 	CURRENT_ROW = 0
 	TEXT_BUFFER = [][]rune{}
+	SELECTION_BUFFER = [][]rune{}
 	n := 0
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan(){
 		line := scanner.Text()
 		TEXT_BUFFER = append(TEXT_BUFFER, []rune{})
+		SELECTION_BUFFER = append(SELECTION_BUFFER, nil)
 		var i int
 		for i = 0 ; i < len(line) ; i++ {
 			TEXT_BUFFER[n] = append(TEXT_BUFFER[n], rune(line[i])) }
@@ -155,31 +187,34 @@ func file2buffer(file *os.File){
 	// keep at least one empty line in buffer...
 	// XXX should we do this here or in the looping code???
 	if n == 0 {
-		TEXT_BUFFER = append(TEXT_BUFFER, []rune{}) } }
+		TEXT_BUFFER = append(TEXT_BUFFER, []rune{}) 
+		SELECTION_BUFFER = append(SELECTION_BUFFER, nil) } }
 
 
 // XXX not sure if we need style arg here...
-func drawScreen(screen tcell.Screen, style tcell.Style){
+func drawScreen(screen tcell.Screen, theme Theme){
 	// XXX
 	screen.Clear()
 	var col, row int
+	style := theme.Default
 	for row = 0 ; row < ROWS ; row++ {
 		var buf_row = row + ROW_OFFSET
 		var col_offset = 0
 
-		if(CURRENT_ROW == row){
-			CURRENT_ROW_BUF = TEXT_BUFFER[buf_row] }
-
 		for col = 0 ; col < COLS ; col++ {
 			var buf_col = col + COL_OFFSET
 
-			// mark current row...
-			// XXX line mode...
-			// XXX need to hide cursor...
+			// theming...
 			if CURRENT_ROW == row {
-				style = style.Reverse(true)
+				if SELECTION_BUFFER[CURRENT_ROW] != nil {
+					style = theme.CurrentSelected
+				} else {
+					style = theme.Current }
+			// mark selected...
+			} else if SELECTION_BUFFER[CURRENT_ROW] != nil {
+				style = theme.Selected
 			} else {
-				style = style.Reverse(false) }
+				style = theme.Default }
 
 			// normalize...
 			line := []rune{}
@@ -298,7 +333,30 @@ func (this Actions) ToLine(line int) bool {
 	// XXX
 	return true }
 
-// actions...
+// selection...
+func (this Actions) SelectToggle(rows ...int) bool {
+	if len(rows) == 0 {
+		rows = []int{CURRENT_ROW} }
+	for i := range rows {
+		if SELECTION_BUFFER[i] == nil {
+			SELECTION_BUFFER[i] = TEXT_BUFFER[i]
+		} else {
+			SELECTION_BUFFER[i] = nil } }
+	return true }
+func (this Actions) SelectAll() bool {
+	for i, row := range TEXT_BUFFER {
+		SELECTION_BUFFER[i] = row } 
+	return true }
+func (this Actions) SelectNone() bool {
+	for i, _ := range SELECTION_BUFFER {
+		SELECTION_BUFFER[i] = nil } 
+	return true }
+func (this Actions) SelectInverse() bool {
+	rows := []int{}
+	for i := 0 ; i < len(TEXT_BUFFER) ; i++ {
+		rows = append(rows, i) }
+	return this.SelectToggle(rows...) }
+
 func (this Actions) Update() bool {
 	// XXX re-run startup command in curent env...
 	return true }
@@ -339,7 +397,7 @@ func callAction(action string) bool {
 			env = append(env, k +"="+ v) }
 		cmd.Env = append(cmd.Environ(), 
 			append(env,
-				"LINE="+ string(CURRENT_ROW_BUF[:]))...)
+				"LINE="+ string(TEXT_BUFFER[CURRENT_ROW][:]))...)
 
 		// run the command...
 		// XXX this should be async???
@@ -435,20 +493,13 @@ func evt2keySeq(evt tcell.EventKey) []string {
 
 
 func fm(){
-	defStyle := tcell.StyleDefault.
-		Background(tcell.ColorReset).
-		Foreground(tcell.ColorReset)
-	//boxStyle := tcell.StyleDefault.
-	//	Foreground(tcell.ColorWhite).
-	//	Background(tcell.ColorPurple)
-
 	// setup...
 	screen, err := tcell.NewScreen()
 	if err != nil {
 		log.Fatalf("%+v", err) }
 	if err := screen.Init(); err != nil {
 		log.Fatalf("%+v", err) }
-	screen.SetStyle(defStyle)
+	screen.SetStyle(THEME.Default)
 	screen.EnableMouse()
 	screen.EnablePaste()
 	screen.Clear()
@@ -487,7 +538,7 @@ func fm(){
 		COLS, ROWS = screen.Size()
 
 		// XXX rename...
-		drawScreen(screen, defStyle)
+		drawScreen(screen, THEME)
 
 		screen.Show()
 
@@ -539,18 +590,24 @@ func fm(){
 		} } }
 
 
-var INPUT_FILE string
+
+// command line args...
+var options struct {
+	// XXX
+
+	// XXX chicken-egg: need to first parse the args then parse the ini 
+	//		and then merge the two...
+	//ArgsFile string `long:"args-file" value-name:"FILE" env:"ARGS" description:"Arguments file"`
+
+	LogFile string `short:"l" long:"log" value-name:"FILE" env:"LOG" description:"Log file"`
+	Pos struct {
+		FILE string
+	} `positional-args:"yes"`
+}
+
 
 func main(){
-	// command line args...
-	var opts struct {
-		InputFile string `short:"i" long:"input" value-name:"FILE" description:"Input file"`
-		LogFile string `short:"l" long:"log" value-name:"FILE" description:"Log file"`
-		Pos struct {
-			FILE string
-		} `positional-args:"yes"`
-	}
-	_, err := flags.Parse(&opts)
+	_, err := flags.Parse(&options)
 	if err != nil {
 		if flags.WroteHelp(err) {
 			return }
@@ -558,14 +615,12 @@ func main(){
 		os.Exit(1) }
 
 	// globals...
-	INPUT_FILE = opts.InputFile
-	if INPUT_FILE == "" && opts.Pos.FILE != "" {
-		INPUT_FILE = opts.Pos.FILE }
+	INPUT_FILE = options.Pos.FILE
 
-    // open log file
-	if opts.LogFile != "" {
+	// log...
+	if options.LogFile != "" {
 		logFile, err := os.OpenFile(
-			opts.LogFile,
+			options.LogFile,
 			os.O_APPEND|os.O_RDWR|os.O_CREATE, 0644)
 		if err != nil {
 			log.Panic(err) }
@@ -573,6 +628,7 @@ func main(){
 		// Set log out put and enjoy :)
 		log.SetOutput(logFile) }
 
+	// startup...
 	fm() }
 
 // vim:set sw=4 ts=4 nowrap :
