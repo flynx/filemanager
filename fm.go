@@ -114,7 +114,6 @@ type Row struct {
 //var TEXT_BUFFER = [][]rune{ {} }
 var TEXT_BUFFER = []Row{}
 
-var SELECTION_BUFFER = []bool{}
 
 // XXX load this from config...
 // XXX how do we represent other keys???
@@ -178,13 +177,11 @@ func file2buffer(file *os.File){
 	// XXX set this to a logical value...
 	CURRENT_ROW = 0
 	TEXT_BUFFER = []Row{}
-	SELECTION_BUFFER = []bool{}
 	n := 0
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan(){
 		line := scanner.Text()
 		TEXT_BUFFER = append(TEXT_BUFFER, Row{})
-		SELECTION_BUFFER = append(SELECTION_BUFFER, false)
 		var i int
 		for i = 0 ; i < len(line) ; i++ {
 			TEXT_BUFFER[n].Runes = append(TEXT_BUFFER[n].Runes, rune(line[i])) }
@@ -195,8 +192,7 @@ func file2buffer(file *os.File){
 	// keep at least one empty line in buffer...
 	// XXX should we do this here or in the looping code???
 	if n == 0 {
-		TEXT_BUFFER = append(TEXT_BUFFER, Row{}) 
-		SELECTION_BUFFER = append(SELECTION_BUFFER, false) } }
+		TEXT_BUFFER = append(TEXT_BUFFER, Row{}) } }
 
 
 // XXX not sure if we need style arg here...
@@ -212,11 +208,11 @@ func drawScreen(screen tcell.Screen, theme Theme){
 		style = theme.Default
 		if buf_row < len(TEXT_BUFFER) {
 			// current+selected...
-			if SELECTION_BUFFER[buf_row] &&
+			if TEXT_BUFFER[buf_row].Selected &&
 					CURRENT_ROW == row {
 				style = theme.CurrentSelected
 			// mark selected...
-			} else if SELECTION_BUFFER[buf_row] {
+			} else if TEXT_BUFFER[buf_row].Selected {
 				style = theme.Selected
 			// current...
 			} else if CURRENT_ROW == row {
@@ -348,19 +344,18 @@ func (this Actions) SelectToggle(rows ...int) bool {
 	if len(rows) == 0 {
 		rows = []int{CURRENT_ROW + ROW_OFFSET} }
 	for _, i := range rows {
-		if SELECTION_BUFFER[i] {
-			SELECTION_BUFFER[i] = false 
+		if TEXT_BUFFER[i].Selected {
+			TEXT_BUFFER[i].Selected = false 
 		} else {
-			SELECTION_BUFFER[i] = true } }
-	log.Println("SELECT!!!", rows, SELECTION_BUFFER)
+			TEXT_BUFFER[i].Selected = true } }
 	return true }
 func (this Actions) SelectAll() bool {
 	for i := 0; i < len(TEXT_BUFFER); i++ {
-		SELECTION_BUFFER[i] = true } 
+		TEXT_BUFFER[i].Selected = true } 
 	return true }
 func (this Actions) SelectNone() bool {
 	for i := 0; i < len(TEXT_BUFFER); i++ {
-		SELECTION_BUFFER[i] = false } 
+		TEXT_BUFFER[i].Selected = false } 
 	return true }
 func (this Actions) SelectInverse() bool {
 	rows := []int{}
@@ -408,15 +403,15 @@ func callAction(action string) bool {
 			env = append(env, k +"="+ v) }
 		// SELECTED...
 		selected := "SELECTED="
-		if SELECTION_BUFFER[CURRENT_ROW + ROW_OFFSET] {
+		if TEXT_BUFFER[CURRENT_ROW + ROW_OFFSET].Selected {
 			selected += "1" }
 		// SELECTION...
 		// XXX revise...
 		// XXX this can get expensive for long sets of rows -- add list of indexes (sorted)...
 		selection := "SELECTION=("
-		for i, sel := range SELECTION_BUFFER {
-			if sel {
-				selection += string(TEXT_BUFFER[i].Runes[:]) + "\n" } }
+		for _, row := range TEXT_BUFFER {
+			if row.Selected {
+				selection += string(row.Runes[:]) + "\n" } }
 		selection += ")"
 		cmd.Env = append(cmd.Environ(), 
 			append(env,
