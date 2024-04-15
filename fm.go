@@ -106,7 +106,13 @@ var CURRENT_ROW = 0
 
 
 var TEXT_BUFFER_WIDTH = 0
-var TEXT_BUFFER = [][]rune{ {} }
+
+type Row struct {
+	Selected bool
+	Runes []rune
+}
+//var TEXT_BUFFER = [][]rune{ {} }
+var TEXT_BUFFER = []Row{}
 
 var SELECTION_BUFFER = []bool{}
 
@@ -171,17 +177,17 @@ var THEME = Theme {
 func file2buffer(file *os.File){
 	// XXX set this to a logical value...
 	CURRENT_ROW = 0
-	TEXT_BUFFER = [][]rune{}
+	TEXT_BUFFER = []Row{}
 	SELECTION_BUFFER = []bool{}
 	n := 0
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan(){
 		line := scanner.Text()
-		TEXT_BUFFER = append(TEXT_BUFFER, []rune{})
+		TEXT_BUFFER = append(TEXT_BUFFER, Row{})
 		SELECTION_BUFFER = append(SELECTION_BUFFER, false)
 		var i int
 		for i = 0 ; i < len(line) ; i++ {
-			TEXT_BUFFER[n] = append(TEXT_BUFFER[n], rune(line[i])) }
+			TEXT_BUFFER[n].Runes = append(TEXT_BUFFER[n].Runes, rune(line[i])) }
 		// set max line width...
 		if i > TEXT_BUFFER_WIDTH {
 			TEXT_BUFFER_WIDTH = i }
@@ -189,7 +195,7 @@ func file2buffer(file *os.File){
 	// keep at least one empty line in buffer...
 	// XXX should we do this here or in the looping code???
 	if n == 0 {
-		TEXT_BUFFER = append(TEXT_BUFFER, []rune{}) 
+		TEXT_BUFFER = append(TEXT_BUFFER, Row{}) 
 		SELECTION_BUFFER = append(SELECTION_BUFFER, false) } }
 
 
@@ -223,7 +229,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 			// normalize...
 			line := []rune{}
 			if buf_row < len(TEXT_BUFFER) {
-				line = TEXT_BUFFER[buf_row] }
+				line = TEXT_BUFFER[buf_row].Runes }
 			c := ' '
 			if buf_col < len(line) {
 				c = line[buf_col] } 
@@ -410,14 +416,14 @@ func callAction(action string) bool {
 		selection := "SELECTION=("
 		for i, sel := range SELECTION_BUFFER {
 			if sel {
-				selection += string(TEXT_BUFFER[i][:]) + "\n" } }
+				selection += string(TEXT_BUFFER[i].Runes[:]) + "\n" } }
 		selection += ")"
 		cmd.Env = append(cmd.Environ(), 
 			append(env,
 				selected,
 				selection,
 				"COLS="+ string(COLS),
-				"LINE="+ string(TEXT_BUFFER[CURRENT_ROW][:]))...)
+				"LINE="+ string(TEXT_BUFFER[CURRENT_ROW].Runes[:]))...)
 
 		// run the command...
 		// XXX this should be async???
