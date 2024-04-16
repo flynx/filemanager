@@ -94,6 +94,12 @@ var ROWS, COLS int
 var COL_OFFSET = 0
 var ROW_OFFSET = 0
 
+var SCROLLBAR = false
+//var SCROLLBAR_FG = tcell.RuneBlock
+//var SCROLLBAR_BG = tcell.RuneVLine
+var SCROLLBAR_FG = tcell.RuneCkBoard
+var SCROLLBAR_BG = tcell.RuneBoard
+
 var SCROLL_THRESHOLD_TOP = 3
 var SCROLL_THRESHOLD_BOTTOM = 3
 
@@ -177,9 +183,7 @@ func file2buffer(file *os.File){
 	n := 0
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan(){
-		row := Row{
-			text: scanner.Text(),
-		}
+		row := Row{ text: scanner.Text() }
 		TEXT_BUFFER = append(TEXT_BUFFER, row)
 		// set max line width...
 		l := len([]rune(row.text))
@@ -192,10 +196,19 @@ func file2buffer(file *os.File){
 		TEXT_BUFFER = append(TEXT_BUFFER, Row{}) } }
 
 
+
 // XXX not sure if we need style arg here...
+// XXX add scrollbar...
 func drawScreen(screen tcell.Screen, theme Theme){
-	// XXX
 	screen.Clear()
+
+	// scrollbar...
+	var size, offset int
+	SCROLLBAR = len(TEXT_BUFFER) > ROWS
+	if SCROLLBAR {
+		size = int(1 + float32(ROWS) * float32(ROWS) / float32(len(TEXT_BUFFER)))
+		offset = int(float32(ROWS) * float32(ROW_OFFSET) / float32(len(TEXT_BUFFER))) }
+
 	var col, row int
 	style := theme["default"]
 	for row = 0 ; row < ROWS ; row++ {
@@ -222,6 +235,14 @@ func drawScreen(screen tcell.Screen, theme Theme){
 
 		var col_offset = 0
 		for col = 0 ; col < COLS ; col++ {
+			// scrollbar...
+			if SCROLLBAR && col == COLS-1 {
+				c := SCROLLBAR_BG
+				if row >= offset && row < offset+size {
+					c = SCROLLBAR_FG }
+				screen.SetContent(col + col_offset, row, c, nil, theme["default"])
+				continue }
+
 			var buf_col = col + COL_OFFSET
 
 			// get rune...
@@ -603,7 +624,19 @@ func fm(){
 				// XXX handle double click...
 				// XXX handle modifiers...
 				if buttons & tcell.Button1 != 0 || buttons & tcell.Button2 != 0 {
-					_, CURRENT_ROW = evt.Position()
+					col, row := evt.Position()
+					// scrollbar...
+					// XXX sould be nice if we started in the scrollbar 
+					//		to heep handling the drag untill released...
+					//		...for this to work need to either detect 
+					//		drag or release...
+					if SCROLLBAR && col == COLS-1 {
+						ROW_OFFSET = 
+							int((float32(row) / float32(ROWS - 1)) * 
+							float32(len(TEXT_BUFFER) - ROWS))
+					// list...
+					} else {
+						CURRENT_ROW = row }
 
 				} else if buttons & tcell.WheelUp != 0 {
 					if ! callHandler("WheelUp") {
