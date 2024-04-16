@@ -90,18 +90,20 @@ var SHELL = "bash -c"
 var TAB_SIZE = 8
 
 var ROWS, COLS int
+var CONTENT_ROWS, CONTENT_COLS int
 
 var COL_OFFSET = 0
 var ROW_OFFSET = 0
 
 var SCROLLBAR = false
-//var SCROLLBAR_FG = tcell.RuneBlock
-//var SCROLLBAR_BG = tcell.RuneVLine
 var SCROLLBAR_FG = tcell.RuneCkBoard
 var SCROLLBAR_BG = tcell.RuneBoard
 
 var SCROLL_THRESHOLD_TOP = 3
 var SCROLL_THRESHOLD_BOTTOM = 3
+
+// XXX
+//var STATUS_LINE = false
 
 // current row relative to viewport...
 var CURRENT_ROW = 0
@@ -122,6 +124,7 @@ type Row struct {
 //var TEXT_BUFFER = [][]rune{ {} }
 var TEXT_BUFFER = []Row{}
 
+var SELECTION = []string{}
 
 // XXX load this from config...
 // XXX how do we represent other keys???
@@ -145,7 +148,8 @@ var KEYBINDINGS = Keybindings {
 
 	"Enter": "! echo \"$LINE\" >> moo.log",
 
-	//"x": "X=! ls -l \"$LINE\"",
+	"x": "! echo \"$SELECTION\" > selection",
+
 	//"a": "A=! A=${A:-1} echo $(( A + 1 ))",
 	//"w": "! echo $A >> sum.log",
 
@@ -157,6 +161,7 @@ var KEYBINDINGS = Keybindings {
 }
 
 
+// XXX make this config-ready -- i.e. map[string]string
 type Theme map[string]tcell.Style
 var THEME = Theme {
 	"default": tcell.StyleDefault.
@@ -360,6 +365,11 @@ func (this Actions) ToLine(line int) bool {
 	return true }
 
 // selection...
+func _updateSelection(){
+	SELECTION = []string{}
+	for _, row := range TEXT_BUFFER {
+		if row.selected {
+			SELECTION = append(SELECTION, row.text) } } }
 func (this Actions) SelectToggle(rows ...int) bool {
 	if len(rows) == 0 {
 		rows = []int{CURRENT_ROW + ROW_OFFSET} }
@@ -368,14 +378,17 @@ func (this Actions) SelectToggle(rows ...int) bool {
 			TEXT_BUFFER[i].selected = false 
 		} else {
 			TEXT_BUFFER[i].selected = true } }
+	_updateSelection()
 	return true }
 func (this Actions) SelectAll() bool {
 	for i := 0; i < len(TEXT_BUFFER); i++ {
 		TEXT_BUFFER[i].selected = true } 
+	_updateSelection()
 	return true }
 func (this Actions) SelectNone() bool {
 	for i := 0; i < len(TEXT_BUFFER); i++ {
 		TEXT_BUFFER[i].selected = false } 
+	SELECTION = []string{}
 	return true }
 func (this Actions) SelectInverse() bool {
 	rows := []int{}
@@ -416,6 +429,7 @@ func callAction(action string) bool {
 		cmd := exec.Command(shell[0], append(shell[1:], code)...)
 		cmd.Stdout = &stdout
 		cmd.Stderr = &stderr
+
 		// pass data to command via env...
 		// XXX handle this globally/func...
 		env := []string{}
@@ -425,20 +439,15 @@ func callAction(action string) bool {
 		selected := "SELECTED="
 		if TEXT_BUFFER[CURRENT_ROW + ROW_OFFSET].selected {
 			selected += "1" }
-		// SELECTION...
-		// XXX revise...
-		// XXX this can get expensive for long sets of rows -- add list of indexes (sorted)...
-		selection := "SELECTION=("
-		for _, row := range TEXT_BUFFER {
-			if row.selected {
-				selection += row.text + "\n" } }
-		selection += ")"
 		cmd.Env = append(cmd.Environ(), 
 			append(env,
 				selected,
-				selection,
-				"COLS="+ string(COLS),
-				"LINE="+ TEXT_BUFFER[CURRENT_ROW].text)...)
+				"SELECTION=" + strings.Join(SELECTION, "\n"),
+				"COLS="+ string(CONTENT_COLS),
+				"ROWS="+ string(CONTENT_ROWS),
+				"LINES="+ string(len(TEXT_BUFFER)),
+				"LINE="+ string(ROW_OFFSET + CURRENT_ROW),
+				"TEXT="+ TEXT_BUFFER[CURRENT_ROW].text)...)
 
 		// run the command...
 		// XXX this should be async???
@@ -580,8 +589,12 @@ func fm(){
 
 
 	for {
-
 		COLS, ROWS = screen.Size()
+
+		CONTENT_COLS, CONTENT_ROWS = COLS, ROWS
+		// XXX also handle borders titlebar and statusbar...
+		if SCROLLBAR {
+			CONTENT_COLS -= 1 }
 
 		// XXX rename...
 		drawScreen(screen, THEME)
@@ -653,6 +666,9 @@ func fm(){
 // command line args...
 var options struct {
 	// XXX
+
+	// XXX not used...
+	ListCommand string `short:"c" long:"cmd" value-name:"CMD" env:"CMD" description:"List command"`
 
 	// XXX chicken-egg: need to first parse the args then parse the ini 
 	//		and then merge the two...
