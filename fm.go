@@ -119,7 +119,8 @@ var TEXT_BUFFER = []Row{}
 
 // XXX load this from config...
 // XXX how do we represent other keys???
-var KEYBINDINGS = map[string]string {
+type Keybindings map[string]string
+var KEYBINDINGS = Keybindings {
 	"Esc": "Exit",
 	"q": "Exit",
 	//"Q": "Exit",
@@ -150,29 +151,23 @@ var KEYBINDINGS = map[string]string {
 }
 
 
-type Theme struct {
-	Default tcell.Style 
-	Current tcell.Style
-	Selected tcell.Style
-	CurrentSelected tcell.Style
-}
+type Theme map[string]tcell.Style
 var THEME = Theme {
-	Default: tcell.StyleDefault.
+	"default": tcell.StyleDefault.
 		Background(tcell.ColorReset).
 		Foreground(tcell.ColorReset),
-	Current: tcell.StyleDefault.
+	"current": tcell.StyleDefault.
 		Background(tcell.ColorReset).
 		Foreground(tcell.ColorReset).
 		Reverse(true),
-	Selected: tcell.StyleDefault.
+	"selected": tcell.StyleDefault.
 		Background(tcell.ColorReset).
 		Foreground(tcell.ColorYellow),
-	CurrentSelected: tcell.StyleDefault.
+	"current-selected": tcell.StyleDefault.
 		Background(tcell.ColorReset).
 		Foreground(tcell.ColorYellow).
 		Reverse(true),
 }
-
 
 
 func file2buffer(file *os.File){
@@ -202,23 +197,23 @@ func drawScreen(screen tcell.Screen, theme Theme){
 	// XXX
 	screen.Clear()
 	var col, row int
-	style := theme.Default
+	style := theme["default"]
 	for row = 0 ; row < ROWS ; row++ {
 		var buf_row = row + ROW_OFFSET
 
 		// row theming...
-		style = theme.Default
+		style = theme["default"]
 		if buf_row < len(TEXT_BUFFER) {
 			// current+selected...
 			if TEXT_BUFFER[buf_row].selected &&
 					CURRENT_ROW == row {
-				style = theme.CurrentSelected
+				style = theme["current-selected"]
 			// mark selected...
 			} else if TEXT_BUFFER[buf_row].selected {
-				style = theme.Selected
+				style = theme["selected"]
 			// current...
 			} else if CURRENT_ROW == row {
-				style = theme.Current } } 
+				style = theme["current"] } } 
 
 		// normalize...
 		line := []rune{}
@@ -528,7 +523,7 @@ func fm(){
 		log.Fatalf("%+v", err) }
 	if err := screen.Init(); err != nil {
 		log.Fatalf("%+v", err) }
-	screen.SetStyle(THEME.Default)
+	screen.SetStyle(THEME["default"])
 	screen.EnableMouse()
 	screen.EnablePaste()
 	screen.Clear()
