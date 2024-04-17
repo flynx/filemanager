@@ -185,6 +185,24 @@ var THEME = Theme {
 }
 
 
+// XXX these are almost identical, can we generalize?
+// XXX option to maintain current row...
+func str2buffer(str string){
+	CURRENT_ROW = 0
+	TEXT_BUFFER = []Row{}
+	n := 0
+	for _, str := range strings.Split(str, "\n") {
+		row := Row{ text: str }
+		TEXT_BUFFER = append(TEXT_BUFFER, row)
+		// set max line width...
+		l := len([]rune(row.text))
+		if TEXT_BUFFER_WIDTH < l {
+			TEXT_BUFFER_WIDTH = l }
+		n++ }
+	// keep at least one empty line in buffer...
+	// XXX should we do this here or in the looping code???
+	if n == 0 {
+		TEXT_BUFFER = append(TEXT_BUFFER, Row{}) } }
 func file2buffer(file *os.File){
 	// XXX set this to a logical value...
 	CURRENT_ROW = 0
@@ -473,8 +491,8 @@ func callAction(actions string) bool {
 				// XXX ...
 
 			} else if prefix == '!' {
-				// XXX read stdout into env...
-				//str := stdout.String()
+				// XXX read stdout into env... (???)
+				//env := strings.Split(stdout.String(), "\n")
 
 			} else if prefix == '<' {
 				// XXX pass stdout to file2buffer(..)...
@@ -506,7 +524,7 @@ func callHandler(key string) bool {
 
 
 // XXX modifier building in is not done yet...
-func evt2keySeq(evt tcell.EventKey) []string {
+func evt2keys(evt tcell.EventKey) []string {
 	key_seq := []string{}
 	mods := []string{}
 	shifted := false
@@ -639,7 +657,7 @@ func fm(){
 					screen.Sync() }
 
 			case *tcell.EventKey:
-				for _, key := range evt2keySeq(*evt) {
+				for _, key := range evt2keys(*evt) {
 					if ! callHandler(key) {
 						return } }
 				//log.Println("KEY:", evt.Name())
