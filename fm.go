@@ -153,8 +153,12 @@ var KEYBINDINGS = Keybindings {
 	//"a": "A=! A=${A:-1} echo $(( A + 1 ))",
 	//"w": "! echo $A >> sum.log",
 
-	"Insert": "SelectToggle",
-	"Space": "SelectToggle",
+	"Insert": `
+		SelectToggle
+		Down`,
+	"Space": `
+		SelectToggle
+		Down`,
 	"ctrl+a": "SelectAll",
 	"ctrl+i": "SelectInverse",
 	"ctrl+d": "SelectNone",
@@ -404,85 +408,96 @@ var ACTIONS Actions
 
 var ENV = map[string]string {}
 var isVarCommand = regexp.MustCompile(`^[a-zA-Z_]+=`)
-func callAction(action string) bool {
-	// builtin actions...
-	if action == "Exit" {
-		return false }
+func callAction(actions string) bool {
+	// XXX make split here a bit more cleaver:
+	//		- support ";"
+	//		- support quoting of separators, i.e. ".. \\\n .." and ".. \; .."
+	//		- ignore string literal content...
+	for _, action := range strings.Split(actions, "\n") {
+		action = strings.Trim(action, " \t")
+		if len(action) == 0 {
+			continue }
+		// builtin actions...
+		if action == "Exit" {
+			return false }
 
-	// NAME=ACTION...
-	name := ""
-	if isVarCommand.Match([]byte(action)) {
-		parts := regexp.MustCompile("=").Split(action, 2)
-		name, action = parts[0], parts[1] }
-	// empty value -> remove from env...
-	if name != "" && action == "" {
-		delete(ENV, name) 
-		return true }
+		// NAME=ACTION...
+		name := ""
+		if isVarCommand.Match([]byte(action)) {
+			parts := regexp.MustCompile("=").Split(action, 2)
+			name, action = parts[0], parts[1] }
+		// empty value -> remove from env...
+		if name != "" && action == "" {
+			delete(ENV, name) 
+			continue }
 
-	// !ACTION | <ACTION | @ACTION...
-	if action[0] == '!' || action[0] == '<' || action[0] == '@' {
-		prefix, code := action[0], action[1:]
-		var stdout bytes.Buffer
-		var stderr bytes.Buffer
-		shell := strings.Fields(SHELL)
-		// XXX this is ugly, split slice and unpack instead of just unpack...
-		cmd := exec.Command(shell[0], append(shell[1:], code)...)
-		cmd.Stdout = &stdout
-		cmd.Stderr = &stderr
+		// !ACTION | <ACTION | @ACTION...
+		if action[0] == '!' || action[0] == '<' || action[0] == '@' {
+			prefix, code := action[0], action[1:]
+			var stdout bytes.Buffer
+			var stderr bytes.Buffer
+			shell := strings.Fields(SHELL)
+			// XXX this is ugly, split slice and unpack instead of just unpack...
+			cmd := exec.Command(shell[0], append(shell[1:], code)...)
+			cmd.Stdout = &stdout
+			cmd.Stderr = &stderr
 
-		// pass data to command via env...
-		// XXX handle this globally/func...
-		env := []string{}
-		for k, v := range ENV {
-			env = append(env, k +"="+ v) }
-		// SELECTED...
-		selected := "SELECTED="
-		if TEXT_BUFFER[CURRENT_ROW + ROW_OFFSET].selected {
-			selected += "1" }
-		cmd.Env = append(cmd.Environ(), 
-			append(env,
-				selected,
-				"SELECTION=" + strings.Join(SELECTION, "\n"),
-				"COLS="+ string(CONTENT_COLS),
-				"ROWS="+ string(CONTENT_ROWS),
-				"LINES="+ string(len(TEXT_BUFFER)),
-				"LINE="+ string(ROW_OFFSET + CURRENT_ROW),
-				"TEXT="+ TEXT_BUFFER[CURRENT_ROW].text)...)
+			// pass data to command via env...
+			// XXX handle this globally/func...
+			env := []string{}
+			for k, v := range ENV {
+				env = append(env, k +"="+ v) }
+			// SELECTED...
+			selected := "SELECTED="
+			if TEXT_BUFFER[CURRENT_ROW + ROW_OFFSET].selected {
+				selected += "1" }
+			cmd.Env = append(cmd.Environ(), 
+				append(env,
+					selected,
+					"SELECTION=" + strings.Join(SELECTION, "\n"),
+					"COLS="+ string(CONTENT_COLS),
+					"ROWS="+ string(CONTENT_ROWS),
+					"LINES="+ string(len(TEXT_BUFFER)),
+					"LINE="+ string(ROW_OFFSET + CURRENT_ROW),
+					"TEXT="+ TEXT_BUFFER[CURRENT_ROW].text)...)
 
-		// run the command...
-		// XXX this should be async???
-		//		...option??
-		if err := cmd.Run(); err != nil {
-			log.Println("Error executing: \""+ code +"\":", err) 
-			// XXX should we break here???
-			return true }
+			// run the command...
+			// XXX this should be async???
+			//		...option??
+			if err := cmd.Run(); err != nil {
+				log.Println("Error executing: \""+ code +"\":", err) 
+				break }
 
-		// handle output...
-		if prefix == '@' {
-			// XXX ...
+			// handle output...
+			if prefix == '@' {
+				// XXX ...
 
-		} else if prefix == '!' {
-			// XXX read stdout int env...
+			} else if prefix == '!' {
+				// XXX read stdout into env...
+				//str := stdout.String()
 
-		} else if prefix == '<' {
-			// XXX pass stdout to file2buffer(..)...
-		}
+			} else if prefix == '<' {
+				// XXX pass stdout to file2buffer(..)...
+				// XXX stdout should be read line by line as it comes...
+				// XXX keep selection and current item and screen position 
+				//		relative to current..
+			}
 
-		// handle env...
-		if name != "" {
-			ENV[name] = stdout.String() } 
+			// handle env...
+			if name != "" {
+				ENV[name] = stdout.String() } 
 
-	// ACTION...
-	} else {
-		method := reflect.ValueOf(&ACTIONS).MethodByName(action)
-		// test if action exists....
-		if ! method.IsValid() {
-			log.Println("Error: Unknown action:", action) 
-			return true }
-		res := method.Call([]reflect.Value{}) 
-		// exit if action returns false...
-		if value, ok := res[0].Interface().(bool) ; ok && !value  {
-			return false } }
+		// ACTION...
+		} else {
+			method := reflect.ValueOf(&ACTIONS).MethodByName(action)
+			// test if action exists....
+			if ! method.IsValid() {
+				log.Println("Error: Unknown action:", action) 
+				continue }
+			res := method.Call([]reflect.Value{}) 
+			// exit if action returns false...
+			if value, ok := res[0].Interface().(bool) ; ok && !value  {
+				return false } } }
 	return true }
 func callHandler(key string) bool {
 	if action, exists := KEYBINDINGS[key] ; exists {
