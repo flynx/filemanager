@@ -232,12 +232,12 @@ func drawScreen(screen tcell.Screen, theme Theme){
 	screen.Clear()
 
 	// scrollbar...
-	var size, offset int
+	var scroller_size, scroller_offset int
 	SCROLLBAR = len(TEXT_BUFFER) > ROWS
 	if SCROLLBAR {
 		r := float32(ROWS) / float32(len(TEXT_BUFFER))
-		size = 1 + int(float32(ROWS - 1) * r)
-		offset = int(float32(ROW_OFFSET + 1) * r) }
+		scroller_size = 1 + int(float32(ROWS - 1) * r)
+		scroller_offset = int(float32(ROW_OFFSET + 1) * r) }
 
 	var col, row int
 	style := theme["default"]
@@ -268,7 +268,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 			// scrollbar...
 			if SCROLLBAR && col == COLS-1 {
 				c := SCROLLBAR_BG
-				if row >= offset && row < offset+size {
+				if row >= scroller_offset && row < scroller_offset+scroller_size {
 					c = SCROLLBAR_FG }
 				screen.SetContent(col + col_offset, row, c, nil, theme["default"])
 				continue }
@@ -346,6 +346,9 @@ func (this Actions) PageUp() bool {
 		this.Top() } 
 	return true }
 func (this Actions) PageDown() bool {
+	if len(TEXT_BUFFER) < ROWS {
+		CURRENT_ROW = len(TEXT_BUFFER) - 1
+		return true }
 	offset := len(TEXT_BUFFER) - ROWS
 	if ROW_OFFSET < offset {
 		ROW_OFFSET += ROWS 
@@ -362,6 +365,9 @@ func (this Actions) Top() bool {
 		ROW_OFFSET = 0 }
 	return true }
 func (this Actions) Bottom() bool {
+	if len(TEXT_BUFFER) < ROWS {
+		CURRENT_ROW = len(TEXT_BUFFER) - 1
+		return true }
 	offset := len(TEXT_BUFFER) - ROWS 
 	if ROW_OFFSET == offset {
 		CURRENT_ROW = ROWS - 1
@@ -369,7 +375,7 @@ func (this Actions) Bottom() bool {
 		ROW_OFFSET = len(TEXT_BUFFER) - ROWS }
 	return true }
 
-// horizontal navigation...
+// XXX horizontal navigation...
 func (this Actions) Left() bool {
 	// XXX
 	return true }
