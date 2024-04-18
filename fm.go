@@ -147,6 +147,8 @@ var KEYBINDINGS = Keybindings {
 	"End": "Bottom",
 
 	"Enter": "! echo \"$LINE\" >> moo.log",
+	// XXX should we also have a "Click" event
+	//"ClickSelected": "Exit",
 
 	"x": "! echo \"$SELECTION\" > selection",
 
@@ -640,6 +642,9 @@ func fm(){
 	for {
 		COLS, ROWS = screen.Size()
 
+		//top_threshold := SCROLL_THRESHOLD_TOP
+		bottom_threshold := ROWS - SCROLL_THRESHOLD_BOTTOM - 1 
+
 		CONTENT_COLS, CONTENT_ROWS = COLS, ROWS
 		// XXX also handle borders titlebar and statusbar...
 		if SCROLLBAR {
@@ -653,35 +658,34 @@ func fm(){
 		evt := screen.PollEvent()
 
 		switch evt := evt.(type) {
-			// XXX still jumpy...
+			// XXX BUG: when scrolling over the ROWS == len(TEXT_BUFFER) 
+			//		the CURRENT_ROW jups up by -2...  
+			//		...this happens somewhere else...
+			// keep the selection in the same spot...
 			case *tcell.EventResize:
-				// keep the selection in the same spot...
-				COLS, ROWS = screen.Size()
-				offset := ROWS - SCROLL_THRESHOLD_BOTTOM - 1 
-				/*/ smaller that screen and at top...
-				if len(TEXT_BUFFER) <= ROWS {
+				// buffer smaller than screen -- keep at top...
+				if ROWS >= len(TEXT_BUFFER) {
 					CURRENT_ROW -= ROW_OFFSET
 					ROW_OFFSET = 0
-				// keep screen at bottom of buffer...
-				} else*/ if len(TEXT_BUFFER) >= ROWS && 
-						ROW_OFFSET + ROWS >= len(TEXT_BUFFER) {
+				// keep from scrolling past the bottom of the screen...
+				} else if ROW_OFFSET + ROWS >= len(TEXT_BUFFER) {
 					delta := ROW_OFFSET - (len(TEXT_BUFFER) - ROWS)
 					ROW_OFFSET -= delta 
 					CURRENT_ROW += delta
-				// bottom...
-				} else if CURRENT_ROW > offset {
+				// keep current row on screen...
+				} else if CURRENT_ROW > bottom_threshold {
 					// if window too small keep selection in the middle...
 					if ROWS < SCROLL_THRESHOLD_TOP + SCROLL_THRESHOLD_BOTTOM {
 						// make this proportional...
 						r := (SCROLL_THRESHOLD_TOP + SCROLL_THRESHOLD_BOTTOM + 1) / SCROLL_THRESHOLD_BOTTOM
-						offset = ROWS / r }
-					delta := CURRENT_ROW - offset
+						bottom_threshold = ROWS / r }
+					delta := CURRENT_ROW - bottom_threshold
 					// move selection and content together...
-					CURRENT_ROW = offset
-					ROW_OFFSET += delta 
-				} else {
-					// XXX do we need this???
-					screen.Sync() }
+					CURRENT_ROW = bottom_threshold
+					ROW_OFFSET += delta
+				// XXX do we need this???
+				} /*else {
+					screen.Sync() }//*/
 
 			case *tcell.EventKey:
 				for _, key := range evt2keys(*evt) {
@@ -692,6 +696,8 @@ func fm(){
 				if evt.Key() == tcell.KeyEscape || evt.Key() == tcell.KeyCtrlC {
 					return }
 
+			// XXX clicking above top threshold or below bottom threshold 
+			//		should scroll the cursor to the threshold...
 			case *tcell.EventMouse:
 				buttons := evt.Buttons()
 				// XXX handle double click...
@@ -709,15 +715,37 @@ func fm(){
 							float32(len(TEXT_BUFFER) - ROWS))
 					// second click in curent row...
 					// XXX should we have a timeout here???
+					// XXX this triggers on drag... is this a bug???
 					} else if row == CURRENT_ROW {
-						if ! callHandler("Click") {
+						if ! callHandler("ClickSelected") {
 							return }
 					// below list...
-					} else if row > len(TEXT_BUFFER){
+					} else if row > len(TEXT_BUFFER) {
 						CURRENT_ROW = len(TEXT_BUFFER) - 1
 					// list...
 					} else {
 						CURRENT_ROW = row }
+
+					// XXX do we need this???
+					// place CURRENT_ROW in middle of screen...
+					if ROWS <= SCROLL_THRESHOLD_TOP + SCROLL_THRESHOLD_BOTTOM {
+						// XXX
+					// scroll to top threshold...
+					} else if CURRENT_ROW < SCROLL_THRESHOLD_TOP && 
+							ROW_OFFSET > 0 {
+						delta := SCROLL_THRESHOLD_TOP - CURRENT_ROW
+						if delta > ROW_OFFSET {
+							delta = ROW_OFFSET }
+						ROW_OFFSET -= delta
+						CURRENT_ROW += delta
+					// scroll to bottom threshold...
+					} else if CURRENT_ROW > bottom_threshold && 
+							ROW_OFFSET + ROWS < len(TEXT_BUFFER) {
+						delta := CURRENT_ROW - bottom_threshold
+						if delta > len(TEXT_BUFFER) - (ROW_OFFSET + ROWS) {
+							delta = len(TEXT_BUFFER) - (ROW_OFFSET + ROWS) }
+						ROW_OFFSET += delta
+						CURRENT_ROW -= delta }
 
 				} else if buttons & tcell.WheelUp != 0 {
 					if ! callHandler("WheelUp") {
