@@ -224,6 +224,8 @@ func file2buffer(file *os.File){
 
 
 
+// XXX add support for ansi escape sequences...
+//		...as a minimum strip them out...
 // XXX not sure if we need style arg here...
 // XXX add scrollbar...
 func drawScreen(screen tcell.Screen, theme Theme){
@@ -233,8 +235,9 @@ func drawScreen(screen tcell.Screen, theme Theme){
 	var size, offset int
 	SCROLLBAR = len(TEXT_BUFFER) > ROWS
 	if SCROLLBAR {
-		size = int(1 + float32(ROWS) * float32(ROWS) / float32(len(TEXT_BUFFER)))
-		offset = int(float32(ROWS) * float32(ROW_OFFSET) / float32(len(TEXT_BUFFER))) }
+		r := float32(ROWS) / float32(len(TEXT_BUFFER))
+		size = 1 + int(float32(ROWS - 1) * r)
+		offset = int(float32(ROW_OFFSET + 1) * r) }
 
 	var col, row int
 	style := theme["default"]
@@ -307,10 +310,16 @@ func (this Actions) Up() bool {
 		this.ScrollUp() }
 	return true }
 func (this Actions) Down() bool {
-	if CURRENT_ROW < ROWS-1 && CURRENT_ROW + ROW_OFFSET < len(TEXT_BUFFER)-1 && 
-			// account for SCROLL_THRESHOLD_BOTTOM
-			(CURRENT_ROW < ROWS - SCROLL_THRESHOLD_BOTTOM - 1 ||
-				ROW_OFFSET + ROWS == len(TEXT_BUFFER)) {
+	// within the text buffer...
+	if CURRENT_ROW + ROW_OFFSET < len(TEXT_BUFFER)-1 && 
+			// within screen...
+			CURRENT_ROW < ROWS-1 && 
+			// buffer smaller than screen...
+			(ROWS >= len(TEXT_BUFFER) ||
+				// screen at end of buffer...
+				ROW_OFFSET + ROWS == len(TEXT_BUFFER) ||
+				// at scroll threshold...
+				CURRENT_ROW < ROWS - SCROLL_THRESHOLD_BOTTOM - 1) {
 		CURRENT_ROW++ 
 	// scroll the buffer...
 	} else {
@@ -517,6 +526,7 @@ func callAction(actions string) bool {
 			if value, ok := res[0].Interface().(bool) ; ok && !value  {
 				return false } } }
 	return true }
+// XXX add alias support...
 func callHandler(key string) bool {
 	if action, exists := KEYBINDINGS[key] ; exists {
 		return callAction(action) }
@@ -637,12 +647,23 @@ func fm(){
 		evt := screen.PollEvent()
 
 		switch evt := evt.(type) {
+			// XXX still jumpy...
 			case *tcell.EventResize:
 				// keep the selection in the same spot...
 				COLS, ROWS = screen.Size()
 				offset := ROWS - SCROLL_THRESHOLD_BOTTOM - 1 
+				/*/ smaller that screen and at top...
+				if len(TEXT_BUFFER) <= ROWS {
+					CURRENT_ROW -= ROW_OFFSET
+					ROW_OFFSET = 0
+				// keep screen at bottom of buffer...
+				} else*/ if len(TEXT_BUFFER) >= ROWS && 
+						ROW_OFFSET + ROWS >= len(TEXT_BUFFER) {
+					delta := ROW_OFFSET - (len(TEXT_BUFFER) - ROWS)
+					ROW_OFFSET -= delta 
+					CURRENT_ROW += delta
 				// bottom...
-				if CURRENT_ROW > offset {
+				} else if CURRENT_ROW > offset {
 					// if window too small keep selection in the middle...
 					if ROWS < SCROLL_THRESHOLD_TOP + SCROLL_THRESHOLD_BOTTOM {
 						// make this proportional...
@@ -680,6 +701,14 @@ func fm(){
 						ROW_OFFSET = 
 							int((float32(row) / float32(ROWS - 1)) * 
 							float32(len(TEXT_BUFFER) - ROWS))
+					// second click in curent row...
+					// XXX should we have a timeout here???
+					} else if row == CURRENT_ROW {
+						if ! callHandler("Click") {
+							return }
+					// below list...
+					} else if row > len(TEXT_BUFFER){
+						CURRENT_ROW = len(TEXT_BUFFER) - 1
 					// list...
 					} else {
 						CURRENT_ROW = row }
