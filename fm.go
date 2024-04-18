@@ -658,17 +658,17 @@ func fm(){
 		evt := screen.PollEvent()
 
 		switch evt := evt.(type) {
-			// XXX BUG: when scrolling over the ROWS == len(TEXT_BUFFER) 
-			//		the CURRENT_ROW jups up by -2...  
-			//		...this happens somewhere else...
+			// XXX BUG: resizing smaller with last row in TEXT_BUFFER selected
+			//		the offset jumps by +/- 3...
 			// keep the selection in the same spot...
 			case *tcell.EventResize:
+				COLS, ROWS = screen.Size()
 				// buffer smaller than screen -- keep at top...
-				if ROWS >= len(TEXT_BUFFER) {
+				if ROWS > len(TEXT_BUFFER) {
 					CURRENT_ROW -= ROW_OFFSET
 					ROW_OFFSET = 0
 				// keep from scrolling past the bottom of the screen...
-				} else if ROW_OFFSET + ROWS >= len(TEXT_BUFFER) {
+				} else if ROW_OFFSET + ROWS > len(TEXT_BUFFER) {
 					delta := ROW_OFFSET - (len(TEXT_BUFFER) - ROWS)
 					ROW_OFFSET -= delta 
 					CURRENT_ROW += delta
