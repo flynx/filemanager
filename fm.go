@@ -596,70 +596,42 @@ func evt2keys(evt tcell.EventKey) []string {
 
 	return key_seq }
 
-// XXX
 func handleScrollLimits(){
-	//top_threshold := SCROLL_THRESHOLD_TOP
+	delta := 0
+
+	top_threshold := SCROLL_THRESHOLD_TOP
 	bottom_threshold := ROWS - SCROLL_THRESHOLD_BOTTOM - 1 
-
-	//if ROW_OFFSET + ROWS == len(TEXT_BUFFER) && 
-	//		CURRENT_ROW > bottom_threshold {
-	//	return }
-
+	if ROWS < SCROLL_THRESHOLD_TOP + SCROLL_THRESHOLD_BOTTOM {
+		top_threshold = ROWS / 2
+		bottom_threshold = ROWS - top_threshold }
+	
 	// buffer smaller than screen -- keep at top...
 	if ROWS > len(TEXT_BUFFER) {
-		CURRENT_ROW -= ROW_OFFSET
 		ROW_OFFSET = 0
+		CURRENT_ROW -= ROW_OFFSET
+		return }
+
 	// keep from scrolling past the bottom of the screen...
-	} else if ROW_OFFSET + ROWS > len(TEXT_BUFFER) {
-		delta := ROW_OFFSET - (len(TEXT_BUFFER) - ROWS)
-		ROW_OFFSET -= delta 
-		CURRENT_ROW += delta
-	// XXX scroll to top threshold...
-	} else if CURRENT_ROW < SCROLL_THRESHOLD_TOP && 
-			ROW_OFFSET > 0 {
-		delta := SCROLL_THRESHOLD_TOP - CURRENT_ROW
-		if delta > ROW_OFFSET {
-			delta = ROW_OFFSET }
-		ROW_OFFSET -= delta
-		CURRENT_ROW += delta
-	// keep current row on screen...
-	} else if CURRENT_ROW > bottom_threshold {
-		// if window too small keep selection in the middle...
-		// XXX a bit glitchy still...
-		if ROWS < SCROLL_THRESHOLD_TOP + SCROLL_THRESHOLD_BOTTOM {
-			// make this proportional...
-			r := (SCROLL_THRESHOLD_TOP + SCROLL_THRESHOLD_BOTTOM + 1) / SCROLL_THRESHOLD_BOTTOM
-			bottom_threshold = ROWS / r 
-		// almost at bottom...
-		} else if len(TEXT_BUFFER) - (ROW_OFFSET + ROWS) < SCROLL_THRESHOLD_BOTTOM {
-			bottom_threshold = ROWS - (len(TEXT_BUFFER) - (ROW_OFFSET + ROWS)) }
-		delta := CURRENT_ROW - bottom_threshold
-		// move selection and content together...
-		CURRENT_ROW = bottom_threshold
-		ROW_OFFSET += delta } 
-	/*/
-	// XXX do we need this???
-	// place CURRENT_ROW in middle of screen...
-	if ROWS <= SCROLL_THRESHOLD_TOP + SCROLL_THRESHOLD_BOTTOM {
-		// XXX
+	if ROW_OFFSET + ROWS > len(TEXT_BUFFER) {
+		delta = ROW_OFFSET - (len(TEXT_BUFFER) - ROWS)
 	// scroll to top threshold...
-	} else if CURRENT_ROW < SCROLL_THRESHOLD_TOP && 
+	} else if CURRENT_ROW < top_threshold && 
 			ROW_OFFSET > 0 {
-		delta := SCROLL_THRESHOLD_TOP - CURRENT_ROW
+		delta = top_threshold - CURRENT_ROW
 		if delta > ROW_OFFSET {
 			delta = ROW_OFFSET }
-		ROW_OFFSET -= delta
-		CURRENT_ROW += delta
-	// scroll to bottom threshold...
+	// keep current row on screen...
 	} else if CURRENT_ROW > bottom_threshold && 
-			ROW_OFFSET + ROWS < len(TEXT_BUFFER) {
-		delta := CURRENT_ROW - bottom_threshold
-		if delta > len(TEXT_BUFFER) - (ROW_OFFSET + ROWS) {
-			delta = len(TEXT_BUFFER) - (ROW_OFFSET + ROWS) }
-		ROW_OFFSET += delta
-		CURRENT_ROW -= delta }
-	//*/
-}
+			CURRENT_ROW > top_threshold {
+		delta = bottom_threshold - CURRENT_ROW
+		// saturate delta...
+		if delta < (ROW_OFFSET + ROWS) - len(TEXT_BUFFER) {
+			delta = (ROW_OFFSET + ROWS) - len(TEXT_BUFFER) } } 
+
+	// do the update...
+	if delta != 0 {
+		ROW_OFFSET -= delta 
+		CURRENT_ROW += delta } }
 
 func fm(){
 	// setup...
