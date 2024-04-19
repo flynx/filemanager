@@ -82,6 +82,7 @@ import "github.com/gdamore/tcell/v2"
 
 
 
+var LIST_CMD string
 var INPUT_FILE string
 
 // XXX need to account 
@@ -435,8 +436,31 @@ func (this Actions) SelectInverse() bool {
 		rows = append(rows, i) }
 	return this.SelectToggle(rows...) }
 
+// XXX re-run startup command in curent env...
 func (this Actions) Update() bool {
-	// XXX re-run startup command in curent env...
+	// file...
+	if INPUT_FILE != "" {
+		file, err := os.Open(INPUT_FILE)
+		if err != nil {
+			fmt.Println(err)
+			return false }
+		defer file.Close()
+		file2buffer(file) 
+	// command...
+	} else if LIST_CMD != "" {
+		// XXX HACK???
+		TEXT_BUFFER = []Row{ {} }
+		// XXX call Update action...
+		callAction("<"+ LIST_CMD)
+	// pipe...
+	} else {
+		stat, err := os.Stdin.Stat()
+		if err != nil {
+			log.Fatalf("%+v", err) }
+		if stat.Mode() & os.ModeNamedPipe != 0 {
+			// XXX do we need to close this??
+			//defer os.Stdin.Close()
+			file2buffer(os.Stdin) } }
 	return true }
 
 var ACTIONS Actions
@@ -479,28 +503,40 @@ func callAction(actions string) bool {
 
 			// pass data to command via env...
 			// XXX handle this globally/func...
+			// SELECTED...
+			selected := ""
+			if TEXT_BUFFER[CURRENT_ROW + ROW_OFFSET].selected {
+				selected = "1" }
+			state := map[string]string {
+				"SELECTED": selected,
+				"SELECTION": strings.Join(SELECTION, "\n"),
+				"COLS": string(CONTENT_COLS),
+				"ROWS": string(CONTENT_ROWS),
+				"LINES": string(len(TEXT_BUFFER)),
+				"LINE": string(ROW_OFFSET + CURRENT_ROW),
+				"TEXT": TEXT_BUFFER[CURRENT_ROW].text,
+			}
 			env := []string{}
 			for k, v := range ENV {
-				env = append(env, k +"="+ v) }
-			// SELECTED...
-			selected := "SELECTED="
-			if TEXT_BUFFER[CURRENT_ROW + ROW_OFFSET].selected {
-				selected += "1" }
-			cmd.Env = append(cmd.Environ(), 
-				append(env,
-					selected,
-					"SELECTION=" + strings.Join(SELECTION, "\n"),
-					"COLS="+ string(CONTENT_COLS),
-					"ROWS="+ string(CONTENT_ROWS),
-					"LINES="+ string(len(TEXT_BUFFER)),
-					"LINE="+ string(ROW_OFFSET + CURRENT_ROW),
-					"TEXT="+ TEXT_BUFFER[CURRENT_ROW].text)...)
+				// XXX go: really ugly...
+				if v == string(0) {
+					v = "0" }
+				if v != "" {
+					env = append(env, k +"="+ v) } }
+			for k, v := range state {
+				// XXX go: really ugly...
+				if v == string(0) {
+					v = "0" }
+				if v != "" {
+					env = append(env, k +"="+ v) } }
+			cmd.Env = append(cmd.Environ(), env...) 
 
 			// run the command...
 			// XXX this should be async???
 			//		...option??
 			if err := cmd.Run(); err != nil {
 				log.Println("Error executing: \""+ code +"\":", err) 
+				//log.Println("    ENV:", env) 
 				break }
 
 			// handle output...
@@ -516,7 +552,8 @@ func callAction(actions string) bool {
 				// XXX stdout should be read line by line as it comes...
 				// XXX keep selection and current item and screen position 
 				//		relative to current..
-			}
+				// XXX STUB??
+				str2buffer(stdout.String()) }
 
 			// handle env...
 			if name != "" {
@@ -653,27 +690,8 @@ func fm(){
 			panic(maybePanic) } }
 	defer quit()
 
-	// XXX handle args...
-	// XXX
-
-	// file...
-	if INPUT_FILE != "" {
-		file, err := os.Open(INPUT_FILE)
-		if err != nil {
-			fmt.Println(err)
-			return }
-		defer file.Close()
-		file2buffer(file) 
-	// pipe...
-	} else {
-		stat, err := os.Stdin.Stat()
-		if err != nil {
-			log.Fatalf("%+v", err) }
-		if stat.Mode() & os.ModeNamedPipe != 0 {
-			// XXX do we need to close this??
-			//defer os.Stdin.Close()
-			file2buffer(os.Stdin) } }
-
+	// XXX should this be done in the event loop???
+	ACTIONS.Update()
 
 	for {
 		COLS, ROWS = screen.Size()
@@ -780,6 +798,7 @@ func main(){
 
 	// globals...
 	INPUT_FILE = options.Pos.FILE
+	LIST_CMD = options.ListCommand
 
 	// log...
 	if options.LogFile != "" {
