@@ -6,13 +6,11 @@
 *		- shared state (env) -- DONE
 *		- startup
 *			pipe -- DONE
-*			-c CMD
+*			-c CMD -- DONE
 *		- update (action: re-run startup command)
 *		- action
 *			keybinding -- DONE
-*			-key:<key> CMD
-*			XXX command chains e.g.:
-*				"Space": "SelectToggle Down"
+*			-key:<key>:<CMD>
 *		- transform (line -> screen line)
 *		- output (???)
 *	- selection -- DONE
@@ -29,6 +27,8 @@
 *
 * XXX should we have search???
 *		...can we pigiback off grep?? =)
+*
+*
 *
 * Data flow
 *	list
