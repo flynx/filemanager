@@ -557,7 +557,10 @@ func callAction(actions string) bool {
 
 			// handle env...
 			if name != "" {
-				ENV[name] = stdout.String() } 
+				if name == "STDOUT" {
+					OUTPUT_STR += stdout.String()
+				} else {
+					ENV[name] = stdout.String() } }
 
 		// ACTION...
 		} else {
