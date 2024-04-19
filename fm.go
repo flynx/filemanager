@@ -81,9 +81,9 @@ import "github.com/jessevdk/go-flags"
 import "github.com/gdamore/tcell/v2"
 
 
-
 var LIST_CMD string
 var INPUT_FILE string
+var OUTPUT_STR string
 
 // XXX need to account 
 var SHELL = "bash -c"
@@ -541,7 +541,7 @@ func callAction(actions string) bool {
 
 			// handle output...
 			if prefix == '@' {
-				// XXX ...
+				OUTPUT_STR += stdout.String()
 
 			} else if prefix == '!' {
 				// XXX read stdout into env... (???)
@@ -812,7 +812,12 @@ func main(){
 		log.SetOutput(logFile) }
 
 	// startup...
-	fm() }
+	fm() 
+
+	// output...
+	// XXX should this be here or in fm(..)
+	if OUTPUT_STR != "" {
+		fmt.Println(OUTPUT_STR) } }
 
 
 
