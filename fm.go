@@ -601,7 +601,10 @@ func handleScrollLimits(){
 	//top_threshold := SCROLL_THRESHOLD_TOP
 	bottom_threshold := ROWS - SCROLL_THRESHOLD_BOTTOM - 1 
 
-	//* XXX keep the best version...
+	//if ROW_OFFSET + ROWS == len(TEXT_BUFFER) && 
+	//		CURRENT_ROW > bottom_threshold {
+	//	return }
+
 	// buffer smaller than screen -- keep at top...
 	if ROWS > len(TEXT_BUFFER) {
 		CURRENT_ROW -= ROW_OFFSET
@@ -622,10 +625,14 @@ func handleScrollLimits(){
 	// keep current row on screen...
 	} else if CURRENT_ROW > bottom_threshold {
 		// if window too small keep selection in the middle...
+		// XXX a bit glitchy still...
 		if ROWS < SCROLL_THRESHOLD_TOP + SCROLL_THRESHOLD_BOTTOM {
 			// make this proportional...
 			r := (SCROLL_THRESHOLD_TOP + SCROLL_THRESHOLD_BOTTOM + 1) / SCROLL_THRESHOLD_BOTTOM
-			bottom_threshold = ROWS / r }
+			bottom_threshold = ROWS / r 
+		// almost at bottom...
+		} else if len(TEXT_BUFFER) - (ROW_OFFSET + ROWS) < SCROLL_THRESHOLD_BOTTOM {
+			bottom_threshold = ROWS - (len(TEXT_BUFFER) - (ROW_OFFSET + ROWS)) }
 		delta := CURRENT_ROW - bottom_threshold
 		// move selection and content together...
 		CURRENT_ROW = bottom_threshold
@@ -815,5 +822,7 @@ func main(){
 
 	// startup...
 	fm() }
+
+
 
 // vim:set sw=4 ts=4 nowrap :
