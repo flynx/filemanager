@@ -72,6 +72,7 @@ import "fmt"
 import "log"
 import "bytes"
 import "strings"
+import "strconv"
 import "unicode"
 import "bufio"
 import "reflect"
@@ -228,6 +229,27 @@ func file2buffer(file *os.File){
 
 
 
+// XXX trying to cheat my way out of implementing this...
+func ansi2style(seq string, style tcell.Style) tcell.Style {
+	// XXX sanity check...
+	if string(seq[:2]) != "\x1B[" || seq[] != 'm' {
+		// XXX
+		panic() }
+	// normalize...
+	args := []int{}
+	for _, i := range strings.Split(string(seq[2:len(seq)-1]), ";") {
+		s, err := strconv.Atoi(i)
+		if err != nil {
+			// XXX
+			panic(err) }
+		args = append(args, s) }
+
+	// XXX
+	log.Println("---", args)
+
+	return style }
+
+
 // XXX add support for ansi escape sequences...
 //		...as a minimum strip them out...
 // XXX not sure if we need style arg here...
@@ -295,16 +317,16 @@ func drawScreen(screen tcell.Screen, theme Theme){
 					for i < len(line) && 
 							! strings.ContainsRune(ansi_commands, line[i]) {
 						i++ }
-					// handle color...
+					/*/ XXX handle color...
 					if line[i] == 'm' {
-						//log.Println("---", string(line[buf_col+1:i+1]))
-					}
+						style = ansi2style(string(line[buf_col:i+1]), style) }
+					//*/
 				} else {
 					ansi_direct_commands := "M78"
 					for i < len(line) && 
 							! strings.ContainsRune(ansi_direct_commands, line[i]) {
 						i++ } } 
-				buf_offset += i - buf_col + 1
+				buf_offset += (i + 1) - buf_col
 				buf_col = i + 1
 				if buf_col >= len(line) {
 					c = ' ' 
