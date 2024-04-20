@@ -139,11 +139,9 @@ var KEYBINDINGS = Keybindings {
 	"Select": "",
 	"Reject": "Exit",
 
-
+	// keys...
 	"Esc": "Reject",
 	"q": "Reject",
-	//"Q": "Exit",
-	//"shift+q": "Exit",
 
 	"Up": "Up",
 	"Down": "Down",
@@ -158,10 +156,10 @@ var KEYBINDINGS = Keybindings {
 
 	"Enter": "Select",
 	// XXX should we also have a "Click" event
-	//"ClickSelected": "Exit",
+	"ClickSelected": "Select",
 
-	"x": "! echo \"$SELECTION\" > selection",
-
+	// XXX testing...
+	//"x": "! echo \"$SELECTION\" > selection",
 	//"a": "A=! A=${A:-1} echo $(( A + 1 ))",
 	//"w": "! echo $A >> sum.log",
 
@@ -632,7 +630,6 @@ func callAction(actions string) bool {
 			if value, ok := res[0].Interface().(bool) ; ok && !value  {
 				return false } } }
 	return true }
-// XXX add alias support...
 func callHandler(key string) bool {
 	// expand aliases...
 	seen := []string{ key }
@@ -641,9 +638,6 @@ func callHandler(key string) bool {
 		for exists && ! slices.Contains(seen, _action) {
 			if _action, exists = KEYBINDINGS[_action] ; exists {
 				action = _action } }
-		return callAction(action) }
-	// call...
-	if action, exists := KEYBINDINGS[key] ; exists {
 		return callAction(action) }
 	return true }
 
