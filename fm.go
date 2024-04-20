@@ -12,6 +12,11 @@
 *			keybinding -- DONE
 *			-key:<key>:<CMD>
 *		- transform (line -> screen line)
+*			XXX this is not needed as it is simpler ot make this part of the -c...
+*				i.e.
+*					fm --cmd ls --transform 'sed "s/moo/foo/"'
+*				vs.
+*					fm --cmd 'ls | sed "s/moo/foo/"'
 *		- output (???)
 *	- selection -- DONE
 *	- config file / defaults
@@ -84,7 +89,6 @@ import "github.com/gdamore/tcell/v2"
 
 
 var LIST_CMD string
-//var TRANSFORM_CMD string
 var INPUT_FILE string
 var STDOUT string
 //var STDERR string
@@ -517,71 +521,11 @@ func (this Actions) Update() bool {
 			// XXX do we need to close this??
 			//defer os.Stdin.Close()
 			file2buffer(os.Stdin) } }
-
-	/*/ transform line...
-	if TRANSFORM_CMD != "" {
-		for i, row := range TEXT_BUFFER {
-			stdout, _, err := callTransform(TRANSFORM_CMD, string(row.text)) 
-			if err != nil {
-				log.Println("Error executing: \""+ TRANSFORM_CMD +"\":", err) }
-			TEXT_BUFFER[i].text = stdout[:] } }
-	//*/
-
 	return true }
 
 var ACTIONS Actions
 
 var ENV = map[string]string {}
-
-/*/ XXX
-func callTransform(code string, str string) (string, string, error) {
-	var err error = nil
-	var stdin bytes.Buffer
-	stdin.Write([]byte(str))
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	shell := strings.Fields(SHELL)
-	// XXX this is ugly, split slice and unpack instead of just unpack...
-	cmd := exec.Command(shell[0], append(shell[1:], code)...)
-	cmd.Stdin = &stdin
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	// pass data to command via env...
-	// XXX handle this globally/func...
-	// SELECTED...
-	selected := ""
-	if TEXT_BUFFER[CURRENT_ROW + ROW_OFFSET].selected {
-		selected = "1" }
-	state := map[string]string {
-		"SELECTED": selected,
-		"SELECTION": strings.Join(SELECTION, "\n"),
-		"COLS": fmt.Sprint(CONTENT_COLS),
-		"ROWS": fmt.Sprint(CONTENT_ROWS),
-		"LINES": fmt.Sprint(len(TEXT_BUFFER)),
-		"LINE": fmt.Sprint(ROW_OFFSET + CURRENT_ROW),
-		"TEXT": TEXT_BUFFER[CURRENT_ROW].text,
-	}
-	env := []string{}
-	for k, v := range ENV {
-		if v != "" {
-			env = append(env, k +"="+ v) } }
-	for k, v := range state {
-		if v != "" {
-			env = append(env, k +"="+ v) } }
-	cmd.Env = append(cmd.Environ(), env...) 
-
-	// run the command...
-	// XXX this should be async???
-	//		...option??
-	if err = cmd.Run(); err != nil {
-		log.Println("Error executing: \""+ code +"\":", err) 
-		log.Println("    ENV:", env) }
-
-	return stdout.String(), stderr.String(), err
-}
-//*/
-
 var isVarCommand = regexp.MustCompile(`^[a-zA-Z_]+=`)
 func callAction(actions string) bool {
 	// XXX make split here a bit more cleaver:
@@ -893,12 +837,6 @@ var options struct {
 	} `positional-args:"yes"`
 
 	ListCommand string `short:"c" long:"cmd" value-name:"CMD" env:"CMD" description:"List command"`
-	// XXX do we need this or can this simply be a part of the -c
-	//		i.e.
-	//			fm -c ls -t 'sed "s/moo/foo/"'
-	//		vs.
-	//			fm -c 'ls | sed "s/moo/foo/"'
-	//Transform string `short:"t" long:"transform" value-name:"CMD" env:"TRANSFORM" description:"Command to transform a line"`
 
 	// XXX chicken-egg: need to first parse the args then parse the ini 
 	//		and then merge the two...
@@ -929,7 +867,6 @@ func main(){
 	// globals...
 	INPUT_FILE = options.Pos.FILE
 	LIST_CMD = options.ListCommand
-	//TRANSFORM_CMD = options.Transform
 
 	// action aliases...
 	if options.Actions.Select != "" {
