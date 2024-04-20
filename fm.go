@@ -84,7 +84,7 @@ import "github.com/gdamore/tcell/v2"
 
 
 var LIST_CMD string
-var TRANSFORM_CMD string
+//var TRANSFORM_CMD string
 var INPUT_FILE string
 var STDOUT string
 //var STDERR string
@@ -847,6 +847,8 @@ var options struct {
 	} `positional-args:"yes"`
 
 	ListCommand string `short:"c" long:"cmd" value-name:"CMD" env:"CMD" description:"List command"`
+	// XXX not used yet...
+	//Transform string `short:"t" long:"transform" value-name:"CMD" env:"TRANSFORM" description:"Command to transform a line"`
 
 	// XXX chicken-egg: need to first parse the args then parse the ini 
 	//		and then merge the two...
@@ -857,8 +859,6 @@ var options struct {
 	Actions struct {
 		Select string `short:"s" long:"select" value-name:"CMD" env:"SELECT" description:"Command to execute on item select"`
 		Reject string `short:"r" long:"reject" value-name:"CMD" env:"REJECT" description:"Command to execute on reject"`
-		// XXX not used yet...
-		Transform string `short:"t" long:"transform" value-name:"CMD" env:"TRANSFORM" description:"Command to transform a line"`
 	} `group:"Actions"`
 
 	Config struct {
@@ -879,7 +879,7 @@ func main(){
 	// globals...
 	INPUT_FILE = options.Pos.FILE
 	LIST_CMD = options.ListCommand
-	TRANSFORM_CMD = options.Transform
+	//TRANSFORM_CMD = options.Transform
 
 	// action aliases...
 	if options.Actions.Select != "" {
