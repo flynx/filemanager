@@ -231,17 +231,17 @@ func file2buffer(file *os.File){
 
 // XXX trying to cheat my way out of implementing this...
 func ansi2style(seq string, style tcell.Style) tcell.Style {
-	// XXX sanity check...
+	// sanity check...
 	if string(seq[:2]) != "\x1B[" || seq[] != 'm' {
-		// XXX
-		panic() }
+		log.Println("Error non-color escape sequence: \"ESC"+ seq[1] +"\"") 
+		return style }
 	// normalize...
 	args := []int{}
 	for _, i := range strings.Split(string(seq[2:len(seq)-1]), ";") {
 		s, err := strconv.Atoi(i)
 		if err != nil {
-			// XXX
-			panic(err) }
+			log.Println("Error parsing escape sequence: \"ESC"+ seq[1] +"\":", err) 
+			return style }
 		args = append(args, s) }
 
 	// XXX
