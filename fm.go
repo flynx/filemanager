@@ -83,7 +83,8 @@ import "github.com/gdamore/tcell/v2"
 
 var LIST_CMD string
 var INPUT_FILE string
-var OUTPUT_STR string
+var STDOUT string
+//var STDERR string
 
 // XXX need to account 
 var SHELL = "bash -c"
@@ -267,6 +268,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 			line = []rune(TEXT_BUFFER[buf_row].text) }
 
 		var col_offset = 0
+		var buf_offset = 0
 		for col = 0 ; col < COLS ; col++ {
 			// scrollbar...
 			if SCROLLBAR && col == COLS-1 {
@@ -276,12 +278,38 @@ func drawScreen(screen tcell.Screen, theme Theme){
 				screen.SetContent(col + col_offset, row, c, nil, theme["default"])
 				continue }
 
-			var buf_col = col + COL_OFFSET
+			var buf_col = col + buf_offset + COL_OFFSET 
 
 			// get rune...
 			c := ' '
 			if buf_col < len(line) {
 				c = line[buf_col] } 
+
+			// handle escape sequences...
+			// see: 
+			//	https://gist.github.com/fnky/458719343aabd01cfb17a3a4f7296797 
+			for c == '\x1B' {
+				i := buf_col + 1
+				if line[i] == '[' {
+					ansi_commands := "HfABCDEFGnsuJKmhlp"
+					for i < len(line) && 
+							! strings.ContainsRune(ansi_commands, line[i]) {
+						i++ }
+					// handle color...
+					if line[i] == 'm' {
+						//log.Println("---", string(line[buf_col+1:i+1]))
+					}
+				} else {
+					ansi_direct_commands := "M78"
+					for i < len(line) && 
+							! strings.ContainsRune(ansi_direct_commands, line[i]) {
+						i++ } } 
+				buf_offset += i - buf_col + 1
+				buf_col = i + 1
+				if buf_col >= len(line) {
+					c = ' ' 
+				} else {
+					c = line[buf_col] } }
 
 			// tab -- offset output to next tabstop... 
 			if c == '\t' {
@@ -541,7 +569,7 @@ func callAction(actions string) bool {
 
 			// handle output...
 			if prefix == '@' {
-				OUTPUT_STR += stdout.String()
+				STDOUT += stdout.String()
 
 			} else if prefix == '!' {
 				// XXX read stdout into env... (???)
@@ -558,7 +586,7 @@ func callAction(actions string) bool {
 			// handle env...
 			if name != "" {
 				if name == "STDOUT" {
-					OUTPUT_STR += stdout.String()
+					STDOUT += stdout.String()
 				} else {
 					ENV[name] = stdout.String() } }
 
@@ -819,8 +847,8 @@ func main(){
 
 	// output...
 	// XXX should this be here or in fm(..)
-	if OUTPUT_STR != "" {
-		fmt.Println(OUTPUT_STR) } }
+	if STDOUT != "" {
+		fmt.Println(STDOUT) } }
 
 
 
