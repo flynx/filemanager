@@ -71,6 +71,7 @@ import "os/exec"
 import "fmt"
 import "log"
 import "bytes"
+import "slices"
 import "strings"
 import "strconv"
 import "unicode"
@@ -133,8 +134,13 @@ var SELECTION = []string{}
 // XXX how do we represent other keys???
 type Keybindings map[string]string
 var KEYBINDINGS = Keybindings {
-	"Esc": "Exit",
-	"q": "Exit",
+	// aliases...
+	"Select": "",
+	"Reject": "Exit",
+
+
+	"Esc": "Reject",
+	"q": "Reject",
 	//"Q": "Exit",
 	//"shift+q": "Exit",
 
@@ -149,7 +155,7 @@ var KEYBINDINGS = Keybindings {
 	"Home": "Top",
 	"End": "Bottom",
 
-	"Enter": "! echo \"$LINE\" >> moo.log",
+	"Enter": "Select",
 	// XXX should we also have a "Click" event
 	//"ClickSelected": "Exit",
 
@@ -450,6 +456,7 @@ func (this Actions) RightEdge() bool {
 	// XXX
 	return true }
 
+// XXX
 func (this Actions) ToLine(line int) bool {
 	// XXX
 	return true }
@@ -513,6 +520,11 @@ func (this Actions) Update() bool {
 			file2buffer(os.Stdin) } }
 	return true }
 
+//func (this Actions) Select() bool {
+//	return true }
+//func (this Actions) Reject() bool {
+//	return true }
+
 var ACTIONS Actions
 
 var ENV = map[string]string {}
@@ -560,10 +572,10 @@ func callAction(actions string) bool {
 			state := map[string]string {
 				"SELECTED": selected,
 				"SELECTION": strings.Join(SELECTION, "\n"),
-				"COLS": string(CONTENT_COLS),
-				"ROWS": string(CONTENT_ROWS),
-				"LINES": string(len(TEXT_BUFFER)),
-				"LINE": string(ROW_OFFSET + CURRENT_ROW),
+				"COLS": fmt.Sprint(CONTENT_COLS),
+				"ROWS": fmt.Sprint(CONTENT_ROWS),
+				"LINES": fmt.Sprint(len(TEXT_BUFFER)),
+				"LINE": fmt.Sprint(ROW_OFFSET + CURRENT_ROW),
 				"TEXT": TEXT_BUFFER[CURRENT_ROW].text,
 			}
 			env := []string{}
@@ -626,6 +638,15 @@ func callAction(actions string) bool {
 	return true }
 // XXX add alias support...
 func callHandler(key string) bool {
+	// expand aliases...
+	seen := []string{ key }
+	if action, exists := KEYBINDINGS[key] ; exists {
+		_action := action
+		for exists && ! slices.Contains(seen, _action) {
+			if _action, exists = KEYBINDINGS[_action] ; exists {
+				action = _action } }
+		return callAction(action) }
+	// call...
 	if action, exists := KEYBINDINGS[key] ; exists {
 		return callAction(action) }
 	return true }
@@ -827,7 +848,10 @@ func fm(){
 var options struct {
 	// XXX
 
-	// XXX not used...
+	// Quick actions...
+	Select string `short:"s" long:"select" value-name:"CMD" env:"ENTER" description:"Command to execute on item select"`
+	Reject string `short:"r" long:"reject" value-name:"CMD" env:"ENTER" description:"Command to execute on reject"`
+
 	ListCommand string `short:"c" long:"cmd" value-name:"CMD" env:"CMD" description:"List command"`
 
 	// XXX chicken-egg: need to first parse the args then parse the ini 
@@ -852,6 +876,12 @@ func main(){
 	// globals...
 	INPUT_FILE = options.Pos.FILE
 	LIST_CMD = options.ListCommand
+
+	// XXX need to make these more generic...
+	if options.Select != "" {
+		KEYBINDINGS["Select"] = strings.ReplaceAll(options.Select, "\\n", "\n") }
+	if options.Reject != "" {
+		KEYBINDINGS["Reject"] = strings.ReplaceAll(options.Reject, "\\n", "\n") }
 
 	// log...
 	if options.LogFile != "" {
