@@ -84,6 +84,7 @@ import "github.com/gdamore/tcell/v2"
 
 
 var LIST_CMD string
+var TRANSFORM_CMD string
 var INPUT_FILE string
 var STDOUT string
 //var STDERR string
@@ -520,11 +521,6 @@ func (this Actions) Update() bool {
 			file2buffer(os.Stdin) } }
 	return true }
 
-//func (this Actions) Select() bool {
-//	return true }
-//func (this Actions) Reject() bool {
-//	return true }
-
 var ACTIONS Actions
 
 var ENV = map[string]string {}
@@ -846,11 +842,9 @@ func fm(){
 
 // command line args...
 var options struct {
-	// XXX
-
-	// Quick actions...
-	Select string `short:"s" long:"select" value-name:"CMD" env:"ENTER" description:"Command to execute on item select"`
-	Reject string `short:"r" long:"reject" value-name:"CMD" env:"ENTER" description:"Command to execute on reject"`
+	Pos struct {
+		FILE string
+	} `positional-args:"yes"`
 
 	ListCommand string `short:"c" long:"cmd" value-name:"CMD" env:"CMD" description:"List command"`
 
@@ -858,10 +852,19 @@ var options struct {
 	//		and then merge the two...
 	//ArgsFile string `long:"args-file" value-name:"FILE" env:"ARGS" description:"Arguments file"`
 
-	LogFile string `short:"l" long:"log" value-name:"FILE" env:"LOG" description:"Log file"`
-	Pos struct {
-		FILE string
-	} `positional-args:"yes"`
+
+	// Quick actions...
+	Actions struct {
+		Select string `short:"s" long:"select" value-name:"CMD" env:"SELECT" description:"Command to execute on item select"`
+		Reject string `short:"r" long:"reject" value-name:"CMD" env:"REJECT" description:"Command to execute on reject"`
+		// XXX not used yet...
+		Transform string `short:"t" long:"transform" value-name:"CMD" env:"TRANSFORM" description:"Command to transform a line"`
+	} `group:"Actions"`
+
+	Config struct {
+		LogFile string `short:"l" long:"log" value-name:"FILE" env:"LOG" description:"Log file"`
+		Separator string `long:"separator" value-name:"STRING" default:"\\n" env:"SEPARATOR" description:"Command separator"`
+	} `group:"Configuration"`
 }
 
 
@@ -876,17 +879,24 @@ func main(){
 	// globals...
 	INPUT_FILE = options.Pos.FILE
 	LIST_CMD = options.ListCommand
+	TRANSFORM_CMD = options.Transform
 
-	// XXX need to make these more generic...
-	if options.Select != "" {
-		KEYBINDINGS["Select"] = strings.ReplaceAll(options.Select, "\\n", "\n") }
-	if options.Reject != "" {
-		KEYBINDINGS["Reject"] = strings.ReplaceAll(options.Reject, "\\n", "\n") }
+	// action aliases...
+	if options.Actions.Select != "" {
+		KEYBINDINGS["Select"] = 
+			strings.ReplaceAll(
+				options.Actions.Select, 
+				options.Config.Separator, "\n") }
+	if options.Actions.Reject != "" {
+		KEYBINDINGS["Reject"] = 
+			strings.ReplaceAll(
+				options.Actions.Reject, 
+				options.Config.Separator, "\n") }
 
 	// log...
-	if options.LogFile != "" {
+	if options.Config.LogFile != "" {
 		logFile, err := os.OpenFile(
-			options.LogFile,
+			options.Config.LogFile,
 			os.O_APPEND|os.O_RDWR|os.O_CREATE, 0644)
 		if err != nil {
 			log.Panic(err) }
