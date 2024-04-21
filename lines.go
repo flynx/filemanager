@@ -459,7 +459,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 		for col = 0 ; col < COLS ; col++ {
 			// scrollbar...
 			if SCROLLBAR && 
-					col == COLS-1 &&
+					col + col_offset == COLS-1 &&
 					! (TITLE_LINE &&
 						row < top_offset) &&
 					! (STATUS_LINE &&
@@ -1090,8 +1090,8 @@ var options struct {
 
 	Chrome struct {
 		Title string `long:"title" value-name:"FMT" env:"TITLE" default:" %CMD " description:"Title format"`
-		Status string `long:"status" value-name:"FMT" env:"STATUS" default:" %CMD %SPAN %INDEX/%LINES " description:"Status format"`
 		TitleCommand string `long:"title-cmd" value-name:"CMD" env:"TITLE_CMD" description:"Title command"`
+		Status string `long:"status" value-name:"FMT" env:"STATUS" default:" %CMD %SPAN %INDEX/%LINES " description:"Status format"`
 		StatusCommand string `long:"status-cmd" value-name:"CMD" env:"STATUS_CMD" description:"Status command"`
 	} `group:"Chrome"`
 
