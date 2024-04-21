@@ -556,7 +556,7 @@ func callAction(actions string) bool {
 		code := action
 		for strings.ContainsRune(prefixes, rune(code[0])) {
 			prefix = append(prefix, rune(code[0]))
-			code = string(code[1:]) }
+			code = strings.TrimSpace(string(code[1:])) }
 		if len(prefix) > 0 {
 			var stdout bytes.Buffer
 			var stderr bytes.Buffer
