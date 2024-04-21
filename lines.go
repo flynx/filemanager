@@ -1,5 +1,5 @@
 /*
-* TODO (stage 1: basics):
+* TODO (stage 1: basics): -- DONE
 *	- basic navigation -- DONE
 *	- keybindings -- DONE
 *	- shell commands
@@ -10,28 +10,28 @@
 *		- update (action: re-run startup command) -- DONE
 *		- action
 *			keybinding -- DONE
-*			-key:<key>:<CMD>
-*		- transform (line -> screen line)
-*			XXX this is not needed as it is simpler ot make this part of the -c...
-*				i.e.
+*			-key=<key>:<CMD> -- DONE
+*		- transform (line -> screen line) -- DONE
+*			The ollowing are different because this is done once per line 
+*			lazily (when the line is first drawn):
 *					lines --cmd ls --transform 'sed "s/moo/foo/"'
-*				vs.
+*			While this is done for every line on load/reload:
 *					lines --cmd 'ls | sed "s/moo/foo/"'
-*		- output (???)
+*		- output -- DONE
 *	- selection -- DONE
-*	- config file / defaults
-*
-*
 * TODO (stage 2: features):
-*	- CLI flags/API
+*	- CLI flags/API -- DONE
+*	- config file / defaults
 *	- UI:
-*		- status
-*		- title
-*		- borders
+*		- status -- DONE
+*		- title -- DONE
+*		- borders (???)
 *		- colors (???)
+*	- live search / filtering (???)
+*		...this can be done via a text field live fed to a command either 
+*		changing selection or content...
+*	- cleanup / refactoring...
 *
-* XXX should we have search???
-*		...can we pigiback off grep?? =)
 *
 *
 *
