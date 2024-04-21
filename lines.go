@@ -14,9 +14,9 @@
 *		- transform (line -> screen line)
 *			XXX this is not needed as it is simpler ot make this part of the -c...
 *				i.e.
-*					fm --cmd ls --transform 'sed "s/moo/foo/"'
+*					lines --cmd ls --transform 'sed "s/moo/foo/"'
 *				vs.
-*					fm --cmd 'ls | sed "s/moo/foo/"'
+*					lines --cmd 'ls | sed "s/moo/foo/"'
 *		- output (???)
 *	- selection -- DONE
 *	- config file / defaults
@@ -299,6 +299,8 @@ func file2buffer(file *os.File){
 
 
 
+// XXX add support for ansi escape sequences...
+//		...as a minimum strip them out...
 // XXX trying to cheat my way out of implementing this...
 func ansi2style(seq string, style tcell.Style) tcell.Style {
 	// sanity check...
@@ -318,7 +320,6 @@ func ansi2style(seq string, style tcell.Style) tcell.Style {
 	log.Println("---", args)
 
 	return style }
-
 
 func populateLine(str string, cmd string) string {
 	// %CMD...
@@ -366,8 +367,6 @@ func populateLine(str string, cmd string) string {
 			fmt.Sprintf("%"+fmt.Sprint(COLS - len(str) + 5) +"v", "")) }
 	return str }
 
-// XXX add support for ansi escape sequences...
-//		...as a minimum strip them out...
 func drawScreen(screen tcell.Screen, theme Theme){
 	screen.Clear()
 
@@ -938,7 +937,7 @@ func updateGeometry(screen tcell.Screen){
 	if STATUS_LINE {
 		ROWS-- } }
 
-func fm(){
+func lines(){
 	// setup...
 	screen, err := tcell.NewScreen()
 	if err != nil {
@@ -1052,6 +1051,14 @@ var options struct {
 		FILE string
 	} `positional-args:"yes"`
 
+	// XXX formatting the config string seems to break things...
+	//ListCommand string `
+	//	short:"c" 
+	//	long:"cmd" 
+	//	value-name:"CMD" 
+	//	env:"CMD" 
+	//	description:"List command"`
+	// NOTE: this is not the same as filtering the input as it will be 
 	ListCommand string `short:"c" long:"cmd" value-name:"CMD" env:"CMD" description:"List command"`
 	// NOTE: this is not the same as filtering the input as it will be 
 	//		done lazily when the line reaches view.
@@ -1067,6 +1074,10 @@ var options struct {
 		Select string `short:"s" long:"select" value-name:"CMD" env:"SELECT" description:"Command to execute on item select"`
 		Reject string `short:"r" long:"reject" value-name:"CMD" env:"REJECT" description:"Command to execute on reject"`
 	} `group:"Actions"`
+
+	Keyboard struct {
+		Key map[string]string `short:"k" long:"key" value-name:"KEY:ACTION" description:"Bind key to action"`
+	} `group:"Keyboard"`
 
 	Chrome struct {
 		Title string `long:"title" value-name:"FMT" env:"TITLE" default:" %CMD " description:"Title format"`
@@ -1115,6 +1126,13 @@ func main(){
 				options.Actions.Reject, 
 				options.Config.Separator, "\n") }
 
+	// keys...
+	for key, action := range options.Keyboard.Key {
+		KEYBINDINGS[key] = 
+			strings.ReplaceAll(
+				action, 
+				options.Config.Separator, "\n") }
+
 	// log...
 	if options.Config.LogFile != "" {
 		logFile, err := os.OpenFile(
@@ -1127,10 +1145,10 @@ func main(){
 		log.SetOutput(logFile) }
 
 	// startup...
-	fm() 
+	lines() 
 
 	// output...
-	// XXX should this be here or in fm(..)
+	// XXX should this be here or in lines(..)
 	if STDOUT != "" {
 		fmt.Println(STDOUT) } }
 
