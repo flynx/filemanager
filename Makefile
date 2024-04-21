@@ -11,12 +11,12 @@
 
 
 
-windows: fm.exe
+windows: lines.exe
 
-linux: fm
+linux: lines
 
 
 
 clean:
-	rm -f fm fm.exe
+	rm -f lines lines.exe
 
