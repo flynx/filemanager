@@ -599,7 +599,7 @@ func (this Actions) Bottom() bool {
 		ROW_OFFSET = len(TEXT_BUFFER) - ROWS }
 	return true }
 
-// XXX horizontal navigation...
+/*// XXX horizontal navigation...
 func (this Actions) Left() bool {
 	// XXX
 	return true }
@@ -620,6 +620,7 @@ func (this Actions) LeftEdge() bool {
 func (this Actions) RightEdge() bool {
 	// XXX
 	return true }
+//*/
 
 // XXX
 func (this Actions) ToLine(line int) bool {
@@ -684,6 +685,12 @@ func (this Actions) Update() bool {
 			//defer os.Stdin.Close()
 			file2buffer(os.Stdin) } }
 	return true }
+
+// placeholder...
+// NOTE: This is never called directly but is here for documentation...
+func (this Actions) Exit() bool {
+	return true }
+
 
 var ACTIONS Actions
 
@@ -1077,6 +1084,8 @@ var options struct {
 
 	Keyboard struct {
 		Key map[string]string `short:"k" long:"key" value-name:"KEY:ACTION" description:"Bind key to action"`
+		// XXX move this to help...
+		ListActions bool `long:"list-actions" description:"List available actions"`
 	} `group:"Keyboard"`
 
 	Chrome struct {
@@ -1100,6 +1109,14 @@ func main(){
 			return }
 		log.Println("Error:", err)
 		os.Exit(1) }
+
+	// doc...
+	if options.Keyboard.ListActions {
+		t := reflect.TypeOf(&ACTIONS)
+		for i := 0; i < t.NumMethod(); i++ {
+			m := t.Method(i)
+			fmt.Println("    "+ m.Name) }
+		return }
 
 	// globals...
 	INPUT_FILE = options.Pos.FILE
