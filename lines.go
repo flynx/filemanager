@@ -7,7 +7,7 @@
 *		- startup
 *			pipe -- DONE
 *			-c CMD -- DONE
-*		- update (action: re-run startup command)
+*		- update (action: re-run startup command) -- DONE
 *		- action
 *			keybinding -- DONE
 *			-key:<key>:<CMD>
@@ -88,8 +88,57 @@ import "github.com/jessevdk/go-flags"
 import "github.com/gdamore/tcell/v2"
 
 
+// XXX refactoring -- not sure about this yet...
+type Lines struct {
+	TabSize uint
+	Shell string
+
+	Theme Theme
+
+	Keybindings Keybindings
+
+	ListCMD string
+	TransformCMD string
+	InputFile string
+	// XXX should this be bytes.Buffer???
+	Output string
+
+	Cols uint
+	Rows uint
+
+	// text buffer...
+	Text []Row
+
+	TextWidth uint
+
+	CurrentRow uint
+
+	// screen offset within the .Text
+	RowOffset uint
+	ColOffset uint
+
+	Scrollbar bool
+	ScrollbarFG rune
+	ScrollbarBG rune
+	ScrollThreshold uint
+}
+
+func New() Lines {
+	return Lines{
+		TabSize: 8,
+		Shell: "bash -c",
+		Theme: THEME,
+		Keybindings: KEYBINDINGS,
+		// XXX
+	}
+}
+//*/
+
+
 var LIST_CMD string
+var TRANSFORM_CMD string
 var INPUT_FILE string
+// XXX should this be a buffer???
 var STDOUT string
 //var STDERR string
 
@@ -99,7 +148,7 @@ var SHELL = "bash -c"
 var TAB_SIZE = 8
 
 var ROWS, COLS int
-var CONTENT_ROWS, CONTENT_COLS int
+//var CONTENT_ROWS, CONTENT_COLS int
 
 var COL_OFFSET = 0
 var ROW_OFFSET = 0
@@ -111,8 +160,14 @@ var SCROLLBAR_BG = tcell.RuneBoard
 var SCROLL_THRESHOLD_TOP = 3
 var SCROLL_THRESHOLD_BOTTOM = 3
 
-// XXX
-//var STATUS_LINE = false
+var TITLE_CMD string
+var TITLE_LINE = false
+var TITLE_LINE_FMT = ""
+
+var STATUS_CMD string
+var STATUS_LINE = false
+var STATUS_LINE_FMT = ""
+
 
 // current row relative to viewport...
 var CURRENT_ROW = 0
@@ -128,9 +183,9 @@ var TEXT_BUFFER_WIDTH = 0
 
 type Row struct {
 	selected bool
+	transformed bool
 	text string
 }
-//var TEXT_BUFFER = [][]rune{ {} }
 var TEXT_BUFFER = []Row{}
 
 var SELECTION = []string{}
@@ -196,6 +251,12 @@ var THEME = Theme {
 		Background(tcell.ColorReset).
 		Foreground(tcell.ColorYellow).
 		Reverse(true),
+	"status-line": tcell.StyleDefault.
+		Background(tcell.ColorGray).
+		Foreground(tcell.ColorReset),
+	"title-line": tcell.StyleDefault.
+		Background(tcell.ColorGray).
+		Foreground(tcell.ColorReset),
 }
 
 
@@ -259,54 +320,156 @@ func ansi2style(seq string, style tcell.Style) tcell.Style {
 	return style }
 
 
+func populateLine(str string, cmd string) string {
+	// %CMD...
+	if strings.Contains(str, "%CMD") {
+		s, err := "", error(nil)
+		if cmd != "" {
+			s, err = callTransform(cmd, str)
+			if err != nil {
+				s = "" } }
+		str = strings.ReplaceAll(str, "%CMD", s) } 
+	// %INDEX...
+	str = strings.ReplaceAll(str, "%INDEX", 
+		fmt.Sprint(ROW_OFFSET + CURRENT_ROW + 1))
+	// %LINES...
+	str = strings.ReplaceAll(str, "%LINES", 
+		fmt.Sprint(len(TEXT_BUFFER)))
+	// %SELECTED...
+	current := TEXT_BUFFER[CURRENT_ROW + ROW_OFFSET]
+	selected := ""
+	if current.selected {
+		selected = "*" }
+	str = strings.ReplaceAll(str, "%SELECTED", selected)
+	// %SELECTION...
+	selection := fmt.Sprint(len(SELECTION))
+	if selection == "0" {
+		selection = "" }
+	str = strings.ReplaceAll(str, "%SELECTION", selection)
+	// %REST...
+	rest := ""
+	if len(current.text) > COLS {
+		rest = current.text[COLS:] }
+	str = strings.ReplaceAll(str, "%REST", rest)
+	// %SPAN / fit width...
+	// contract...
+	if len(str) > COLS {
+		overflow := (len(str) - COLS) + 3
+		parts := strings.SplitN(str, "%SPAN", 2)
+		str = string(parts[0][:len(parts[0])-overflow]) + "..."
+		if len(parts) > 1 {
+			str += parts[1] }
+	// expand...
+	} else {
+		// XXX need a way to indicate the character to use for expansion...
+		str = strings.ReplaceAll(str, "%SPAN", 
+			fmt.Sprintf("%"+fmt.Sprint(COLS - len(str) + 5) +"v", "")) }
+	return str }
+
 // XXX add support for ansi escape sequences...
 //		...as a minimum strip them out...
-// XXX not sure if we need style arg here...
-// XXX add scrollbar...
 func drawScreen(screen tcell.Screen, theme Theme){
 	screen.Clear()
 
 	// scrollbar...
 	var scroller_size, scroller_offset int
+	scroller_style, ok := theme["scrollbar"]
+	if ! ok {
+		scroller_style = theme["default"] }
 	SCROLLBAR = len(TEXT_BUFFER) > ROWS
 	if SCROLLBAR {
 		r := float32(ROWS) / float32(len(TEXT_BUFFER))
 		scroller_size = 1 + int(float32(ROWS - 1) * r)
 		scroller_offset = int(float32(ROW_OFFSET + 1) * r) }
 
+	// XXX CONTENT_ROWS... (???)
+	top_offset := 0
+	bottom_offset := 0
+	if TITLE_LINE {
+		top_offset++ }
+	if STATUS_LINE {
+		bottom_offset++ }
+	height := 
+		top_offset + 
+		ROWS + 
+		bottom_offset
+
 	var col, row int
 	style := theme["default"]
-	for row = 0 ; row < ROWS ; row++ {
-		var buf_row = row + ROW_OFFSET
+	for row = 0 ; row < height ; row++ {
+		var buf_row = row - top_offset + ROW_OFFSET
 
 		// row theming...
 		style = theme["default"]
-		if buf_row < len(TEXT_BUFFER) {
+		non_default_style := true
+		if buf_row >= 0 && 
+				buf_row < len(TEXT_BUFFER) {
 			// current+selected...
 			if TEXT_BUFFER[buf_row].selected &&
-					CURRENT_ROW == row {
-				style = theme["current-selected"]
+					CURRENT_ROW == row - top_offset {
+				style, non_default_style = theme["current-selected"]
 			// mark selected...
 			} else if TEXT_BUFFER[buf_row].selected {
-				style = theme["selected"]
+				style, non_default_style = theme["selected"]
 			// current...
-			} else if CURRENT_ROW == row {
-				style = theme["current"] } } 
+			} else if CURRENT_ROW == row - top_offset {
+				style, non_default_style = theme["current"] } } 
 
 		// normalize...
 		line := []rune{}
-		if buf_row < len(TEXT_BUFFER) {
-			line = []rune(TEXT_BUFFER[buf_row].text) }
+		// buffer line...
+		if buf_row >= 0 && 
+				buf_row < len(TEXT_BUFFER) && 
+				row >= top_offset &&
+				row <= ROWS {
+			// transform (lazy)...
+			// XXX should we do this in advance +/- screen (a-la ImageGrid ribbons)???
+			if TRANSFORM_CMD != "" && 
+					! TEXT_BUFFER[buf_row].transformed {
+				text, err := callTransform(TRANSFORM_CMD, TEXT_BUFFER[buf_row].text)
+				if err == nil {
+					TEXT_BUFFER[buf_row].text = text
+					TEXT_BUFFER[buf_row].transformed = true } }
+			line = []rune(TEXT_BUFFER[buf_row].text) 
+		// chrome...
+		} else {
+			str, cmd := "", ""
+			// title...
+			if TITLE_LINE && 
+					row == 0 {
+				str = TITLE_LINE_FMT
+				style, non_default_style = theme["title-line"]
+				if TITLE_CMD != "" {
+					cmd = TITLE_CMD }
+			// status...
+			} else if STATUS_LINE && 
+					row == height-1 {
+				str = STATUS_LINE_FMT
+				style, non_default_style = theme["status-line"] 
+				if STATUS_CMD != "" {
+					cmd = STATUS_CMD } }
+			// populate the line...
+			line = []rune(populateLine(str, cmd)) }
+
+		// set default style...
+		if ! non_default_style {
+			style = theme["default"] }
 
 		var col_offset = 0
 		var buf_offset = 0
 		for col = 0 ; col < COLS ; col++ {
 			// scrollbar...
-			if SCROLLBAR && col == COLS-1 {
+			if SCROLLBAR && 
+					col == COLS-1 &&
+					! (TITLE_LINE &&
+						row < top_offset) &&
+					! (STATUS_LINE &&
+						row == height-1) {
 				c := SCROLLBAR_BG
-				if row >= scroller_offset && row < scroller_offset+scroller_size {
+				if row-top_offset >= scroller_offset && 
+						row-top_offset < scroller_offset+scroller_size {
 					c = SCROLLBAR_FG }
-				screen.SetContent(col + col_offset, row, c, nil, theme["default"])
+				screen.SetContent(col + col_offset, row, c, nil, scroller_style)
 				continue }
 
 			var buf_col = col + buf_offset + COL_OFFSET 
@@ -526,7 +689,57 @@ func (this Actions) Update() bool {
 var ACTIONS Actions
 
 var ENV = map[string]string {}
-var isVarCommand = regexp.MustCompile(`^[a-zA-Z_]+=`)
+
+// XXX needs revision -- fells hacky...
+func callCommand(code string, stdin bytes.Buffer) (bytes.Buffer, bytes.Buffer, error) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	shell := strings.Fields(SHELL)
+	cmd := exec.Command(shell[0], append(shell[1:], code)...)
+
+	cmd.Stdin = &stdin
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	// pass data to command via env...
+	selected := ""
+	if TEXT_BUFFER[CURRENT_ROW + ROW_OFFSET].selected {
+		selected = "1" }
+	state := map[string]string {
+		"SELECTED": selected,
+		"SELECTION": strings.Join(SELECTION, "\n"),
+		// XXX need a way to tell the command the current available width...
+		//"COLS": fmt.Sprint(CONTENT_COLS),
+		//"ROWS": fmt.Sprint(CONTENT_ROWS),
+		"LINES": fmt.Sprint(len(TEXT_BUFFER)),
+		"LINE": fmt.Sprint(ROW_OFFSET + CURRENT_ROW),
+		"TEXT": TEXT_BUFFER[CURRENT_ROW].text,
+	}
+	env := []string{}
+	for k, v := range ENV {
+		if v != "" {
+			env = append(env, k +"="+ v) } }
+	for k, v := range state {
+		if v != "" {
+			env = append(env, k +"="+ v) } }
+	cmd.Env = append(cmd.Environ(), env...) 
+
+	// run the command...
+	// XXX this should be run async???
+	//		...option??
+	var err error
+	if err = cmd.Run(); err != nil {
+		log.Println("Error executing: \""+ code +"\":", err) 
+		log.Println("    ENV:", env) }
+
+	return stdout, stderr, err }
+func callTransform(cmd string, line string) (string, error) {
+	var stdin bytes.Buffer
+	stdin.Write([]byte(line))
+	stdout, _, err := callCommand(cmd, stdin)
+	return stdout.String(), err }
+var isVarCommand = regexp.MustCompile(`^\s*[a-zA-Z_]+=`)
 func callAction(actions string) bool {
 	// XXX make split here a bit more cleaver:
 	//		- support ";"
@@ -550,56 +763,29 @@ func callAction(actions string) bool {
 			delete(ENV, name) 
 			continue }
 
-		// !ACTION | <ACTION | @ACTION | ...
+		// shell commands:
+		//		@ CMD	- simple command
+		//		! CMD	- stdout treated as env variables, one per line
+		//		< CMD	- stdout read into buffer
+		//		> CMD	- stdout printed to lines stdout
+		//		| CMD	- current line passed to stdin
+		// NOTE: commands can be combined.
 		prefixes := "@!<>|"
 		prefix := []rune{}
 		code := action
+		// split out the prefixes...
 		for strings.ContainsRune(prefixes, rune(code[0])) {
 			prefix = append(prefix, rune(code[0]))
 			code = strings.TrimSpace(string(code[1:])) }
 		if len(prefix) > 0 {
-			var stdout bytes.Buffer
-			var stderr bytes.Buffer
-			shell := strings.Fields(SHELL)
-			cmd := exec.Command(shell[0], append(shell[1:], code)...)
-			// read input into command's stdin...
+
+			var stdin bytes.Buffer
 			if slices.Contains(prefix, '|') {
-				var stdin bytes.Buffer
-				stdin.Write([]byte(TEXT_BUFFER[CURRENT_ROW].text))
-				cmd.Stdin = &stdin }
-			cmd.Stdout = &stdout
-			cmd.Stderr = &stderr
+				stdin.Write([]byte(TEXT_BUFFER[CURRENT_ROW].text)) }
 
-			// pass data to command via env...
-			// XXX handle this globally/func...
-			// SELECTED...
-			selected := ""
-			if TEXT_BUFFER[CURRENT_ROW + ROW_OFFSET].selected {
-				selected = "1" }
-			state := map[string]string {
-				"SELECTED": selected,
-				"SELECTION": strings.Join(SELECTION, "\n"),
-				"COLS": fmt.Sprint(CONTENT_COLS),
-				"ROWS": fmt.Sprint(CONTENT_ROWS),
-				"LINES": fmt.Sprint(len(TEXT_BUFFER)),
-				"LINE": fmt.Sprint(ROW_OFFSET + CURRENT_ROW),
-				"TEXT": TEXT_BUFFER[CURRENT_ROW].text,
-			}
-			env := []string{}
-			for k, v := range ENV {
-				if v != "" {
-					env = append(env, k +"="+ v) } }
-			for k, v := range state {
-				if v != "" {
-					env = append(env, k +"="+ v) } }
-			cmd.Env = append(cmd.Environ(), env...) 
-
-			// run the command...
-			// XXX this should be run async???
-			//		...option??
-			if err := cmd.Run(); err != nil {
-				log.Println("Error executing: \""+ code +"\":", err) 
-				log.Println("    ENV:", env) 
+			//stdout, stderr, err := callCommand(code, stdin)
+			stdout, _, err := callCommand(code, stdin)
+			if err != nil {
 				break }
 
 			// list output...
@@ -614,9 +800,9 @@ func callAction(actions string) bool {
 			// output to env...
 			if slices.Contains(prefix, '!') {
 				for _, str := range strings.Split(stdout.String(), "\n") {
-					if strings.TrimSpace(str) == "" {
+					if strings.TrimSpace(str) == "" ||
+							! isVarCommand.Match([]byte(str)) {
 						continue }
-					// XXX this is a bit naive...
 					res := strings.SplitN(str, "=", 1)
 					if len(res) != 2 {
 						continue }
@@ -745,6 +931,13 @@ func handleScrollLimits(){
 		ROW_OFFSET -= delta 
 		CURRENT_ROW += delta } }
 
+func updateGeometry(screen tcell.Screen){
+	COLS, ROWS = screen.Size() 
+	if TITLE_LINE {
+		ROWS-- }
+	if STATUS_LINE {
+		ROWS-- } }
+
 func fm(){
 	// setup...
 	screen, err := tcell.NewScreen()
@@ -769,15 +962,18 @@ func fm(){
 	ACTIONS.Update()
 
 	for {
-		COLS, ROWS = screen.Size()
+		updateGeometry(screen)
 
-
+		/* XXX these are not used...
 		CONTENT_COLS, CONTENT_ROWS = COLS, ROWS
-		// XXX also handle borders titlebar and statusbar...
 		if SCROLLBAR {
-			CONTENT_COLS -= 1 }
+			CONTENT_COLS-- }
+		if TITLE_LINE {
+			CONTENT_ROWS-- }
+		if STATUS_LINE {
+			CONTENT_ROWS-- }
+		//*/
 
-		// XXX rename...
 		drawScreen(screen, THEME)
 
 		screen.Show()
@@ -785,11 +981,9 @@ func fm(){
 		evt := screen.PollEvent()
 
 		switch evt := evt.(type) {
-			// XXX BUG: resizing smaller with last row in TEXT_BUFFER selected
-			//		the offset jumps by +/- 3...
 			// keep the selection in the same spot...
 			case *tcell.EventResize:
-				COLS, ROWS = screen.Size()
+				updateGeometry(screen)
 				handleScrollLimits()
 
 			case *tcell.EventKey:
@@ -801,27 +995,36 @@ func fm(){
 				if evt.Key() == tcell.KeyEscape || evt.Key() == tcell.KeyCtrlC {
 					return }
 
-			// XXX clicking above top threshold or below bottom threshold 
-			//		should scroll the cursor to the threshold...
 			case *tcell.EventMouse:
 				buttons := evt.Buttons()
 				// XXX handle double click...
 				// XXX handle modifiers...
 				if buttons & tcell.Button1 != 0 || buttons & tcell.Button2 != 0 {
 					col, row := evt.Position()
+					// title/status bars...
+					top_offset := 0
+					if TITLE_LINE {
+						top_offset = 1
+						if row == 0 {
+							// XXX handle titlebar click???
+							continue } }
+					if STATUS_LINE {
+						if row == ROWS + 1 {
+							// XXX handle statusbar click???
+							continue } }
 					// scrollbar...
 					// XXX sould be nice if we started in the scrollbar 
-					//		to heep handling the drag untill released...
+					//		to keep handling the drag untill released...
 					//		...for this to work need to either detect 
 					//		drag or release...
 					if SCROLLBAR && col == COLS-1 {
 						ROW_OFFSET = 
-							int((float32(row) / float32(ROWS - 1)) * 
+							int((float32(row - top_offset) / float32(ROWS - 1)) * 
 							float32(len(TEXT_BUFFER) - ROWS))
 					// second click in curent row...
 					// XXX should we have a timeout here???
 					// XXX this triggers on drag... is this a bug???
-					} else if row == CURRENT_ROW {
+					} else if row - top_offset == CURRENT_ROW {
 						if ! callHandler("ClickSelected") {
 							return }
 					// below list...
@@ -829,7 +1032,7 @@ func fm(){
 						CURRENT_ROW = len(TEXT_BUFFER) - 1
 					// list...
 					} else {
-						CURRENT_ROW = row }
+						CURRENT_ROW = row - top_offset }
 					handleScrollLimits()
 
 
@@ -839,9 +1042,7 @@ func fm(){
 
 				} else if buttons & tcell.WheelDown != 0 {
 					if ! callHandler("WheelDown") {
-						return } }
-
-		} } }
+						return } } } } }
 
 
 
@@ -852,6 +1053,9 @@ var options struct {
 	} `positional-args:"yes"`
 
 	ListCommand string `short:"c" long:"cmd" value-name:"CMD" env:"CMD" description:"List command"`
+	// NOTE: this is not the same as filtering the input as it will be 
+	//		done lazily when the line reaches view.
+	TransformCommand string `short:"t" long:"transform" value-name:"CMD" env:"TRANSFORM" description:"Row transform command"`
 
 	// XXX chicken-egg: need to first parse the args then parse the ini 
 	//		and then merge the two...
@@ -863,6 +1067,13 @@ var options struct {
 		Select string `short:"s" long:"select" value-name:"CMD" env:"SELECT" description:"Command to execute on item select"`
 		Reject string `short:"r" long:"reject" value-name:"CMD" env:"REJECT" description:"Command to execute on reject"`
 	} `group:"Actions"`
+
+	Chrome struct {
+		Title string `long:"title" value-name:"FMT" env:"TITLE" default:" %CMD " description:"Title format"`
+		Status string `long:"status" value-name:"FMT" env:"STATUS" default:" %CMD %SPAN %INDEX/%LINES " description:"Status format"`
+		TitleCommand string `long:"title-cmd" value-name:"CMD" env:"TITLE_CMD" description:"Title command"`
+		StatusCommand string `long:"status-cmd" value-name:"CMD" env:"STATUS_CMD" description:"Status command"`
+	} `group:"Chrome"`
 
 	Config struct {
 		LogFile string `short:"l" long:"log" value-name:"FILE" env:"LOG" description:"Log file"`
@@ -882,6 +1093,15 @@ func main(){
 	// globals...
 	INPUT_FILE = options.Pos.FILE
 	LIST_CMD = options.ListCommand
+	TRANSFORM_CMD = options.TransformCommand
+
+	TITLE_LINE_FMT = options.Chrome.Title
+	TITLE_LINE = TITLE_LINE_FMT != ""
+	TITLE_CMD = options.Chrome.TitleCommand
+
+	STATUS_LINE_FMT = options.Chrome.Status
+	STATUS_LINE = STATUS_LINE_FMT != ""
+	STATUS_CMD = options.Chrome.StatusCommand
 
 	// action aliases...
 	if options.Actions.Select != "" {
