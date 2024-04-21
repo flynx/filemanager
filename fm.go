@@ -550,14 +550,23 @@ func callAction(actions string) bool {
 			delete(ENV, name) 
 			continue }
 
-		// !ACTION | <ACTION | @ACTION...
-		if action[0] == '!' || action[0] == '<' || action[0] == '@' {
-			prefix, code := action[0], action[1:]
+		// !ACTION | <ACTION | @ACTION | ...
+		prefixes := "@!<>|"
+		prefix := []rune{}
+		code := action
+		for strings.ContainsRune(prefixes, rune(code[0])) {
+			prefix = append(prefix, rune(code[0]))
+			code = string(code[1:]) }
+		if len(prefix) > 0 {
 			var stdout bytes.Buffer
 			var stderr bytes.Buffer
 			shell := strings.Fields(SHELL)
-			// XXX this is ugly, split slice and unpack instead of just unpack...
 			cmd := exec.Command(shell[0], append(shell[1:], code)...)
+			// read input into command's stdin...
+			if slices.Contains(prefix, '|') {
+				var stdin bytes.Buffer
+				stdin.Write([]byte(TEXT_BUFFER[CURRENT_ROW].text))
+				cmd.Stdin = &stdin }
 			cmd.Stdout = &stdout
 			cmd.Stderr = &stderr
 
@@ -586,26 +595,32 @@ func callAction(actions string) bool {
 			cmd.Env = append(cmd.Environ(), env...) 
 
 			// run the command...
-			// XXX this should be async???
+			// XXX this should be run async???
 			//		...option??
 			if err := cmd.Run(); err != nil {
 				log.Println("Error executing: \""+ code +"\":", err) 
 				log.Println("    ENV:", env) 
 				break }
 
-			// handle output...
-			if prefix == '@' {
-				STDOUT += stdout.String()
-
-			} else if prefix == '!' {
-				// XXX read stdout into env... (???)
-				//env := strings.Split(stdout.String(), "\n")
-
-			} else if prefix == '<' {
+			// list output...
+			if slices.Contains(prefix, '<') {
 				// XXX stdout should be read line by line as it comes...
 				// XXX keep selection and current item and screen position 
 				//		relative to current..
 				str2buffer(stdout.String()) }
+			// output to stdout...
+			if slices.Contains(prefix, '>') {
+				STDOUT += stdout.String() }
+			// output to env...
+			if slices.Contains(prefix, '!') {
+				for _, str := range strings.Split(stdout.String(), "\n") {
+					if strings.TrimSpace(str) == "" {
+						continue }
+					// XXX this is a bit naive...
+					res := strings.SplitN(str, "=", 1)
+					if len(res) != 2 {
+						continue }
+					ENV[strings.TrimSpace(res[0])] = strings.TrimSpace(res[1]) } }
 
 			// handle env...
 			if name != "" {
