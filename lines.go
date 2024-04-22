@@ -1178,6 +1178,7 @@ func main(){
 				options.Config.Separator, "\n") }
 
 	// themes/colors...
+	// XXX should colors be stored as strings or as direct color values???
 	for name, spec := range options.Config.Theme {
 		color := strings.SplitN(spec, ":", 2)
 		THEME[name] = 
