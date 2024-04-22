@@ -84,6 +84,8 @@ import "bufio"
 import "reflect"
 import "regexp"
 
+//import "go/importer"
+
 import "github.com/jessevdk/go-flags"
 import "github.com/gdamore/tcell/v2"
 
@@ -337,7 +339,9 @@ func populateLine(str string, cmd string) string {
 	str = strings.ReplaceAll(str, "%LINES", 
 		fmt.Sprint(len(TEXT_BUFFER)))
 	// %SELECTED...
-	current := TEXT_BUFFER[CURRENT_ROW + ROW_OFFSET]
+	current := Row{}
+	if len(TEXT_BUFFER) != 0 {
+		current = TEXT_BUFFER[CURRENT_ROW + ROW_OFFSET] } 
 	selected := ""
 	if current.selected {
 		selected = "*" }
@@ -1058,6 +1062,8 @@ var options struct {
 		FILE string
 	} `positional-args:"yes"`
 
+	// XXX can we set default values from variables???
+	//		...doing ` ... `+ VAR +` ... ` breaks things...
 	// XXX formatting the config string seems to break things...
 	//ListCommand string `
 	//	short:"c" 
@@ -1084,8 +1090,6 @@ var options struct {
 
 	Keyboard struct {
 		Key map[string]string `short:"k" long:"key" value-name:"KEY:ACTION" description:"Bind key to action"`
-		// XXX move this to help...
-		ListActions bool `long:"list-actions" description:"List available actions"`
 	} `group:"Keyboard"`
 
 	Chrome struct {
@@ -1098,7 +1102,19 @@ var options struct {
 	Config struct {
 		LogFile string `short:"l" long:"log" value-name:"FILE" env:"LOG" description:"Log file"`
 		Separator string `long:"separator" value-name:"STRING" default:"\\n" env:"SEPARATOR" description:"Command separator"`
+		// XXX might be fun to be able to set this to something like "middle"...
+		ScrollThreshold int `long:"scroll-threshold" value-name:"N" default:"3" description:"Number of lines from the edge of screen to triger scrolling"`
+		// XXX not sure how to override the defaults without overriding user options...
+		//ScrollThresholdTop int `long:"scroll-threshold-top" value-name:"N" default:"3" description:"Number of lines from the top edge of screen to triger scrolling"`
+		//ScrollThresholdBottom int `long:"scroll-threshold-bottom" value-name:"N" default:"3" description:"Number of lines from the bottom edge of screen to triger scrolling"`
+		Theme map[string]string `long:"theme" value-name:"NAME:FGCOLOR:BGCOLOR" description:"Set theme color"`
 	} `group:"Configuration"`
+
+	Introspection struct {
+		ListActions bool `long:"list-actions" description:"List available actions"`
+		ListThemeable bool `long:"list-themeable" description:"List available themable element names"`
+		ListColors bool `long:"list-colors" description:"List usable color names"`
+	} `group:"Introspection"`
 }
 
 
@@ -1111,11 +1127,19 @@ func main(){
 		os.Exit(1) }
 
 	// doc...
-	if options.Keyboard.ListActions {
+	if options.Introspection.ListActions {
 		t := reflect.TypeOf(&ACTIONS)
 		for i := 0; i < t.NumMethod(); i++ {
 			m := t.Method(i)
 			fmt.Println("    "+ m.Name) }
+		return }
+	if options.Introspection.ListThemeable {
+		for name, _ := range THEME {
+			fmt.Println("    "+ name) }
+		return }
+	if options.Introspection.ListColors {
+		for name, _ := range tcell.ColorNames {
+			fmt.Println("    "+ name) }
 		return }
 
 	// globals...
@@ -1130,6 +1154,9 @@ func main(){
 	STATUS_LINE_FMT = options.Chrome.Status
 	STATUS_LINE = STATUS_LINE_FMT != ""
 	STATUS_CMD = options.Chrome.StatusCommand
+
+	SCROLL_THRESHOLD_TOP = options.Config.ScrollThreshold
+	SCROLL_THRESHOLD_BOTTOM = options.Config.ScrollThreshold
 
 	// action aliases...
 	if options.Actions.Select != "" {
@@ -1149,6 +1176,14 @@ func main(){
 			strings.ReplaceAll(
 				action, 
 				options.Config.Separator, "\n") }
+
+	// themes/colors...
+	for name, spec := range options.Config.Theme {
+		color := strings.SplitN(spec, ":", 2)
+		THEME[name] = 
+			tcell.StyleDefault.
+				Foreground(tcell.GetColor(color[0])).
+				Background(tcell.GetColor(color[1])) }
 
 	// log...
 	if options.Config.LogFile != "" {
