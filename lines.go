@@ -1108,8 +1108,8 @@ var options struct {
 
 	// Quick actions...
 	Actions struct {
-		Select string `short:"s" long:"select" value-name:"CMD" env:"SELECT" description:"Command to execute on item select"`
-		Reject string `short:"r" long:"reject" value-name:"CMD" env:"REJECT" description:"Command to execute on reject"`
+		Select string `short:"s" long:"select" value-name:"ACTION" env:"SELECT" description:"Command to execute on item select"`
+		Reject string `short:"r" long:"reject" value-name:"ACTION" env:"REJECT" description:"Command to execute on reject"`
 	} `group:"Actions"`
 
 	Keyboard struct {
