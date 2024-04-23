@@ -337,6 +337,7 @@ func ansi2style(seq string, style tcell.Style) tcell.Style {
 
 	return style }
 
+// XXX add ability to expand envioronment variables...
 func populateTemplateLine(str string, cmd string) string {
 	// %CMD...
 	if strings.Contains(str, "%CMD") {
