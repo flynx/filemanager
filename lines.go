@@ -1,4 +1,11 @@
 /*
+* XXX BUG: opening a nested lines and quitting can sometimes hang the parent (race)???
+*		...fells like both event loops are running at the same time and 
+*		they race to catch the events...
+* XXX BUG: opening a nested tui app does not work (mc, less, ...)
+*		...stop/pause the event loop???
+*
+*
 * TODO (stage 1: basics): -- DONE
 *	- basic navigation -- DONE
 *	- keybindings -- DONE
@@ -26,7 +33,7 @@
 *		- status -- DONE
 *		- title -- DONE
 *		- borders (???)
-*		- colors (???)
+*		- colors -- DONE
 *	- live search / filtering (???)
 *		...this can be done via a text field live fed to a command either 
 *		changing selection or content...
@@ -90,7 +97,7 @@ import "github.com/jessevdk/go-flags"
 import "github.com/gdamore/tcell/v2"
 
 
-// XXX refactoring -- not sure about this yet...
+/*/ XXX refactoring -- not sure about this yet...
 type Lines struct {
 	TabSize uint
 	Shell string
@@ -123,6 +130,8 @@ type Lines struct {
 	ScrollbarFG rune
 	ScrollbarBG rune
 	ScrollThreshold uint
+
+	Actions Actions
 }
 
 func New() Lines {
@@ -135,6 +144,7 @@ func New() Lines {
 	}
 }
 //*/
+
 
 
 var LIST_CMD string
@@ -233,6 +243,8 @@ var KEYBINDINGS = Keybindings {
 	"ctrl+a": "SelectAll",
 	"ctrl+i": "SelectInverse",
 	"ctrl+d": "SelectNone",
+
+	"ctrl+r": "Refresh",
 }
 
 
@@ -323,7 +335,7 @@ func ansi2style(seq string, style tcell.Style) tcell.Style {
 
 	return style }
 
-func populateLine(str string, cmd string) string {
+func populateTemplateLine(str string, cmd string) string {
 	// %CMD...
 	if strings.Contains(str, "%CMD") {
 		s, err := "", error(nil)
@@ -452,7 +464,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 				if STATUS_CMD != "" {
 					cmd = STATUS_CMD } }
 			// populate the line...
-			line = []rune(populateLine(str, cmd)) }
+			line = []rune(populateTemplateLine(str, cmd)) }
 
 		// set default style...
 		if ! non_default_style {
@@ -632,7 +644,7 @@ func (this Actions) ToLine(line int) bool {
 	return true }
 
 // selection...
-func _updateSelection(){
+func updateSelectionList(){
 	SELECTION = []string{}
 	for _, row := range TEXT_BUFFER {
 		if row.selected {
@@ -645,12 +657,12 @@ func (this Actions) SelectToggle(rows ...int) bool {
 			TEXT_BUFFER[i].selected = false 
 		} else {
 			TEXT_BUFFER[i].selected = true } }
-	_updateSelection()
+	updateSelectionList()
 	return true }
 func (this Actions) SelectAll() bool {
 	for i := 0; i < len(TEXT_BUFFER); i++ {
 		TEXT_BUFFER[i].selected = true } 
-	_updateSelection()
+	updateSelectionList()
 	return true }
 func (this Actions) SelectNone() bool {
 	for i := 0; i < len(TEXT_BUFFER); i++ {
@@ -675,9 +687,6 @@ func (this Actions) Update() bool {
 		file2buffer(file) 
 	// command...
 	} else if LIST_CMD != "" {
-		// XXX HACK???
-		TEXT_BUFFER = []Row{ {} }
-		// XXX call Update action...
 		callAction("<"+ LIST_CMD)
 	// pipe...
 	} else {
@@ -689,6 +698,10 @@ func (this Actions) Update() bool {
 			//defer os.Stdin.Close()
 			file2buffer(os.Stdin) } }
 	return true }
+func (this Actions) Refresh() bool {
+	SCREEN.Sync()
+	return true }
+
 
 // placeholder...
 // NOTE: This is never called directly but is here for documentation...
@@ -714,8 +727,12 @@ func callCommand(code string, stdin bytes.Buffer) (bytes.Buffer, bytes.Buffer, e
 
 	// pass data to command via env...
 	selected := ""
-	if TEXT_BUFFER[CURRENT_ROW + ROW_OFFSET].selected {
-		selected = "1" }
+	text := ""
+	// vars we need text for...
+	if len(TEXT_BUFFER) > 0 { 
+		if TEXT_BUFFER[CURRENT_ROW + ROW_OFFSET].selected {
+			selected = "1" }
+		text = TEXT_BUFFER[CURRENT_ROW].text }
 	state := map[string]string {
 		"SELECTED": selected,
 		"SELECTION": strings.Join(SELECTION, "\n"),
@@ -724,9 +741,10 @@ func callCommand(code string, stdin bytes.Buffer) (bytes.Buffer, bytes.Buffer, e
 		//"ROWS": fmt.Sprint(CONTENT_ROWS),
 		"LINES": fmt.Sprint(len(TEXT_BUFFER)),
 		"LINE": fmt.Sprint(ROW_OFFSET + CURRENT_ROW),
-		"TEXT": TEXT_BUFFER[CURRENT_ROW].text,
+		"TEXT": text,
 	}
 	env := []string{}
+	// cleanup...
 	for k, v := range ENV {
 		if v != "" {
 			env = append(env, k +"="+ v) } }
@@ -734,6 +752,8 @@ func callCommand(code string, stdin bytes.Buffer) (bytes.Buffer, bytes.Buffer, e
 		if v != "" {
 			env = append(env, k +"="+ v) } }
 	cmd.Env = append(cmd.Environ(), env...) 
+
+	defer SCREEN.Sync()
 
 	// run the command...
 	// XXX this should be run async???
@@ -803,6 +823,7 @@ func callAction(actions string) bool {
 				// XXX stdout should be read line by line as it comes...
 				// XXX keep selection and current item and screen position 
 				//		relative to current..
+				// XXX do we need screen.Sync() here???
 				str2buffer(stdout.String()) }
 			// output to stdout...
 			if slices.Contains(prefix, '>') {
@@ -948,9 +969,12 @@ func updateGeometry(screen tcell.Screen){
 	if STATUS_LINE {
 		ROWS-- } }
 
+var SCREEN tcell.Screen
+
 func lines(){
 	// setup...
 	screen, err := tcell.NewScreen()
+	SCREEN = screen
 	if err != nil {
 		log.Fatalf("%+v", err) }
 	if err := screen.Init(); err != nil {
@@ -1107,6 +1131,7 @@ var options struct {
 		// XXX not sure how to override the defaults without overriding user options...
 		//ScrollThresholdTop int `long:"scroll-threshold-top" value-name:"N" default:"3" description:"Number of lines from the top edge of screen to triger scrolling"`
 		//ScrollThresholdBottom int `long:"scroll-threshold-bottom" value-name:"N" default:"3" description:"Number of lines from the bottom edge of screen to triger scrolling"`
+		// XXX add named themes...
 		Theme map[string]string `long:"theme" value-name:"NAME:FGCOLOR:BGCOLOR" description:"Set theme color"`
 	} `group:"Configuration"`
 
@@ -1187,15 +1212,18 @@ func main(){
 				Background(tcell.GetColor(color[1])) }
 
 	// log...
-	if options.Config.LogFile != "" {
-		logFile, err := os.OpenFile(
-			options.Config.LogFile,
-			os.O_APPEND|os.O_RDWR|os.O_CREATE, 0644)
-		if err != nil {
-			log.Panic(err) }
-		defer logFile.Close()
-		// Set log out put and enjoy :)
-		log.SetOutput(logFile) }
+	logFileName := options.Config.LogFile
+	// XXX can we suppress only log.Print*(..) and keep errors and panic output???
+	if logFileName == "" {
+		logFileName = "/dev/null" }
+	logFile, err := os.OpenFile(
+		logFileName,
+		os.O_APPEND|os.O_RDWR|os.O_CREATE, 0644)
+	if err != nil {
+		log.Panic(err) }
+	defer logFile.Close()
+	// Set log out put and enjoy :)
+	log.SetOutput(logFile) 
 
 	// startup...
 	lines() 
