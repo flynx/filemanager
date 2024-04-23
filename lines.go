@@ -242,6 +242,7 @@ var KEYBINDINGS = Keybindings {
 		SelectToggle
 		Down`,
 	"ctrl+a": "SelectAll",
+	// XXX ctrl-i is Tab -- can we destinguish the two in the terminal???
 	"ctrl+i": "SelectInverse",
 	"ctrl+d": "SelectNone",
 
