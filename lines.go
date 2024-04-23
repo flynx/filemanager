@@ -4,6 +4,7 @@
 *		they race to catch the events...
 * XXX BUG: opening a nested tui app does not work (mc, less, ...)
 *		...stop/pause the event loop???
+* XXX BUG: ./lines -c ls produces an extra empty line at the end...
 *
 *
 * TODO (stage 1: basics): -- DONE
@@ -824,7 +825,7 @@ func callAction(actions string) bool {
 				// XXX keep selection and current item and screen position 
 				//		relative to current..
 				// XXX do we need screen.Sync() here???
-				str2buffer(stdout.String()) }
+				str2buffer(strings.TrimSpace(stdout.String())) }
 			// output to stdout...
 			if slices.Contains(prefix, '>') {
 				STDOUT += stdout.String() }
@@ -898,30 +899,42 @@ func evt2keys(evt tcell.EventKey) []string {
 			mods = append(mods, "shift") } 
 		key = strings.ToLower(string(k)) } 
 
+	// split out mods and normalize...
+	key_mods := strings.Split(key, "+")
+	key = key_mods[len(key_mods)-1]
+	if k := []rune(key) ; len(k) == 1 && unicode.IsUpper(k[0]) {
+		key = strings.ToLower(key) }
+	key_mods = key_mods[:len(key_mods)-1]
+
 	// basic translation...
 	if key == " " {
 		key = "Space" }
 
-	if mod & tcell.ModCtrl != 0 {
+	if slices.Contains(key_mods, "Ctrl") || 
+			mod & tcell.ModCtrl != 0 {
 		mods = append(mods, "ctrl") }
-	if mod & tcell.ModAlt != 0 {
+	if slices.Contains(key_mods, "Alt") || 
+			mod & tcell.ModAlt != 0 {
 		mods = append(mods, "alt") }
-	if mod & tcell.ModMeta != 0 {
+	if slices.Contains(key_mods, "Meta") || 
+			mod & tcell.ModMeta != 0 {
 		mods = append(mods, "meta") }
 	if !shifted && mod & tcell.ModShift != 0 {
 		mods = append(mods, "shift") }
 
-	// XXX generate all mod combinations...
-	// XXX sort by length...
-	// XXX
-
-	// XXX STUB...
+	// XXX STUB -- still need 3 and 4 mod combinations for completeness...
+	//		...generate combinations + sort by length...
+	for i := 0; i < len(mods); i++ {
+		for j := i+1; j < len(mods); j++ {
+			key_seq = append(key_seq, mods[i] +"+"+ mods[j] +"+"+ key) } }
 	for _, m := range mods {
 		key_seq = append(key_seq, m +"+"+ key) }
 	// uppercase letter...
 	if shifted {
 		key_seq = append(key_seq, Key) }
 	key_seq = append(key_seq, key)
+
+	//log.Println("KEYS:", key, mods, key_seq)
 
 	return key_seq }
 
