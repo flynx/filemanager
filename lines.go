@@ -1,78 +1,22 @@
 /*
-* XXX BUG: opening a nested lines and quitting can sometimes hang the parent (race)???
-*		...fells like both event loops are running at the same time and 
-*		they race to catch the events...
-* XXX BUG: opening a nested tui app does not work (mc, less, ...)
-*		...stop/pause the event loop???
-* XXX BUG: ./lines -c ls produces an extra empty line at the end...
 *
+* Features:
+*	- list with line navigation
+*	- selection
+*	- actions
+*	- live search/filtering
+*
+*
+*
+* XXX BUG: ./lines -c ls produces an extra empty line at the end...
+*		...fixed by trimming output, not sure if this is a good idea...
+* XXX BUG: scrollbar sometimes is off by 1 cell when scrolling down (small overflow)...
+*
+* XXX can we load a screen with the curent terminal state as content???
 * XXX might be fun to add a stack of views...
 *		...the top most one is shown and we can pop/push views to stack...
 *		...this can be usefull to implement viewers and the like...
 *		...this can also can be done by calling lines again...
-*
-* TODO (stage 1: basics): -- DONE
-*	- basic navigation -- DONE
-*	- keybindings -- DONE
-*	- shell commands
-*		- shared state (env) -- DONE
-*		- startup
-*			pipe -- DONE
-*			-c CMD -- DONE
-*		- update (action: re-run startup command) -- DONE
-*		- action
-*			keybinding -- DONE
-*			-key=<key>:<CMD> -- DONE
-*		- transform (line -> screen line) -- DONE
-*			The ollowing are different because this is done once per line 
-*			lazily (when the line is first drawn):
-*					lines --cmd ls --transform 'sed "s/moo/foo/"'
-*			While this is done for every line on load/reload:
-*					lines --cmd 'ls | sed "s/moo/foo/"'
-*		- output -- DONE
-*	- selection -- DONE
-* TODO (stage 2: features):
-*	- CLI flags/API -- DONE
-*	- config file / defaults
-*	- UI:
-*		- status -- DONE
-*		- title -- DONE
-*		- borders (???)
-*		- colors -- DONE
-*	- live search / filtering (???)
-*		...this can be done via a text field live fed to a command either 
-*		changing selection or content...
-*	- cleanup / refactoring...
-*
-*
-*
-*
-* Data flow
-*	list
-*		filter
-*		transform (line)
-*
-*	- buffer:
-*		- from stdin
-*		- from command
-*		- non-blocking update
-*		- keep position on update
-*			- wait for cur-line in update buffer
-*			- redraw relative to current line
-*		- command to filter/format line on update (cursor in/out/...)
-*	- key bindings:
-*		- reasonable defaults
-*		- config
-*		- action 
-*	- navigation:
-*		- cursor -- a-la vim
-*		- line -- a-la FAR
-*		- page -- a-la more/less
-*		- pattern -- a-la info
-*	- selection
-*	- copy/paste
-*	- cells
-*
 * XXX need a way to show a box over the curent terminal content...
 * XXX might be fun to add an inline mode -- if # of lines is less that 
 *		term height Println(..) them and then play with that region of 
@@ -258,7 +202,9 @@ var KEYBINDINGS = Keybindings {
 }
 
 
-// XXX make this config-ready -- i.e. map[string]string
+// XXX should colors be stored as strings or as direct color values???
+//		the binary (curent) form needs parsing on load (se arg handling) 
+//		while the text will need parsing on use...
 type Theme map[string]tcell.Style
 var THEME = Theme {
 	"default": tcell.StyleDefault.
@@ -731,7 +677,7 @@ func makeCallEnv(cmd *exec.Cmd) []string {
 	if len(TEXT_BUFFER) > 0 { 
 		if TEXT_BUFFER[CURRENT_ROW + ROW_OFFSET].selected {
 			selected = "1" }
-		text = TEXT_BUFFER[CURRENT_ROW].text }
+		text = TEXT_BUFFER[CURRENT_ROW + ROW_OFFSET].text }
 	state := map[string]string {
 		"SELECTED": selected,
 		"SELECTION": strings.Join(SELECTION, "\n"),
@@ -755,7 +701,7 @@ func makeCallEnv(cmd *exec.Cmd) []string {
 // XXX needs revision -- feels hacky...
 // XXX use more generic input types -- io.Reader / io.Writer...
 // XXX generalize and combine callAtCommand(..) and callCommand(..)
-func callAtCommand(code string, stdin bytes.Buffer) (*os.File, *os.File, error) {
+func callAtCommand(code string, stdin bytes.Buffer) error {
 	shell := strings.Fields(SHELL)
 	cmd := exec.Command(shell[0], append(shell[1:], code)...)
 
@@ -766,7 +712,12 @@ func callAtCommand(code string, stdin bytes.Buffer) (*os.File, *os.File, error) 
 	env := makeCallEnv(cmd)
 	cmd.Env = env
 
+	// NOTE: order here is significant...
 	defer SCREEN.Sync()
+	defer SCREEN.Resume()
+
+	// XXX can we suspend but without flusing the screen???
+	SCREEN.Suspend()
 
 	// run the command...
 	// XXX this should be run async???
@@ -776,8 +727,7 @@ func callAtCommand(code string, stdin bytes.Buffer) (*os.File, *os.File, error) 
 		log.Println("Error executing: \""+ code +"\":", err) 
 		log.Println("    ENV:", env) }
 
-	// XXX is this a good idea???
-	return os.Stdout, os.Stderr, err }
+	return err }
 func callCommand(code string, stdin bytes.Buffer) (bytes.Buffer, bytes.Buffer, error) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -811,6 +761,7 @@ func callTransform(cmd string, line string) (string, error) {
 	stdout, _, err := callCommand(cmd, stdin)
 	return stdout.String(), err }
 var isVarCommand = regexp.MustCompile(`^\s*[a-zA-Z_]+=`)
+// XXX add support for async commands...
 func callAction(actions string) bool {
 	// XXX make split here a bit more cleaver:
 	//		- support ";"
@@ -835,11 +786,13 @@ func callAction(actions string) bool {
 			continue }
 
 		// shell commands:
-		//		@ CMD	- simple command
+		//		@ CMD	- simple/interactive command
+		//					NOTE: this uses os.Stdout...
 		//		! CMD	- stdout treated as env variables, one per line
 		//		< CMD	- stdout read into buffer
 		//		> CMD	- stdout printed to lines stdout
 		//		| CMD	- current line passed to stdin
+		//		XXX & CMD	- async command (XXX not implemented...)
 		// NOTE: commands can be combined.
 		prefixes := "@!<>|"
 		prefix := []rune{}
@@ -854,7 +807,18 @@ func callAction(actions string) bool {
 			if slices.Contains(prefix, '|') {
 				stdin.Write([]byte(TEXT_BUFFER[CURRENT_ROW].text)) }
 
-			stdout, _, err := callCommand(code, stdin)
+			// call the command...
+			var err error
+			var output string
+			if slices.Contains(prefix, '@') {
+				// XXX after running suspend for some reason we do not reach the .Resume() call...
+				//SCREEN.Suspend()
+				err = callAtCommand(code, stdin)
+				//SCREEN.Resume()
+			} else {
+				var stdout bytes.Buffer
+				stdout, _, err = callCommand(code, stdin)
+				output = stdout.String() }
 			if err != nil {
 				log.Println("Error:", err)
 				break }
@@ -865,13 +829,13 @@ func callAction(actions string) bool {
 				// XXX keep selection and current item and screen position 
 				//		relative to current..
 				// XXX do we need screen.Sync() here???
-				str2buffer(strings.TrimSpace(stdout.String())) }
+				str2buffer(strings.TrimSpace(output)) }
 			// output to stdout...
 			if slices.Contains(prefix, '>') {
-				STDOUT += stdout.String() }
+				STDOUT += output }
 			// output to env...
 			if slices.Contains(prefix, '!') {
-				for _, str := range strings.Split(stdout.String(), "\n") {
+				for _, str := range strings.Split(output, "\n") {
 					if strings.TrimSpace(str) == "" ||
 							! isVarCommand.Match([]byte(str)) {
 						continue }
@@ -883,9 +847,9 @@ func callAction(actions string) bool {
 			// handle env...
 			if name != "" {
 				if name == "STDOUT" {
-					STDOUT += stdout.String()
+					STDOUT += output
 				} else {
-					ENV[name] = stdout.String() } }
+					ENV[name] = output } }
 
 		// ACTION...
 		} else {
@@ -1266,7 +1230,6 @@ func main(){
 				options.Config.Separator, "\n") }
 
 	// themes/colors...
-	// XXX should colors be stored as strings or as direct color values???
 	for name, spec := range options.Config.Theme {
 		color := strings.SplitN(spec, ":", 2)
 		THEME[name] = 
