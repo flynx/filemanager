@@ -6,6 +6,10 @@
 *		...stop/pause the event loop???
 * XXX BUG: ./lines -c ls produces an extra empty line at the end...
 *
+* XXX might be fun to add a stack of views...
+*		...the top most one is shown and we can pop/push views to stack...
+*		...this can be usefull to implement viewers and the like...
+*		...this can also can be done by calling lines again...
 *
 * TODO (stage 1: basics): -- DONE
 *	- basic navigation -- DONE
@@ -80,6 +84,7 @@ package main
 
 import "os"
 import "os/exec"
+//import "io"
 //import "path"
 import "fmt"
 import "log"
@@ -160,6 +165,9 @@ var SHELL = "bash -c"
 
 var TAB_SIZE = 8
 
+var LEFT, TOP int
+var WIDTH, HEIGHT int
+// XXX rename...
 var ROWS, COLS int
 //var CONTENT_ROWS, CONTENT_COLS int
 
@@ -414,8 +422,8 @@ func drawScreen(screen tcell.Screen, theme Theme){
 
 	var col, row int
 	style := theme["default"]
-	for row = 0 ; row < height ; row++ {
-		var buf_row = row - top_offset + ROW_OFFSET
+	for row = TOP ; row < TOP + height ; row++ {
+		var buf_row = row - top_offset + ROW_OFFSET - TOP
 
 		// row theming...
 		style = theme["default"]
@@ -424,13 +432,13 @@ func drawScreen(screen tcell.Screen, theme Theme){
 				buf_row < len(TEXT_BUFFER) {
 			// current+selected...
 			if TEXT_BUFFER[buf_row].selected &&
-					CURRENT_ROW == row - top_offset {
+					CURRENT_ROW == row - top_offset - TOP {
 				style, non_default_style = theme["current-selected"]
 			// mark selected...
 			} else if TEXT_BUFFER[buf_row].selected {
 				style, non_default_style = theme["selected"]
 			// current...
-			} else if CURRENT_ROW == row - top_offset {
+			} else if CURRENT_ROW == row - top_offset - TOP {
 				style, non_default_style = theme["current"] } } 
 
 		// normalize...
@@ -438,8 +446,8 @@ func drawScreen(screen tcell.Screen, theme Theme){
 		// buffer line...
 		if buf_row >= 0 && 
 				buf_row < len(TEXT_BUFFER) && 
-				row >= top_offset &&
-				row <= ROWS {
+				row >= TOP + top_offset &&
+				row <= TOP + ROWS {
 			// transform (lazy)...
 			// XXX should we do this in advance +/- screen (a-la ImageGrid ribbons)???
 			if TRANSFORM_CMD != "" && 
@@ -454,14 +462,14 @@ func drawScreen(screen tcell.Screen, theme Theme){
 			str, cmd := "", ""
 			// title...
 			if TITLE_LINE && 
-					row == 0 {
+					row == TOP {
 				str = TITLE_LINE_FMT
 				style, non_default_style = theme["title-line"]
 				if TITLE_CMD != "" {
 					cmd = TITLE_CMD }
 			// status...
 			} else if STATUS_LINE && 
-					row == height-1 {
+					row == TOP + height-1 {
 				str = STATUS_LINE_FMT
 				style, non_default_style = theme["status-line"] 
 				if STATUS_CMD != "" {
@@ -475,22 +483,22 @@ func drawScreen(screen tcell.Screen, theme Theme){
 
 		var col_offset = 0
 		var buf_offset = 0
-		for col = 0 ; col < COLS ; col++ {
+		for col = LEFT ; col < LEFT + COLS ; col++ {
 			// scrollbar...
 			if SCROLLBAR && 
-					col + col_offset == COLS-1 &&
+					col + col_offset == LEFT + COLS-1 &&
 					! (TITLE_LINE &&
-						row < top_offset) &&
+						row < TOP + top_offset) &&
 					! (STATUS_LINE &&
-						row == height-1) {
+						row == TOP + height-1) {
 				c := SCROLLBAR_BG
-				if row-top_offset >= scroller_offset && 
-						row-top_offset < scroller_offset+scroller_size {
+				if row - top_offset - TOP >= scroller_offset && 
+						row - top_offset - TOP < scroller_offset + scroller_size {
 					c = SCROLLBAR_FG }
 				screen.SetContent(col + col_offset, row, c, nil, scroller_style)
 				continue }
 
-			var buf_col = col + buf_offset + COL_OFFSET 
+			var buf_col = col + buf_offset + COL_OFFSET - LEFT
 
 			// get rune...
 			c := ' '
@@ -715,19 +723,7 @@ func (this Actions) Exit() bool {
 var ACTIONS Actions
 
 var ENV = map[string]string {}
-
-// XXX needs revision -- fells hacky...
-func callCommand(code string, stdin bytes.Buffer) (bytes.Buffer, bytes.Buffer, error) {
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-
-	shell := strings.Fields(SHELL)
-	cmd := exec.Command(shell[0], append(shell[1:], code)...)
-
-	cmd.Stdin = &stdin
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
+func makeCallEnv(cmd *exec.Cmd) []string {
 	// pass data to command via env...
 	selected := ""
 	text := ""
@@ -754,7 +750,21 @@ func callCommand(code string, stdin bytes.Buffer) (bytes.Buffer, bytes.Buffer, e
 	for k, v := range state {
 		if v != "" {
 			env = append(env, k +"="+ v) } }
-	cmd.Env = append(cmd.Environ(), env...) 
+	return append(cmd.Environ(), env...) }
+
+// XXX needs revision -- feels hacky...
+// XXX use more generic input types -- io.Reader / io.Writer...
+// XXX generalize and combine callAtCommand(..) and callCommand(..)
+func callAtCommand(code string, stdin bytes.Buffer) (*os.File, *os.File, error) {
+	shell := strings.Fields(SHELL)
+	cmd := exec.Command(shell[0], append(shell[1:], code)...)
+
+	cmd.Stdin = &stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	env := makeCallEnv(cmd)
+	cmd.Env = env
 
 	defer SCREEN.Sync()
 
@@ -766,7 +776,35 @@ func callCommand(code string, stdin bytes.Buffer) (bytes.Buffer, bytes.Buffer, e
 		log.Println("Error executing: \""+ code +"\":", err) 
 		log.Println("    ENV:", env) }
 
+	// XXX is this a good idea???
+	return os.Stdout, os.Stderr, err }
+func callCommand(code string, stdin bytes.Buffer) (bytes.Buffer, bytes.Buffer, error) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	shell := strings.Fields(SHELL)
+	cmd := exec.Command(shell[0], append(shell[1:], code)...)
+
+	// XXX can we make these optional???
+	cmd.Stdin = &stdin
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	env := makeCallEnv(cmd)
+	cmd.Env = env
+
+	//defer SCREEN.Sync()
+
+	// run the command...
+	// XXX this should be run async???
+	//		...option??
+	var err error
+	if err = cmd.Run(); err != nil {
+		log.Println("Error executing: \""+ code +"\":", err) 
+		log.Println("    ENV:", env) }
+
 	return stdout, stderr, err }
+
 func callTransform(cmd string, line string) (string, error) {
 	var stdin bytes.Buffer
 	stdin.Write([]byte(line))
@@ -816,9 +854,9 @@ func callAction(actions string) bool {
 			if slices.Contains(prefix, '|') {
 				stdin.Write([]byte(TEXT_BUFFER[CURRENT_ROW].text)) }
 
-			//stdout, stderr, err := callCommand(code, stdin)
 			stdout, _, err := callCommand(code, stdin)
 			if err != nil {
+				log.Println("Error:", err)
 				break }
 
 			// list output...
@@ -978,7 +1016,9 @@ func handleScrollLimits(){
 		CURRENT_ROW += delta } }
 
 func updateGeometry(screen tcell.Screen){
-	COLS, ROWS = screen.Size() 
+	LEFT, TOP = 0, 0
+	WIDTH, HEIGHT = screen.Size() 
+	COLS, ROWS = WIDTH, HEIGHT
 	if TITLE_LINE {
 		ROWS-- }
 	if STATUS_LINE {
@@ -1050,38 +1090,46 @@ func lines(){
 				// XXX handle modifiers...
 				if buttons & tcell.Button1 != 0 || buttons & tcell.Button2 != 0 {
 					col, row := evt.Position()
+					// ignore clicks outside the list...
+					if col < LEFT || col >= LEFT + WIDTH || 
+							row < TOP || row >= TOP + HEIGHT {
+						continue }
 					// title/status bars...
 					top_offset := 0
 					if TITLE_LINE {
 						top_offset = 1
-						if row == 0 {
+						if row == TOP {
 							// XXX handle titlebar click???
+							//log.Println("TITLE_LINE")
 							continue } }
 					if STATUS_LINE {
-						if row == ROWS + 1 {
+						if row - TOP == ROWS + 1 {
 							// XXX handle statusbar click???
+							//log.Println("STATUS_LINE")
 							continue } }
 					// scrollbar...
 					// XXX sould be nice if we started in the scrollbar 
 					//		to keep handling the drag untill released...
 					//		...for this to work need to either detect 
 					//		drag or release...
-					if SCROLLBAR && col == COLS-1 {
+					if SCROLLBAR && 
+							col == LEFT + COLS - 1 {
+						//log.Println("SCROLLBAR")
 						ROW_OFFSET = 
-							int((float32(row - top_offset) / float32(ROWS - 1)) * 
+							int((float32(row - TOP - top_offset) / float32(ROWS - 1)) * 
 							float32(len(TEXT_BUFFER) - ROWS))
 					// second click in curent row...
 					// XXX should we have a timeout here???
 					// XXX this triggers on drag... is this a bug???
-					} else if row - top_offset == CURRENT_ROW {
+					} else if row - top_offset - TOP == CURRENT_ROW {
 						if ! callHandler("ClickSelected") {
 							return }
 					// below list...
-					} else if row > len(TEXT_BUFFER) {
+					} else if row - TOP > len(TEXT_BUFFER) {
 						CURRENT_ROW = len(TEXT_BUFFER) - 1
 					// list...
 					} else {
-						CURRENT_ROW = row - top_offset }
+						CURRENT_ROW = row - TOP - top_offset}
 					handleScrollLimits()
 
 
