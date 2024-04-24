@@ -12,6 +12,7 @@
 *		...fixed by trimming output, not sure if this is a good idea...
 * XXX BUG: scrollbar sometimes is off by 1 cell when scrolling down (small overflow)...
 *
+* XXX add env variable expansion to chrome...
 * XXX can we load a screen with the curent terminal state as content???
 * XXX might be fun to add a stack of views...
 *		...the top most one is shown and we can pop/push views to stack...
@@ -291,53 +292,77 @@ func ansi2style(seq string, style tcell.Style) tcell.Style {
 
 	return style }
 
-// XXX add ability to expand envioronment variables...
+// XXX should we only use env vars???
+var isEnvVar = regexp.MustCompile(`(\$[a-zA-Z_]+|\$\{[a-zA-Z_]+\})`)
+var isPlaceholder = regexp.MustCompile(`(%[a-zA-Z_]+|%\{[a-zA-Z_]+\})`)
 func populateTemplateLine(str string, cmd string) string {
-	// %CMD...
-	if strings.Contains(str, "%CMD") {
-		s, err := "", error(nil)
-		if cmd != "" {
-			s, err = callTransform(cmd, str)
-			if err != nil {
-				s = "" } }
-		str = strings.ReplaceAll(str, "%CMD", s) } 
-	// %INDEX...
-	str = strings.ReplaceAll(str, "%INDEX", 
-		fmt.Sprint(ROW_OFFSET + CURRENT_ROW + 1))
-	// %LINES...
-	str = strings.ReplaceAll(str, "%LINES", 
-		fmt.Sprint(len(TEXT_BUFFER)))
-	// %SELECTED...
-	current := Row{}
-	if len(TEXT_BUFFER) != 0 {
-		current = TEXT_BUFFER[CURRENT_ROW + ROW_OFFSET] } 
-	selected := ""
-	if current.selected {
-		selected = "*" }
-	str = strings.ReplaceAll(str, "%SELECTED", selected)
-	// %SELECTION...
-	selection := fmt.Sprint(len(SELECTION))
-	if selection == "0" {
-		selection = "" }
-	str = strings.ReplaceAll(str, "%SELECTION", selection)
-	// %REST...
-	rest := ""
-	if len(current.text) > COLS {
-		rest = current.text[COLS:] }
-	str = strings.ReplaceAll(str, "%REST", rest)
+	// handle env variables...
+	env := makeEnv()
+	str = string(isEnvVar.ReplaceAllFunc(
+		[]byte(str), 
+		func(match []byte) []byte {
+			// normalize...
+			name := string(match[1:])
+			if name[0] == '{' {
+				name = string(name[1:len(name)-1]) }
+			// get the value...
+			if val, ok := env[name] ; ok {
+				return []byte(val)
+			} else {
+				return []byte(os.Getenv(name)) }
+			return []byte("") }))
+
+	// handle placeholders...
+	size := false
+	str = string(isPlaceholder.ReplaceAllFunc(
+		[]byte(str), 
+		func(match []byte) []byte {
+			// normalize...
+			name := string(match[1:])
+			if name[0] == '{' {
+				name = string(name[1:len(name)-1]) }
+			var err error
+			val := ""
+			current := Row{}
+			if len(TEXT_BUFFER) != 0 {
+				current = TEXT_BUFFER[CURRENT_ROW + ROW_OFFSET] } 
+			switch name {
+				// this has to be handled later, when the string is 
+				// otherwise complete...
+				case "SPAN":
+					size = true
+					val = "%SPAN"
+				case "CMD":
+					if cmd != "" {
+						val, err = callTransform(cmd, str)
+						if err != nil {
+							val = "" } }
+				case "SELECTED":
+					val = ""
+					if current.selected {
+						val = "*" }
+				case "SELECTION":
+					val = fmt.Sprint(len(SELECTION))
+					if val == "0" {
+						val = "" }
+				case "REST":
+					val = current.text[COLS:] }
+			return []byte(val) }))
+
 	// %SPAN / fit width...
 	// contract...
-	if len(str) > COLS {
-		overflow := (len(str) - COLS) + 3
-		parts := strings.SplitN(str, "%SPAN", 2)
-		str = string(parts[0][:len(parts[0])-overflow]) + "..."
-		if len(parts) > 1 {
-			str += parts[1] }
-	// expand...
-	} else {
-		// XXX need a way to indicate the character to use for expansion...
-		str = strings.ReplaceAll(str, "%SPAN", 
-			fmt.Sprintf("%"+fmt.Sprint(COLS - len(str) + 5) +"v", "")) }
+	if size {
+		if len(str) > COLS {
+			overflow := (len(str) - COLS) + 3
+			parts := strings.SplitN(str, "%SPAN", 2)
+			str = string(parts[0][:len(parts[0])-overflow]) + "..."
+			if len(parts) > 1 {
+				str += parts[1] }
+		// expand...
+		} else {
+			// XXX need a way to indicate the character to use for expansion...
+			str = strings.Replace(str, "%SPAN", 
+				fmt.Sprintf("%"+fmt.Sprint(COLS - len(str) + len("%SPAN")) +"v", ""), 1) } }
 	return str }
 
 func drawScreen(screen tcell.Screen, theme Theme){
@@ -669,7 +694,7 @@ func (this Actions) Exit() bool {
 var ACTIONS Actions
 
 var ENV = map[string]string {}
-func makeCallEnv(cmd *exec.Cmd) []string {
+func makeEnv() map[string]string {
 	// pass data to command via env...
 	selected := ""
 	text := ""
@@ -678,6 +703,10 @@ func makeCallEnv(cmd *exec.Cmd) []string {
 		if TEXT_BUFFER[CURRENT_ROW + ROW_OFFSET].selected {
 			selected = "1" }
 		text = TEXT_BUFFER[CURRENT_ROW + ROW_OFFSET].text }
+	env := map[string]string{}
+	for k, v := range ENV {
+		if v != "" {
+			env[k] = v } }
 	state := map[string]string {
 		"SELECTED": selected,
 		"SELECTION": strings.Join(SELECTION, "\n"),
@@ -685,17 +714,18 @@ func makeCallEnv(cmd *exec.Cmd) []string {
 		//"COLS": fmt.Sprint(CONTENT_COLS),
 		//"ROWS": fmt.Sprint(CONTENT_ROWS),
 		"LINES": fmt.Sprint(len(TEXT_BUFFER)),
-		"LINE": fmt.Sprint(ROW_OFFSET + CURRENT_ROW),
+		"LINE": fmt.Sprint(ROW_OFFSET + CURRENT_ROW + 1),
+		"INDEX": fmt.Sprint(ROW_OFFSET + CURRENT_ROW),
 		"TEXT": text,
 	}
-	env := []string{}
-	// cleanup...
-	for k, v := range ENV {
-		if v != "" {
-			env = append(env, k +"="+ v) } }
 	for k, v := range state {
 		if v != "" {
-			env = append(env, k +"="+ v) } }
+			env[k] = v } }
+	return env }
+func makeCallEnv(cmd *exec.Cmd) []string {
+	env := []string{}
+	for k, v := range makeEnv() {
+		env = append(env, k +"="+ v) }
 	return append(cmd.Environ(), env...) }
 
 // XXX needs revision -- feels hacky...
@@ -1146,7 +1176,7 @@ var options struct {
 	Chrome struct {
 		Title string `long:"title" value-name:"FMT" env:"TITLE" default:" %CMD " description:"Title format"`
 		TitleCommand string `long:"title-cmd" value-name:"CMD" env:"TITLE_CMD" description:"Title command"`
-		Status string `long:"status" value-name:"FMT" env:"STATUS" default:" %CMD %SPAN %INDEX/%LINES " description:"Status format"`
+		Status string `long:"status" value-name:"FMT" env:"STATUS" default:" %CMD %SPAN $LINE/$LINES " description:"Status format"`
 		StatusCommand string `long:"status-cmd" value-name:"CMD" env:"STATUS_CMD" description:"Status command"`
 	} `group:"Chrome"`
 
