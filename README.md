@@ -16,6 +16,14 @@ $ ls | lines \
 ```
 
 ```shell
+$ ls -alFh --group-directories-first \
+    | sed \
+        -e '1,2d' \
+        -e 's/^\(.*[0-9]\{2\}:[0-9]\{2\}\) \(.*\)$/\2 %SPAN \1/' \
+    | lines
+```
+
+```shell
 $ lines \
     --title 'A question?' \
     -c 'echo -e "YES\nNO"' \

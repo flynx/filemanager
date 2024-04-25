@@ -13,6 +13,7 @@
 *
 *
 * XXX handle paste (and copy) -- actions...
+* XXX add hover style...
 * XXX can we run two instances and tee input/output???
 * XXX can we load a screen with the curent terminal state as content???
 *		modes:
@@ -527,6 +528,19 @@ func drawScreen(screen tcell.Screen, theme Theme){
 					c = ' ' 
 				} else {
 					c = line[buf_col] } }
+
+			// "%SPAN" -- expand...
+			span_marker := "%SPAN"
+			if c == '%' && 
+					string(line[buf_col:buf_col+len(span_marker)]) == span_marker {
+				// set offset...
+				// XXX this can't account for tabs after this point...
+				col_offset += COLS - len(line)
+				for i := 0 ; i <= col_offset + len(span_marker) ; i++ {
+					screen.SetContent(col+i, row, ' ', nil, style) } 
+				// skip the marker...
+				col += len(span_marker) - 1
+				continue }
 
 			// tab -- offset output to next tabstop... 
 			if c == '\t' {
