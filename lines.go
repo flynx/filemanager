@@ -12,7 +12,6 @@
 *		...fixed by trimming output, not sure if this is a good idea...
 * XXX BUG: scrollbar sometimes is off by 1 cell when scrolling down (small overflow)...
 *
-* XXX add env variable expansion to chrome...
 * XXX can we load a screen with the curent terminal state as content???
 * XXX might be fun to add a stack of views...
 *		...the top most one is shown and we can pop/push views to stack...
@@ -519,9 +518,26 @@ func drawScreen(screen tcell.Screen, theme Theme){
 // XXX can this be a map???
 type Actions struct {}
 
+type Result int
+const (
+	// Normal action return value.
+	OK Result = -1 + iota
+
+	// Returning this from an action will quit lines (exit code 0)
+	Exit 
+
+	// Returning this will quite lines with error (exit code 1)
+	Fail
+)
+// Convert from Result type to propper exit code.
+func toExitCode(r Result) int {
+	if r == Fail {
+		return int(Fail) }
+	return 0 }
+
 // vertical navigation...
 // XXX changing only CURRENT_ROW can be donwe by redrawing only two lines...
-func (this Actions) Up() bool {
+func (this Actions) Up() Result {
 	if CURRENT_ROW > 0 && 
 			// account for SCROLL_THRESHOLD_TOP...
 			(CURRENT_ROW > SCROLL_THRESHOLD_TOP ||
@@ -530,8 +546,8 @@ func (this Actions) Up() bool {
 	// scroll the buffer...
 	} else {
 		this.ScrollUp() }
-	return true }
-func (this Actions) Down() bool {
+	return OK }
+func (this Actions) Down() Result {
 	// within the text buffer...
 	if CURRENT_ROW + ROW_OFFSET < len(TEXT_BUFFER)-1 && 
 			// within screen...
@@ -546,31 +562,31 @@ func (this Actions) Down() bool {
 	// scroll the buffer...
 	} else {
 		this.ScrollDown() }
-	return true }
+	return OK }
 
 // XXX should these track CURRENT_ROW relative to screen (current) or 
 //		relative to content???
-func (this Actions) ScrollUp() bool {
+func (this Actions) ScrollUp() Result {
 	if ROW_OFFSET > 0 {
 		ROW_OFFSET-- }
-	return true }
-func (this Actions) ScrollDown() bool {
+	return OK }
+func (this Actions) ScrollDown() Result {
 	if ROW_OFFSET + ROWS < len(TEXT_BUFFER) {
 		ROW_OFFSET++ } 
-	return true }
+	return OK }
 
-func (this Actions) PageUp() bool {
+func (this Actions) PageUp() Result {
 	if ROW_OFFSET > 0 {
 		ROW_OFFSET -= ROWS 
 		if ROW_OFFSET < 0 {
 			this.Top() } 
 	} else if ROW_OFFSET == 0 {
 		this.Top() } 
-	return true }
-func (this Actions) PageDown() bool {
+	return OK }
+func (this Actions) PageDown() Result {
 	if len(TEXT_BUFFER) < ROWS {
 		CURRENT_ROW = len(TEXT_BUFFER) - 1
-		return true }
+		return OK }
 	offset := len(TEXT_BUFFER) - ROWS
 	if ROW_OFFSET < offset {
 		ROW_OFFSET += ROWS 
@@ -578,52 +594,47 @@ func (this Actions) PageDown() bool {
 			this.Bottom() } 
 	} else if ROW_OFFSET == offset {
 		this.Bottom() } 
-	return true }
+	return OK }
 
-func (this Actions) Top() bool {
+func (this Actions) Top() Result {
 	if ROW_OFFSET == 0 {
 		CURRENT_ROW = 0 
 	} else {
 		ROW_OFFSET = 0 }
-	return true }
-func (this Actions) Bottom() bool {
+	return OK }
+func (this Actions) Bottom() Result {
 	if len(TEXT_BUFFER) < ROWS {
 		CURRENT_ROW = len(TEXT_BUFFER) - 1
-		return true }
+		return OK }
 	offset := len(TEXT_BUFFER) - ROWS 
 	if ROW_OFFSET == offset {
 		CURRENT_ROW = ROWS - 1
 	} else {
 		ROW_OFFSET = len(TEXT_BUFFER) - ROWS }
-	return true }
+	return OK }
 
 /*// XXX horizontal navigation...
-func (this Actions) Left() bool {
+func (this Actions) Left() Result {
 	// XXX
-	return true }
-func (this Actions) Right() bool {
+	return OK }
+func (this Actions) Right() Result {
 	// XXX
-	return true }
+	return OK }
 
-func (this Actions) ScrollLeft() bool {
+func (this Actions) ScrollLeft() Result {
 	// XXX
-	return true }
-func (this Actions) ScrollRight() bool {
+	return OK }
+func (this Actions) ScrollRight() Result {
 	// XXX
-	return true }
+	return OK }
 
-func (this Actions) LeftEdge() bool {
+func (this Actions) LeftEdge() Result {
 	// XXX
-	return true }
-func (this Actions) RightEdge() bool {
+	return OK }
+func (this Actions) RightEdge() Result {
 	// XXX
-	return true }
+	return OK }
 //*/
-
-// XXX
-func (this Actions) ToLine(line int) bool {
-	// XXX
-	return true }
 
 // selection...
 func updateSelectionList(){
@@ -631,7 +642,7 @@ func updateSelectionList(){
 	for _, row := range TEXT_BUFFER {
 		if row.selected {
 			SELECTION = append(SELECTION, row.text) } } }
-func (this Actions) SelectToggle(rows ...int) bool {
+func (this Actions) SelectToggle(rows ...int) Result {
 	if len(rows) == 0 {
 		rows = []int{CURRENT_ROW + ROW_OFFSET} }
 	for _, i := range rows {
@@ -640,36 +651,36 @@ func (this Actions) SelectToggle(rows ...int) bool {
 		} else {
 			TEXT_BUFFER[i].selected = true } }
 	updateSelectionList()
-	return true }
-func (this Actions) SelectAll() bool {
+	return OK }
+func (this Actions) SelectAll() Result {
 	for i := 0; i < len(TEXT_BUFFER); i++ {
 		TEXT_BUFFER[i].selected = true } 
 	updateSelectionList()
-	return true }
-func (this Actions) SelectNone() bool {
+	return OK }
+func (this Actions) SelectNone() Result {
 	for i := 0; i < len(TEXT_BUFFER); i++ {
 		TEXT_BUFFER[i].selected = false } 
 	SELECTION = []string{}
-	return true }
-func (this Actions) SelectInverse() bool {
+	return OK }
+func (this Actions) SelectInverse() Result {
 	rows := []int{}
 	for i := 0 ; i < len(TEXT_BUFFER) ; i++ {
 		rows = append(rows, i) }
 	return this.SelectToggle(rows...) }
 
-// XXX re-run startup command in curent env...
-func (this Actions) Update() bool {
+// utility...
+func (this Actions) Update() Result {
 	// file...
 	if INPUT_FILE != "" {
 		file, err := os.Open(INPUT_FILE)
 		if err != nil {
 			fmt.Println(err)
-			return false }
+			return Fail }
 		defer file.Close()
 		file2buffer(file) 
 	// command...
 	} else if LIST_CMD != "" {
-		callAction("<"+ LIST_CMD)
+		return callAction("<"+ LIST_CMD)
 	// pipe...
 	} else {
 		stat, err := os.Stdin.Stat()
@@ -679,19 +690,19 @@ func (this Actions) Update() bool {
 			// XXX do we need to close this??
 			//defer os.Stdin.Close()
 			file2buffer(os.Stdin) } }
-	return true }
-func (this Actions) Refresh() bool {
+	return OK }
+func (this Actions) Refresh() Result {
 	SCREEN.Sync()
-	return true }
-
+	return OK }
 
 // placeholder...
-// NOTE: This is never called directly but is here for documentation...
-func (this Actions) Exit() bool {
-	return true }
-
+func (this Actions) Fail() Result {
+	return Fail }
+func (this Actions) Exit() Result {
+	return Exit }
 
 var ACTIONS Actions
+
 
 var ENV = map[string]string {}
 func makeEnv() map[string]string {
@@ -792,7 +803,7 @@ func callTransform(cmd string, line string) (string, error) {
 	return stdout.String(), err }
 var isVarCommand = regexp.MustCompile(`^\s*[a-zA-Z_]+=`)
 // XXX add support for async commands...
-func callAction(actions string) bool {
+func callAction(actions string) Result {
 	// XXX make split here a bit more cleaver:
 	//		- support ";"
 	//		- support quoting of separators, i.e. ".. \\\n .." and ".. \; .."
@@ -801,9 +812,6 @@ func callAction(actions string) bool {
 		action = strings.Trim(action, " \t")
 		if len(action) == 0 {
 			continue }
-		// builtin actions...
-		if action == "Exit" {
-			return false }
 
 		// NAME=ACTION...
 		name := ""
@@ -890,10 +898,13 @@ func callAction(actions string) bool {
 				continue }
 			res := method.Call([]reflect.Value{}) 
 			// exit if action returns false...
-			if value, ok := res[0].Interface().(bool) ; ok && !value  {
-				return false } } }
-	return true }
-func callHandler(key string) bool {
+			value, ok := res[0].Interface().(Result)
+			if ! ok {
+				// XXX
+			}
+			return value } }
+	return OK }
+func callHandler(key string) Result {
 	// expand aliases...
 	seen := []string{ key }
 	if action, exists := KEYBINDINGS[key] ; exists {
@@ -902,7 +913,7 @@ func callHandler(key string) bool {
 			if _action, exists = KEYBINDINGS[_action] ; exists {
 				action = _action } }
 		return callAction(action) }
-	return true }
+	return OK }
 
 
 // XXX modifier building in is not done yet...
@@ -1020,7 +1031,7 @@ func updateGeometry(screen tcell.Screen){
 
 var SCREEN tcell.Screen
 
-func lines(){
+func lines() Result {
 	// setup...
 	screen, err := tcell.NewScreen()
 	SCREEN = screen
@@ -1071,12 +1082,13 @@ func lines(){
 
 			case *tcell.EventKey:
 				for _, key := range evt2keys(*evt) {
-					if ! callHandler(key) {
-						return } }
+					res := callHandler(key)
+					if res != OK {
+						return res } }
 				//log.Println("KEY:", evt.Name())
 				// defaults...
 				if evt.Key() == tcell.KeyEscape || evt.Key() == tcell.KeyCtrlC {
-					return }
+					return OK }
 
 			case *tcell.EventMouse:
 				buttons := evt.Buttons()
@@ -1116,8 +1128,9 @@ func lines(){
 					// XXX should we have a timeout here???
 					// XXX this triggers on drag... is this a bug???
 					} else if row - top_offset - TOP == CURRENT_ROW {
-						if ! callHandler("ClickSelected") {
-							return }
+						res := callHandler("ClickSelected") 
+						if res != OK {
+							return res }
 					// below list...
 					} else if row - TOP > len(TEXT_BUFFER) {
 						CURRENT_ROW = len(TEXT_BUFFER) - 1
@@ -1128,12 +1141,14 @@ func lines(){
 
 
 				} else if buttons & tcell.WheelUp != 0 {
-					if ! callHandler("WheelUp") {
-						return }
+					res := callHandler("WheelUp")
+					if res != OK {
+						return res }
 
 				} else if buttons & tcell.WheelDown != 0 {
-					if ! callHandler("WheelDown") {
-						return } } } } }
+					res := callHandler("WheelDown")
+					if res != OK {
+						return res } } } } }
 
 
 
@@ -1200,11 +1215,11 @@ var options struct {
 }
 
 
-func main(){
+func startup() Result {
 	_, err := flags.Parse(&options)
 	if err != nil {
 		if flags.WroteHelp(err) {
-			return }
+			return OK }
 		log.Println("Error:", err)
 		os.Exit(1) }
 
@@ -1214,15 +1229,15 @@ func main(){
 		for i := 0; i < t.NumMethod(); i++ {
 			m := t.Method(i)
 			fmt.Println("    "+ m.Name) }
-		return }
+		return OK }
 	if options.Introspection.ListThemeable {
 		for name, _ := range THEME {
 			fmt.Println("    "+ name) }
-		return }
+		return OK }
 	if options.Introspection.ListColors {
 		for name, _ := range tcell.ColorNames {
 			fmt.Println("    "+ name) }
-		return }
+		return OK }
 
 	// globals...
 	INPUT_FILE = options.Pos.FILE
@@ -1282,13 +1297,19 @@ func main(){
 	log.SetOutput(logFile) 
 
 	// startup...
-	lines() 
+	res := lines() 
+	if res == Fail {
+		return res }
 
 	// output...
 	// XXX should this be here or in lines(..)
 	if STDOUT != "" {
-		fmt.Println(STDOUT) } }
+		fmt.Println(STDOUT) } 
+	return OK }
 
+
+func main(){
+	os.Exit(toExitCode(startup())) }
 
 
 // vim:set sw=4 ts=4 nowrap :
