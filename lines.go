@@ -12,6 +12,8 @@
 *		...fixed by trimming output, not sure if this is a good idea...
 * XXX BUG: scrollbar sometimes is off by 1 cell when scrolling down (small overflow)...
 *
+* XXX should returning a non-0 from a command close lines??? (currently it does)
+*		...I'd prefer to ignore errors unless explicitly required...
 * XXX can we load a screen with the curent terminal state as content???
 * XXX might be fun to add a stack of views...
 *		...the top most one is shown and we can pop/push views to stack...
@@ -849,17 +851,14 @@ func callAction(actions string) Result {
 			var err error
 			var output string
 			if slices.Contains(prefix, '@') {
-				// XXX after running suspend for some reason we do not reach the .Resume() call...
-				//SCREEN.Suspend()
 				err = callAtCommand(code, stdin)
-				//SCREEN.Resume()
 			} else {
 				var stdout bytes.Buffer
 				stdout, _, err = callCommand(code, stdin)
 				output = stdout.String() }
 			if err != nil {
 				log.Println("Error:", err)
-				break }
+				return Fail }
 
 			// list output...
 			if slices.Contains(prefix, '<') {
