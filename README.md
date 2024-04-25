@@ -11,6 +11,7 @@ $ lines -c ls --title ' Lines: $PWD/$TEXT' -s '@ less $TEXT'
 $ lines \
     --title 'A question?' \
     -c 'echo -e "YES\nNO"' \
+    -r "Fail" \
     -s '> [ "$TEXT" == "YES" ] \n Exit'
 ```
 
@@ -18,6 +19,7 @@ $ lines \
 if $(lines \
         --title 'A question?' \
         -c 'echo -e "YES\nNO"' \
+        -r "Fail" \
         -s '> [ "$TEXT" == "YES" ] \n Exit') ; then
     # user answered yes...
     ...

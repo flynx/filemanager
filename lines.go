@@ -7,14 +7,29 @@
 *	- live search/filtering
 *
 *
-*
 * XXX BUG: ./lines -c ls produces an extra empty line at the end...
 *		...fixed by trimming output, not sure if this is a good idea...
 * XXX BUG: scrollbar sometimes is off by 1 cell when scrolling down (small overflow)...
 *
+*
+* XXX can we run two instances and tee input/output???
+* XXX can we load a screen with the curent terminal state as content???
+*		modes:
+*			inline (just after the current line)
+*			floating
+*			fill (current)
+* XXX add ability to size and center the ui...
+*		size:
+*			fill-screen (default)
+*			fit-content
+*			WxH
+*		position:
+*			center
+*			top/bottom left/right
+*			L,T
+*			...
 * XXX should returning a non-0 from a command close lines??? (currently it does)
 *		...I'd prefer to ignore errors unless explicitly required...
-* XXX can we load a screen with the curent terminal state as content???
 * XXX might be fun to add a stack of views...
 *		...the top most one is shown and we can pop/push views to stack...
 *		...this can be usefull to implement viewers and the like...
