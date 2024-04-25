@@ -128,6 +128,11 @@ var SHELL = "bash -c"
 
 var TAB_SIZE = 8
 
+// width, height
+var SIZE = []string{"auto", "auto"}
+// left, top
+var ALIGN = []string{"center", "center"}
+
 var LEFT, TOP int
 var WIDTH, HEIGHT int
 // XXX rename...
@@ -245,6 +250,9 @@ var THEME = Theme {
 		Foreground(tcell.ColorReset),
 	"title-line": tcell.StyleDefault.
 		Background(tcell.ColorGray).
+		Foreground(tcell.ColorReset),
+	"background": tcell.StyleDefault.
+		Background(tcell.ColorReset).
 		Foreground(tcell.ColorReset),
 }
 
@@ -393,9 +401,9 @@ func drawScreen(screen tcell.Screen, theme Theme){
 		scroller_style = theme["default"] }
 	SCROLLBAR = len(TEXT_BUFFER) > ROWS
 	if SCROLLBAR {
-		r := float32(ROWS) / float32(len(TEXT_BUFFER))
-		scroller_size = 1 + int(float32(ROWS - 1) * r)
-		scroller_offset = int(float32(ROW_OFFSET + 1) * r) }
+		r := float64(ROWS) / float64(len(TEXT_BUFFER))
+		scroller_size = 1 + int(float64(ROWS - 1) * r)
+		scroller_offset = int(float64(ROW_OFFSET + 1) * r) }
 
 	// XXX CONTENT_ROWS... (???)
 	top_offset := 0
@@ -731,7 +739,7 @@ func makeEnv() map[string]string {
 	// vars we need text for...
 	if len(TEXT_BUFFER) > 0 { 
 		if TEXT_BUFFER[CURRENT_ROW + ROW_OFFSET].selected {
-			selected = "1" }
+			selected = "*" }
 		text = TEXT_BUFFER[CURRENT_ROW + ROW_OFFSET].text }
 	env := map[string]string{}
 	for k, v := range ENV {
@@ -1036,9 +1044,82 @@ func handleScrollLimits(){
 		ROW_OFFSET -= delta 
 		CURRENT_ROW += delta } }
 
+
 func updateGeometry(screen tcell.Screen){
-	LEFT, TOP = 0, 0
-	WIDTH, HEIGHT = screen.Size() 
+	err := error(nil)
+	W, H := screen.Size()
+	
+	//WIDTH, HEIGHT = W, H
+
+	// WIDTH...
+	if SIZE[0] == "auto" {
+		WIDTH = W
+	} else if SIZE[0][len(SIZE[0])-1] == '%' {
+		r, err := strconv.ParseFloat(string(SIZE[1][0:len(SIZE[0])-1]), 32)
+		if err != nil {
+			// XXX
+		}
+		WIDTH = int(float64(W) * (r / 100))
+	} else {
+		WIDTH, err = strconv.Atoi(SIZE[0])
+		if err != nil {
+			// XXX
+		} }
+	// HEIGHT...
+	if SIZE[1] == "auto" {
+		HEIGHT = H
+	} else if SIZE[1][len(SIZE[1])-1] == '%' {
+		r, err := strconv.ParseFloat(string(SIZE[1][0:len(SIZE[1])-1]), 32)
+		if err != nil {
+			// XXX
+		}
+		HEIGHT = int(float64(H) * (r / 100))
+	} else {
+		HEIGHT, err = strconv.Atoi(SIZE[1])
+		if err != nil {
+			// XXX
+		} }
+	// LEFT (value)
+	left_set := false
+	if slices.Contains(ALIGN, "left") {
+		left_set = false
+		LEFT = 0
+	} else if slices.Contains(ALIGN, "right") {
+		left_set = false
+		LEFT = W - WIDTH
+	} else {
+		left_set = false
+		LEFT, err = strconv.Atoi(ALIGN[0])
+		if err != nil {
+			// XXX
+		} }
+	// TOP (value)
+	top_set := false
+	if slices.Contains(ALIGN, "top") {
+		top_set = false
+		TOP = 0
+	} else if slices.Contains(ALIGN, "bottom") {
+		top_set = false
+		TOP = W - WIDTH
+	} else {
+		top_set = false
+		TOP, err = strconv.Atoi(ALIGN[1]) 
+		if err != nil {
+			// XXX
+		} }
+	// LEFT (center)
+	if ! left_set {
+		if top_set && 
+				slices.Contains(ALIGN, "center") || 
+				ALIGN[0] == "center" {
+			LEFT = int(float64(W - WIDTH) / 2) } }
+	// TOP (center)
+	if ! top_set {
+		if top_set && 
+				slices.Contains(ALIGN, "center") || 
+				ALIGN[0] == "center" {
+			TOP = int(float64(H - HEIGHT) / 2) } }
+
 	COLS, ROWS = WIDTH, HEIGHT
 	if TITLE_LINE {
 		ROWS-- }
@@ -1055,9 +1136,17 @@ func lines() Result {
 		log.Fatalf("%+v", err) }
 	if err := screen.Init(); err != nil {
 		log.Fatalf("%+v", err) }
-	screen.SetStyle(THEME["default"])
 	screen.EnableMouse()
 	screen.EnablePaste()
+
+	// XXX add option to draw over terminal content (i.e. transparent bg)...
+	// XXX need option to draw shadow...
+	if t, ok := THEME["background"] ; ok {
+		screen.SetStyle(t)
+	} else if t, ok := THEME["default"] ; ok {
+		screen.SetStyle(t)
+	} else {
+		screen.SetStyle(tcell.StyleDefault) }
 	screen.Clear()
 
 	// handle panics...
@@ -1138,8 +1227,8 @@ func lines() Result {
 							col == LEFT + COLS - 1 {
 						//log.Println("SCROLLBAR")
 						ROW_OFFSET = 
-							int((float32(row - TOP - top_offset) / float32(ROWS - 1)) * 
-							float32(len(TEXT_BUFFER) - ROWS))
+							int((float64(row - TOP - top_offset) / float64(ROWS - 1)) * 
+							float64(len(TEXT_BUFFER) - ROWS))
 					// second click in curent row...
 					// XXX should we have a timeout here???
 					// XXX this triggers on drag... is this a bug???
@@ -1209,6 +1298,8 @@ var options struct {
 		TitleCommand string `long:"title-cmd" value-name:"CMD" env:"TITLE_CMD" description:"Title command"`
 		Status string `long:"status" value-name:"FMT" env:"STATUS" default:" %CMD %SPAN $LINE/$LINES " description:"Status format"`
 		StatusCommand string `long:"status-cmd" value-name:"CMD" env:"STATUS_CMD" description:"Status command"`
+		Size string `long:"size" value-name:"WIDTH,HEIGHT" env:"SIZE" default:"auto,auto" description:"Widget size"`
+		Align string `long:"align" value-name:"LEFT,TOP" env:"ALIGN" default:"center,center" description:"Widget alignment"`
 	} `group:"Chrome"`
 
 	Config struct {
@@ -1267,6 +1358,9 @@ func startup() Result {
 	STATUS_LINE_FMT = options.Chrome.Status
 	STATUS_LINE = STATUS_LINE_FMT != ""
 	STATUS_CMD = options.Chrome.StatusCommand
+
+	SIZE = strings.Split(options.Chrome.Size, ",")
+	ALIGN = strings.Split(options.Chrome.Align, ",")
 
 	SCROLL_THRESHOLD_TOP = options.Config.ScrollThreshold
 	SCROLL_THRESHOLD_BOTTOM = options.Config.ScrollThreshold
