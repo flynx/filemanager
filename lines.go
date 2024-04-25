@@ -13,7 +13,6 @@
 * XXX BUG: scrollbar sometimes is off by 1 cell when scrolling down (small overflow)...
 *
 *
-* XXX would be nice to indicate line overprinting when expanding %SPAN...
 * XXX handle paste (and copy) -- actions...
 * XXX add hover style...
 * XXX can we run two instances and tee input/output???
@@ -160,6 +159,10 @@ var STATUS_CMD string
 var STATUS_LINE = false
 var STATUS_LINE_FMT = ""
 
+var SPAN_MARKER = "%SPAN"
+var SPAN_SEPARATOR = tcell.RuneVLine
+var SPAN_OVERFLOW_SEPARATOR = '}'
+var SPAN_LEFT_MIN_WIDTH = 10
 
 // current row relative to viewport...
 var CURRENT_ROW = 0
@@ -358,9 +361,9 @@ func populateTemplateLine(str string, cmd string) string {
 			switch name {
 				// this has to be handled later, when the string is 
 				// otherwise complete...
-				case "SPAN":
+				case string(SPAN_MARKER[1:]):
 					size = true
-					val = "%SPAN"
+					val = SPAN_MARKER
 				case "CMD":
 					if cmd != "" {
 						val, err = callTransform(cmd, str)
@@ -383,15 +386,15 @@ func populateTemplateLine(str string, cmd string) string {
 	if size {
 		if len(str) > COLS {
 			overflow := (len(str) - COLS) + 3
-			parts := strings.SplitN(str, "%SPAN", 2)
+			parts := strings.SplitN(str, SPAN_MARKER, 2)
 			str = string(parts[0][:len(parts[0])-overflow]) + "..."
 			if len(parts) > 1 {
 				str += parts[1] }
 		// expand...
 		} else {
 			// XXX need a way to indicate the character to use for expansion...
-			str = strings.Replace(str, "%SPAN", 
-				fmt.Sprintf("%"+fmt.Sprint(COLS - len(str) + len("%SPAN")) +"v", ""), 1) } }
+			str = strings.Replace(str, SPAN_MARKER, 
+				fmt.Sprintf("%"+fmt.Sprint(COLS - len(str) + len(SPAN_MARKER)) +"v", ""), 1) } }
 	return str }
 
 func drawScreen(screen tcell.Screen, theme Theme){
@@ -482,9 +485,8 @@ func drawScreen(screen tcell.Screen, theme Theme){
 			style = theme["default"] }
 
 		var col_offset = 0
-		var col_extend = 0
 		var buf_offset = 0
-		for col = LEFT ; col < LEFT + COLS + col_extend ; col++ {
+		for col = LEFT ; col < LEFT + COLS - col_offset ; col++ {
 			// scrollbar...
 			if SCROLLBAR && 
 					col + col_offset == LEFT + COLS-1 &&
@@ -533,33 +535,36 @@ func drawScreen(screen tcell.Screen, theme Theme){
 					c = line[buf_col] } }
 
 			// "%SPAN" -- expand...
-			span_marker := "%SPAN"
 			if c == '%' && 
-					string(line[buf_col:buf_col+len(span_marker)]) == span_marker {
+					string(line[buf_col:buf_col+len(SPAN_MARKER)]) == SPAN_MARKER {
 				// set offset...
 				// XXX this can't account for tabs after this point...
-				col_offset += COLS - len(line)
-				for i := 0 ; i < col_offset + len(span_marker) ; i++ {
+				if len(line) - buf_col + SPAN_LEFT_MIN_WIDTH < COLS {
+					col_offset += COLS - len(line)
+				} else {
+					col_offset += len(line) - buf_col + SPAN_LEFT_MIN_WIDTH - len(line) }
+				if SCROLLBAR {
+					col_offset-- }
+				for i := 0 ; i < col_offset + len(SPAN_MARKER) ; i++ {
 					screen.SetContent(col+i, row, ' ', nil, style) } 
 				// separator...
 				// XXX overprint marker -- make this configurable...
 				//		...one way to do this is to define two chars a 
 				//		separator and an overflow indicator (a-la FAR)
 				// XXX make these variable length...
-				sep := '|'
+				sep := SPAN_SEPARATOR
 				if col_offset < 0 {
-					sep = '}' }
-				screen.SetContent(col+col_offset+len(span_marker)-1, row, sep, nil, style) 
+					sep = SPAN_OVERFLOW_SEPARATOR }
+				screen.SetContent(col+col_offset+len(SPAN_MARKER)-1, row, sep, nil, style) 
 				// skip the marker...
-				col += len(span_marker) - 1
-				// compensate for truncation...
-				if col_offset < 0 {
-					col_extend = -col_offset }
+				col += len(SPAN_MARKER) - 1
 				continue }
 
 			// tab -- offset output to next tabstop... 
+			// XXX BUG: 'a\tb\c\d' -- b and c are not shown...
+			// XXX BUG: compensate for overprinting...
 			if c == '\t' {
-				col_offset += TAB_SIZE - (col % TAB_SIZE)
+				col_offset += TAB_SIZE - ((col - LEFT) % TAB_SIZE)
 				for i := 0 ; i <= col_offset ; i++ {
 					screen.SetContent(col+i, row, ' ', nil, style) }
 
@@ -1084,30 +1089,26 @@ func updateGeometry(screen tcell.Screen){
 	if SIZE[0] == "auto" {
 		WIDTH = W
 	} else if SIZE[0][len(SIZE[0])-1] == '%' {
-		r, err := strconv.ParseFloat(string(SIZE[1][0:len(SIZE[0])-1]), 32)
+		r, err := strconv.ParseFloat(string(SIZE[0][0:len(SIZE[0])-1]), 32)
 		if err != nil {
-			// XXX
-		}
+			log.Println("Error parsing width") }
 		WIDTH = int(float64(W) * (r / 100))
 	} else {
 		WIDTH, err = strconv.Atoi(SIZE[0])
 		if err != nil {
-			// XXX
-		} }
+			log.Println("Error parsing width") } }
 	// HEIGHT...
 	if SIZE[1] == "auto" {
 		HEIGHT = H
 	} else if SIZE[1][len(SIZE[1])-1] == '%' {
 		r, err := strconv.ParseFloat(string(SIZE[1][0:len(SIZE[1])-1]), 32)
 		if err != nil {
-			// XXX
-		}
+			log.Println("Error parsing height") }
 		HEIGHT = int(float64(H) * (r / 100))
 	} else {
 		HEIGHT, err = strconv.Atoi(SIZE[1])
 		if err != nil {
-			// XXX
-		} }
+			log.Println("Error parsing height") } }
 	// LEFT (value)
 	left_set := false
 	if slices.Contains(ALIGN, "left") {
@@ -1120,8 +1121,7 @@ func updateGeometry(screen tcell.Screen){
 		left_set = false
 		LEFT, err = strconv.Atoi(ALIGN[0])
 		if err != nil {
-			// XXX
-		} }
+			log.Println("Error parsing left") } }
 	// TOP (value)
 	top_set := false
 	if slices.Contains(ALIGN, "top") {
@@ -1134,8 +1134,7 @@ func updateGeometry(screen tcell.Screen){
 		top_set = false
 		TOP, err = strconv.Atoi(ALIGN[1]) 
 		if err != nil {
-			// XXX
-		} }
+			log.Println("Error parsing top") } }
 	// LEFT (center)
 	if ! left_set {
 		if top_set && 
