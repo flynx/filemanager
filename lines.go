@@ -484,6 +484,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 		if ! non_default_style {
 			style = theme["default"] }
 
+		// draw row...
 		var col_offset = 0
 		var buf_offset = 0
 		for col = LEFT ; col < LEFT + COLS - col_offset ; col++ {
@@ -534,11 +535,11 @@ func drawScreen(screen tcell.Screen, theme Theme){
 				} else {
 					c = line[buf_col] } }
 
-			// "%SPAN" -- expand...
+			// "%SPAN" -- expand/contract line...
 			if c == '%' && 
 					string(line[buf_col:buf_col+len(SPAN_MARKER)]) == SPAN_MARKER {
 				// set offset...
-				// XXX this can't account for tabs after this point...
+				// XXX this can't account for width of tabs after this point...
 				if len(line) - buf_col + SPAN_LEFT_MIN_WIDTH < COLS {
 					col_offset += COLS - len(line)
 				} else {
@@ -548,9 +549,6 @@ func drawScreen(screen tcell.Screen, theme Theme){
 				for i := 0 ; i < col_offset + len(SPAN_MARKER) ; i++ {
 					screen.SetContent(col+i, row, ' ', nil, style) } 
 				// separator...
-				// XXX overprint marker -- make this configurable...
-				//		...one way to do this is to define two chars a 
-				//		separator and an overflow indicator (a-la FAR)
 				// XXX make these variable length...
 				sep := SPAN_SEPARATOR
 				if col_offset < 0 {
@@ -561,16 +559,18 @@ func drawScreen(screen tcell.Screen, theme Theme){
 				continue }
 
 			// tab -- offset output to next tabstop... 
-			// XXX BUG: 'a\tb\c\d' -- b and c are not shown...
+			// XXX BUG: 'aa\tbbbb\tcccc\tdddd' -- the first tab is off by one...
 			// XXX BUG: compensate for overprinting...
 			if c == '\t' {
-				col_offset += TAB_SIZE - ((col - LEFT) % TAB_SIZE)
-				for i := 0 ; i <= col_offset ; i++ {
-					screen.SetContent(col+i, row, ' ', nil, style) }
+				offset := TAB_SIZE - ((buf_col + col_offset) % TAB_SIZE)
+				log.Println("TS", buf_col+col_offset, col_offset)
+				for i := 0 ; i <= offset ; i++ {
+					screen.SetContent(col + col_offset + i, row, ' ', nil, style) }
+				col_offset += offset 
+				continue }
 
 			// normal characters...
-			} else {
-				screen.SetContent(col + col_offset, row, c, nil, style) } } } }
+			screen.SetContent(col + col_offset, row, c, nil, style) } } } 
 
 
 // Actions...
@@ -1091,24 +1091,24 @@ func updateGeometry(screen tcell.Screen){
 	} else if SIZE[0][len(SIZE[0])-1] == '%' {
 		r, err := strconv.ParseFloat(string(SIZE[0][0:len(SIZE[0])-1]), 32)
 		if err != nil {
-			log.Println("Error parsing width") }
+			log.Println("Error parsing width", SIZE[0]) }
 		WIDTH = int(float64(W) * (r / 100))
 	} else {
 		WIDTH, err = strconv.Atoi(SIZE[0])
 		if err != nil {
-			log.Println("Error parsing width") } }
+			log.Println("Error parsing width", SIZE[0]) } }
 	// HEIGHT...
 	if SIZE[1] == "auto" {
 		HEIGHT = H
 	} else if SIZE[1][len(SIZE[1])-1] == '%' {
 		r, err := strconv.ParseFloat(string(SIZE[1][0:len(SIZE[1])-1]), 32)
 		if err != nil {
-			log.Println("Error parsing height") }
+			log.Println("Error parsing height", SIZE[1]) }
 		HEIGHT = int(float64(H) * (r / 100))
 	} else {
 		HEIGHT, err = strconv.Atoi(SIZE[1])
 		if err != nil {
-			log.Println("Error parsing height") } }
+			log.Println("Error parsing height", SIZE[1]) } }
 	// LEFT (value)
 	left_set := false
 	if slices.Contains(ALIGN, "left") {
@@ -1117,11 +1117,11 @@ func updateGeometry(screen tcell.Screen){
 	} else if slices.Contains(ALIGN, "right") {
 		left_set = false
 		LEFT = W - WIDTH
-	} else {
+	} else if ALIGN[0] != "center" {
 		left_set = false
 		LEFT, err = strconv.Atoi(ALIGN[0])
 		if err != nil {
-			log.Println("Error parsing left") } }
+			log.Println("Error parsing left", ALIGN[0]) } }
 	// TOP (value)
 	top_set := false
 	if slices.Contains(ALIGN, "top") {
@@ -1130,11 +1130,11 @@ func updateGeometry(screen tcell.Screen){
 	} else if slices.Contains(ALIGN, "bottom") {
 		top_set = false
 		TOP = W - WIDTH
-	} else {
+	} else if ALIGN[1] != "center" {
 		top_set = false
 		TOP, err = strconv.Atoi(ALIGN[1]) 
 		if err != nil {
-			log.Println("Error parsing top") } }
+			log.Println("Error parsing top", ALIGN[1]) } }
 	// LEFT (center)
 	if ! left_set {
 		if top_set && 
