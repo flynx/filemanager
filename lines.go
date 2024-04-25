@@ -38,6 +38,7 @@
 * XXX might be fun to add an inline mode -- if # of lines is less that 
 *		term height Println(..) them and then play with that region of 
 *		the terminal, otherwise open normally...
+* XXX concurent update + keep selection position/value...
 *
 */
 
