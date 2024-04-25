@@ -12,6 +12,7 @@
 * XXX BUG: scrollbar sometimes is off by 1 cell when scrolling down (small overflow)...
 *
 *
+* XXX handle paste (and copy) -- actions...
 * XXX can we run two instances and tee input/output???
 * XXX can we load a screen with the curent terminal state as content???
 *		modes:
