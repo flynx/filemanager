@@ -162,7 +162,7 @@ var STATUS_LINE_FMT = ""
 var SPAN_MARKER = "%SPAN"
 var SPAN_SEPARATOR = tcell.RuneVLine
 var SPAN_OVERFLOW_SEPARATOR = '}'
-var SPAN_LEFT_MIN_WIDTH = 10
+var SPAN_LEFT_MIN_WIDTH = 8
 
 // current row relative to viewport...
 var CURRENT_ROW = 0
@@ -551,7 +551,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 				// separator...
 				// XXX make these variable length...
 				sep := SPAN_SEPARATOR
-				if col_offset < 0 {
+				if col_offset + len(SPAN_MARKER) - 1 < 0 {
 					sep = SPAN_OVERFLOW_SEPARATOR }
 				screen.SetContent(col+col_offset+len(SPAN_MARKER)-1, row, sep, nil, style) 
 				// skip the marker...
@@ -563,7 +563,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 			// XXX BUG: compensate for overprinting...
 			if c == '\t' {
 				offset := TAB_SIZE - ((buf_col + col_offset) % TAB_SIZE)
-				log.Println("TS", buf_col+col_offset, col_offset)
+				//log.Println("TS", buf_col+col_offset, col_offset)
 				for i := 0 ; i <= offset ; i++ {
 					screen.SetContent(col + col_offset + i, row, ' ', nil, style) }
 				col_offset += offset 
