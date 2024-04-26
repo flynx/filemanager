@@ -507,7 +507,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 		var col_offset = 0
 		var buf_offset = 0
 		for col = LEFT ; col < LEFT + COLS - col_offset ; col++ {
-			var buf_col = col + buf_offset + COL_OFFSET - LEFT
+			buf_col := col + buf_offset + COL_OFFSET - LEFT
 
 			// content block...
 			content_block := false
@@ -537,6 +537,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 			// see: 
 			//	https://gist.github.com/fnky/458719343aabd01cfb17a3a4f7296797 
 			// XXX need to handle colors at least...
+			next := false
 			for c == '\x1B' {
 				i := buf_col + 1
 				if line[i] == '[' {
@@ -553,12 +554,14 @@ func drawScreen(screen tcell.Screen, theme Theme){
 					for i < len(line) && 
 							! strings.ContainsRune(ansi_direct_commands, line[i]) {
 						i++ } } 
+				// continue with next rune...
 				buf_offset += (i + 1) - buf_col
-				buf_col = i + 1
-				if buf_col >= len(line) {
-					c = ' ' 
-				} else {
-					c = line[buf_col] } }
+				col--
+				// continue parent loop...
+				next = true
+				break }
+			if next {
+				continue }
 
 			// overflow indicator...
 			if content_block &&
@@ -567,7 +570,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 				screen.SetContent(col + col_offset, row, SPAN_OVERFLOW_SEPARATOR, nil, style)
 				continue } 
 
-			// "%SPAN" -- expand/contract line...
+			// "%SPAN" -- expand/contract line to fit width...
 			if c == '%' && 
 					string(line[buf_col:buf_col+len(SPAN_MARKER)]) == SPAN_MARKER {
 				// set offset...
