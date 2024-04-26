@@ -152,7 +152,7 @@ var ROWS, COLS int
 var COL_OFFSET = 0
 var ROW_OFFSET = 0
 
-var SCROLLBAR = false
+var SCROLLBAR = 0
 var SCROLLBAR_FG = tcell.RuneCkBoard
 var SCROLLBAR_BG = tcell.RuneBoard
 
@@ -416,8 +416,11 @@ func drawScreen(screen tcell.Screen, theme Theme){
 	scroller_style, ok := theme["scrollbar"]
 	if ! ok {
 		scroller_style = theme["default"] }
-	SCROLLBAR = len(TEXT_BUFFER) > ROWS
-	if SCROLLBAR {
+	if len(TEXT_BUFFER) > ROWS {
+		SCROLLBAR = 1
+	} else {
+		SCROLLBAR = 0 }
+	if SCROLLBAR > 0 {
 		r := float64(ROWS) / float64(len(TEXT_BUFFER))
 		scroller_size = 1 + int(float64(ROWS - 1) * r)
 		scroller_offset = int(float64(ROW_OFFSET + 1) * r) }
@@ -503,21 +506,26 @@ func drawScreen(screen tcell.Screen, theme Theme){
 		var col_offset = 0
 		var buf_offset = 0
 		for col = LEFT ; col < LEFT + COLS - col_offset ; col++ {
-			// scrollbar...
-			if SCROLLBAR && 
-					col + col_offset == LEFT + COLS-1 &&
-					! (TITLE_LINE &&
+			var buf_col = col + buf_offset + COL_OFFSET - LEFT
+
+			// content block...
+			content_block := false
+			if ! (TITLE_LINE &&
 						row < TOP + top_offset) &&
 					! (STATUS_LINE &&
 						row == TOP + height-1) {
+				content_block = true }
+
+			// scrollbar...
+			if SCROLLBAR > 0 && 
+					content_block &&
+					col + col_offset == LEFT + COLS-1 {
 				c := SCROLLBAR_BG
 				if row - top_offset - TOP >= scroller_offset && 
 						row - top_offset - TOP < scroller_offset + scroller_size {
 					c = SCROLLBAR_FG }
 				screen.SetContent(col + col_offset, row, c, nil, scroller_style)
 				continue }
-
-			var buf_col = col + buf_offset + COL_OFFSET - LEFT
 
 			// get rune...
 			c := ' '
@@ -550,17 +558,22 @@ func drawScreen(screen tcell.Screen, theme Theme){
 				} else {
 					c = line[buf_col] } }
 
+			// overflow indicator...
+			if buf_col + col_offset == COLS - SCROLLBAR - 1 && 
+					content_block &&
+					buf_col < len(line)-1 {
+				screen.SetContent(col + col_offset, row, SPAN_OVERFLOW_SEPARATOR, nil, style)
+				continue } 
+
 			// "%SPAN" -- expand/contract line...
 			if c == '%' && 
 					string(line[buf_col:buf_col+len(SPAN_MARKER)]) == SPAN_MARKER {
 				// set offset...
 				// XXX this can't account for width of tabs after this point...
 				if len(line) - buf_col + SPAN_LEFT_MIN_WIDTH < COLS {
-					col_offset += COLS - len(line)
+					col_offset += COLS - len(line) - SCROLLBAR
 				} else {
-					col_offset += len(line) - buf_col + SPAN_LEFT_MIN_WIDTH - len(line) }
-				if SCROLLBAR {
-					col_offset-- }
+					col_offset += len(line) - buf_col + SPAN_LEFT_MIN_WIDTH - len(line) - SCROLLBAR }
 				for i := 0 ; i < col_offset + len(SPAN_MARKER) ; i++ {
 					screen.SetContent(col+i, row, ' ', nil, style) } 
 				// separator...
@@ -575,17 +588,16 @@ func drawScreen(screen tcell.Screen, theme Theme){
 
 			// tab -- offset output to next tabstop... 
 			// XXX BUG: 'aa\tbbbb\tcccc\tdddd' -- the first tab is off by one...
-			// XXX BUG: compensate for overprinting out of bounds...
 			if c == '\t' {
 				offset := TAB_SIZE - ((buf_col + col_offset) % TAB_SIZE)
 				//log.Println("TS", buf_col+col_offset, col_offset)
-				for i := 0 ; i <= offset ; i++ {
+				for i := 0 ; i <= offset && col + col_offset + i < LEFT + COLS ; i++ {
 					screen.SetContent(col + col_offset + i, row, ' ', nil, style) }
 				col_offset += offset 
 				continue }
 
 			// normal characters...
-			screen.SetContent(col + col_offset, row, c, nil, style) } } } 
+			screen.SetContent(col + col_offset, row, c, nil, style) } } }
 
 
 // Actions...
@@ -1210,7 +1222,7 @@ func lines() Result {
 
 		/* XXX these are not used...
 		CONTENT_COLS, CONTENT_ROWS = COLS, ROWS
-		if SCROLLBAR {
+		if SCROLLBAR > 0 {
 			CONTENT_COLS-- }
 		if TITLE_LINE {
 			CONTENT_ROWS-- }
@@ -1269,7 +1281,7 @@ func lines() Result {
 					//		to keep handling the drag untill released...
 					//		...for this to work need to either detect 
 					//		drag or release...
-					if SCROLLBAR && 
+					if SCROLLBAR > 0 && 
 							col == LEFT + COLS - 1 {
 						//log.Println("SCROLLBAR")
 						ROW_OFFSET = 
