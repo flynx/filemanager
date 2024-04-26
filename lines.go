@@ -7,7 +7,14 @@
 *	- live search/filtering
 *
 *
-* XXX BUG actions chains stopped working when defined in code -- see: Space
+* XXX BUG: tabs can lead to printing outside of bounds...
+*		to reproduce:
+*			$ echo -e 'aa\tbbbb\tcccc\tdddd\naaaa\tbbbb' \
+*				| go run lines \
+*					-l debug.log \
+*   				--size "50%,50%" \
+*   				--theme background:darkblue:darkblue	
+*			reize terminal window to nearest tab...
 * XXX BUG: ./lines -c ls produces an extra empty line at the end...
 *		...fixed by trimming output, not sure if this is a good idea...
 * XXX BUG: scrollbar sometimes is off by 1 cell when scrolling down (small overflow)...
@@ -140,6 +147,7 @@ var WIDTH, HEIGHT int
 // XXX rename...
 var ROWS, COLS int
 //var CONTENT_ROWS, CONTENT_COLS int
+//var HOVER_COL, HOVER_ROW int
 
 var COL_OFFSET = 0
 var ROW_OFFSET = 0
@@ -260,6 +268,9 @@ var THEME = Theme {
 	"background": tcell.StyleDefault.
 		Background(tcell.ColorReset).
 		Foreground(tcell.ColorReset),
+	//"hover": tcell.StyleDefault.
+	//	Background(tcell.ColorGray).
+	//	Foreground(tcell.ColorReset),
 }
 
 
@@ -440,6 +451,10 @@ func drawScreen(screen tcell.Screen, theme Theme){
 			// mark selected...
 			} else if TEXT_BUFFER[buf_row].selected {
 				style, non_default_style = theme["selected"]
+			// hover...
+			// XXX do we need this???
+			//} else if HOVER_ROW == row - top_offset - TOP {
+			//	style, non_default_style = theme["hover"] 
 			// current...
 			} else if CURRENT_ROW == row - top_offset - TOP {
 				style, non_default_style = theme["current"] } } 
@@ -560,7 +575,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 
 			// tab -- offset output to next tabstop... 
 			// XXX BUG: 'aa\tbbbb\tcccc\tdddd' -- the first tab is off by one...
-			// XXX BUG: compensate for overprinting...
+			// XXX BUG: compensate for overprinting out of bounds...
 			if c == '\t' {
 				offset := TAB_SIZE - ((buf_col + col_offset) % TAB_SIZE)
 				//log.Println("TS", buf_col+col_offset, col_offset)
@@ -870,7 +885,8 @@ func callAction(actions string) Result {
 	//		- support quoting of separators, i.e. ".. \\\n .." and ".. \; .."
 	//		- ignore string literal content...
 	for _, action := range strings.Split(actions, "\n") {
-		action = strings.Trim(action, " \t")
+		//action = strings.Trim(action, " \t")
+		action = strings.TrimSpace(action)
 		if len(action) == 0 {
 			continue }
 
@@ -960,7 +976,8 @@ func callAction(actions string) Result {
 			if ! ok {
 				// XXX
 			}
-			return value } }
+			if value != OK {
+				return value } } }
 	return OK }
 func callHandler(key string) Result {
 	// expand aliases...
@@ -1229,6 +1246,7 @@ func lines() Result {
 				// XXX handle modifiers...
 				if buttons & tcell.Button1 != 0 || buttons & tcell.Button2 != 0 {
 					col, row := evt.Position()
+					//HOVER_COL, HOVER_ROW = col, row
 					// ignore clicks outside the list...
 					if col < LEFT || col >= LEFT + WIDTH || 
 							row < TOP || row >= TOP + HEIGHT {
