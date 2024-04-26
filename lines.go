@@ -537,30 +537,31 @@ func drawScreen(screen tcell.Screen, theme Theme){
 			// see: 
 			//	https://gist.github.com/fnky/458719343aabd01cfb17a3a4f7296797 
 			// XXX need to handle colors at least...
-			next := false
-			for c == '\x1B' {
-				i := buf_col + 1
-				if line[i] == '[' {
-					ansi_commands := "HfABCDEFGnsuJKmhlp"
-					for i < len(line) && 
-							! strings.ContainsRune(ansi_commands, line[i]) {
-						i++ }
-					/*/ XXX handle color...
-					if line[i] == 'm' {
-						style = ansi2style(string(line[buf_col:i+1]), style) }
-					//*/
-				} else {
-					ansi_direct_commands := "M78"
-					for i < len(line) && 
-							! strings.ContainsRune(ansi_direct_commands, line[i]) {
-						i++ } } 
-				// continue with next rune...
-				buf_offset += (i + 1) - buf_col
+			if c == '\x1B' {
+				for c == '\x1B' {
+					i := buf_col + 1
+					if line[i] == '[' {
+						ansi_commands := "HfABCDEFGnsuJKmhlp"
+						for i < len(line) && 
+								! strings.ContainsRune(ansi_commands, line[i]) {
+							i++ }
+						/*/ XXX handle color...
+						if line[i] == 'm' {
+							style = ansi2style(string(line[buf_col:i+1]), style) }
+						//*/
+					} else {
+						ansi_direct_commands := "M78"
+						for i < len(line) && 
+								! strings.ContainsRune(ansi_direct_commands, line[i]) {
+							i++ } } 
+					buf_offset += (i + 1) - buf_col
+					buf_col = i + 1
+					if buf_col >= len(line) {
+						c = ' ' 
+					} else {
+						c = line[buf_col] } }
+				// pass the next rune throu the whole stack...
 				col--
-				// continue parent loop...
-				next = true
-				break }
-			if next {
 				continue }
 
 			// overflow indicator...
