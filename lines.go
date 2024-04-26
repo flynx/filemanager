@@ -791,7 +791,6 @@ func (this Actions) Refresh() Result {
 	SCREEN.Sync()
 	return OK }
 
-// placeholder...
 func (this Actions) Fail() Result {
 	return Fail }
 func (this Actions) Exit() Result {
