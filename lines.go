@@ -168,9 +168,10 @@ var STATUS_LINE = false
 var STATUS_LINE_FMT = ""
 
 var SPAN_MARKER = "%SPAN"
+var SPAN_LEFT_MIN_WIDTH = 8
+// XXX should these be strings (variable length)???
 var SPAN_SEPARATOR = tcell.RuneVLine
 var SPAN_OVERFLOW_SEPARATOR = '}'
-var SPAN_LEFT_MIN_WIDTH = 8
 
 // current row relative to viewport...
 var CURRENT_ROW = 0
@@ -517,8 +518,8 @@ func drawScreen(screen tcell.Screen, theme Theme){
 				content_block = true }
 
 			// scrollbar...
-			if SCROLLBAR > 0 && 
-					content_block &&
+			if content_block &&
+					SCROLLBAR > 0 && 
 					col + col_offset == LEFT + COLS-1 {
 				c := SCROLLBAR_BG
 				if row - top_offset - TOP >= scroller_offset && 
@@ -532,9 +533,10 @@ func drawScreen(screen tcell.Screen, theme Theme){
 			if buf_col < len(line) {
 				c = line[buf_col] } 
 
-			// handle escape sequences...
+			// escape sequences...
 			// see: 
 			//	https://gist.github.com/fnky/458719343aabd01cfb17a3a4f7296797 
+			// XXX need to handle colors at least...
 			for c == '\x1B' {
 				i := buf_col + 1
 				if line[i] == '[' {
@@ -559,8 +561,8 @@ func drawScreen(screen tcell.Screen, theme Theme){
 					c = line[buf_col] } }
 
 			// overflow indicator...
-			if buf_col + col_offset == COLS - SCROLLBAR - 1 && 
-					content_block &&
+			if content_block &&
+					buf_col + col_offset == COLS - SCROLLBAR - 1 && 
 					buf_col < len(line)-1 {
 				screen.SetContent(col + col_offset, row, SPAN_OVERFLOW_SEPARATOR, nil, style)
 				continue } 
@@ -577,20 +579,22 @@ func drawScreen(screen tcell.Screen, theme Theme){
 				for i := 0 ; i < col_offset + len(SPAN_MARKER) ; i++ {
 					screen.SetContent(col+i, row, ' ', nil, style) } 
 				// separator...
-				// XXX make these variable length...
 				sep := SPAN_SEPARATOR
 				if col_offset + len(SPAN_MARKER) - 1 < 0 {
 					sep = SPAN_OVERFLOW_SEPARATOR }
-				screen.SetContent(col+col_offset+len(SPAN_MARKER)-1, row, sep, nil, style) 
+				screen.SetContent(col + col_offset + len(SPAN_MARKER) - 1, row, sep, nil, style) 
 				// skip the marker...
 				col += len(SPAN_MARKER) - 1
 				continue }
 
 			// tab -- offset output to next tabstop... 
-			// XXX BUG: 'aa\tbbbb\tcccc\tdddd' -- the first tab is off by one...
+			// XXX BUG: '1234567\t7654321\t1234567\t7654321' -- still a bit off...
+			//		...the first offset is off by 1, the rest seem OK
 			if c == '\t' {
-				offset := TAB_SIZE - ((buf_col + col_offset) % TAB_SIZE)
-				//log.Println("TS", buf_col+col_offset, col_offset)
+				// XXX revise this -- the -1's seem off...
+				offset := TAB_SIZE - ((buf_col + col_offset - 1) % TAB_SIZE) - 1
+				//log.Println("OFFSET", offset)
+				// XXX overflow indicator needs to be drawn here...
 				for i := 0 ; i <= offset && col + col_offset + i < LEFT + COLS ; i++ {
 					screen.SetContent(col + col_offset + i, row, ' ', nil, style) }
 				col_offset += offset 
