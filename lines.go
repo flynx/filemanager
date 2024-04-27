@@ -168,10 +168,14 @@ var STATUS_LINE = false
 var STATUS_LINE_FMT = ""
 
 var SPAN_MARKER = "%SPAN"
+//var SPAN_MODE = "fit-right"
+var SPAN_MODE = "10"
 var SPAN_LEFT_MIN_WIDTH = 8
-// XXX should these be strings (variable length)???
-var SPAN_SEPARATOR = tcell.RuneVLine
-var SPAN_OVERFLOW_SEPARATOR = '}'
+var SPAN_RIGHT_MIN_WIDTH = 8
+//var SPAN_SEPARATOR = tcell.RuneVLine
+var SPAN_SEPARATOR = ' '
+
+var OVERFLOW_INDICATOR = '}'
 
 // current row relative to viewport...
 var CURRENT_ROW = 0
@@ -507,6 +511,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 		var col_offset = 0
 		var buf_offset = 0
 		for col = LEFT ; col < LEFT + COLS - col_offset ; col++ {
+			cur_col := col + col_offset
 			buf_col := col + buf_offset + COL_OFFSET - LEFT
 
 			// content block...
@@ -520,12 +525,12 @@ func drawScreen(screen tcell.Screen, theme Theme){
 			// scrollbar...
 			if content_block &&
 					SCROLLBAR > 0 && 
-					col + col_offset == LEFT + COLS-1 {
+					cur_col == LEFT + COLS-1 {
 				c := SCROLLBAR_BG
 				if row - top_offset - TOP >= scroller_offset && 
 						row - top_offset - TOP < scroller_offset + scroller_size {
 					c = SCROLLBAR_FG }
-				screen.SetContent(col + col_offset, row, c, nil, scroller_style)
+				screen.SetContent(cur_col, row, c, nil, scroller_style)
 				continue }
 
 			// get rune...
@@ -568,25 +573,62 @@ func drawScreen(screen tcell.Screen, theme Theme){
 			if content_block &&
 					buf_col + col_offset == COLS - SCROLLBAR - 1 && 
 					buf_col < len(line)-1 {
-				screen.SetContent(col + col_offset, row, SPAN_OVERFLOW_SEPARATOR, nil, style)
+				screen.SetContent(cur_col, row, OVERFLOW_INDICATOR, nil, style)
 				continue } 
 
 			// "%SPAN" -- expand/contract line to fit width...
 			if c == '%' && 
 					string(line[buf_col:buf_col+len(SPAN_MARKER)]) == SPAN_MARKER {
-				// set offset...
-				// XXX this can't account for width of tabs after this point...
-				if len(line) - buf_col + SPAN_LEFT_MIN_WIDTH < COLS {
-					col_offset += COLS - len(line) - SCROLLBAR
+				offset := 0
+				// automatic -- align to left/right edges...
+				// NOTE: this essentially rigth-aligns the right side, it 
+				//		will not attempt to left-align to the SPAN_SEPARATOR...
+				// XXX should we attempty to draw a sraight vertical line between columns???
+				if SPAN_MODE == "fit-right" {
+					if len(line) - buf_col + SPAN_LEFT_MIN_WIDTH < COLS {
+						offset = COLS - len(line) - SCROLLBAR
+					} else {
+						offset = -buf_col + SPAN_LEFT_MIN_WIDTH - SCROLLBAR }
+				// manual...
 				} else {
-					col_offset += len(line) - buf_col + SPAN_LEFT_MIN_WIDTH - len(line) - SCROLLBAR }
-				for i := 0 ; i < col_offset + len(SPAN_MARKER) ; i++ {
-					screen.SetContent(col+i, row, ' ', nil, style) } 
+					c := 0
+					// %...
+					if SPAN_MODE[len(SPAN_MODE)-1] == '%' {
+						p, err := strconv.ParseFloat(string(SPAN_MODE[0:len(SPAN_MODE)-1]), 64)
+						if err != nil {
+							log.Println("Error parsing:", SPAN_MODE) }
+						c = int(float64(COLS) * (p / 100))
+						// normalize...
+						if c < SPAN_LEFT_MIN_WIDTH {
+							c = SPAN_LEFT_MIN_WIDTH }
+						if COLS - c < SPAN_RIGHT_MIN_WIDTH {
+							c = COLS - SPAN_RIGHT_MIN_WIDTH }
+						if COLS < SPAN_LEFT_MIN_WIDTH + SPAN_RIGHT_MIN_WIDTH {
+							r := float64(SPAN_LEFT_MIN_WIDTH) / float64(SPAN_RIGHT_MIN_WIDTH) 
+							c = int(float64(COLS) * r) }
+					// cols...
+					} else {
+						v, err := strconv.Atoi(SPAN_MODE) 
+						if err != nil {
+							log.Println("Error parsing:", SPAN_MODE) 
+							continue }
+						if v < 0 {
+							c = COLS + v - SCROLLBAR
+						} else {
+							c = v } }
+					offset = c - buf_col - len(SPAN_MARKER) }
+				i := cur_col
+				for ; i < cur_col + offset + len(SPAN_MARKER) - 1 && i < LEFT + COLS ; i++ {
+					screen.SetContent(i, row, ' ', nil, style) } 
 				// separator...
-				sep := SPAN_SEPARATOR
-				if col_offset + len(SPAN_MARKER) - 1 < 0 {
-					sep = SPAN_OVERFLOW_SEPARATOR }
-				screen.SetContent(col + col_offset + len(SPAN_MARKER) - 1, row, sep, nil, style) 
+				if col + offset + len(SPAN_MARKER) < LEFT + COLS { 
+					sep := SPAN_SEPARATOR
+					if offset - col_offset + len(SPAN_MARKER) - 1 < 0 {
+						sep = OVERFLOW_INDICATOR }
+					screen.SetContent(col + offset + len(SPAN_MARKER) - 1, row, sep, nil, style) 
+				} else {
+					screen.SetContent(LEFT + COLS - SCROLLBAR - 1, row, OVERFLOW_INDICATOR, nil, style) }
+				col_offset = offset
 				// skip the marker...
 				col += len(SPAN_MARKER) - 1
 				continue }
@@ -597,15 +639,17 @@ func drawScreen(screen tcell.Screen, theme Theme){
 			if c == '\t' {
 				// XXX revise this -- the -1's seem off...
 				offset := TAB_SIZE - ((buf_col + col_offset - 1) % TAB_SIZE) - 1
-				//log.Println("OFFSET", offset)
-				// XXX overflow indicator needs to be drawn here...
-				for i := 0 ; i <= offset && col + col_offset + i < LEFT + COLS ; i++ {
-					screen.SetContent(col + col_offset + i, row, ' ', nil, style) }
+				i := 0
+				for ; i <= offset && cur_col + i < LEFT + COLS ; i++ {
+					screen.SetContent(cur_col + i, row, ' ', nil, style) }
+				// overflow indicator...
+				if cur_col + i >= LEFT + COLS {
+					screen.SetContent(cur_col + i - 1, row, OVERFLOW_INDICATOR, nil, style) }
 				col_offset += offset 
 				continue }
 
 			// normal characters...
-			screen.SetContent(col + col_offset, row, c, nil, style) } } }
+			screen.SetContent(cur_col, row, c, nil, style) } } }
 
 
 // Actions...
@@ -1365,6 +1409,9 @@ var options struct {
 		StatusCommand string `long:"status-cmd" value-name:"CMD" env:"STATUS_CMD" description:"Status command"`
 		Size string `long:"size" value-name:"WIDTH,HEIGHT" env:"SIZE" default:"auto,auto" description:"Widget size"`
 		Align string `long:"align" value-name:"LEFT,TOP" env:"ALIGN" default:"center,center" description:"Widget alignment"`
+		Span string `long:"span" value-name:"MODE" env:"ALIGN" default:"fit-right" description:"Line spanning mode/size"`
+		SpanLeftMin int `long:"span-left-min" value-name:"COLS" env:"SPAN_LEFT_MIN" default:"8" description:"Left column minimum span"`
+		SpanRightMin int `long:"span-right-min" value-name:"COLS" env:"SPAN_RIGHT_MIN" default:"6" description:"Right column minimum span"`
 	} `group:"Chrome"`
 
 	Config struct {
@@ -1426,6 +1473,9 @@ func startup() Result {
 
 	SIZE = strings.Split(options.Chrome.Size, ",")
 	ALIGN = strings.Split(options.Chrome.Align, ",")
+	SPAN_MODE = options.Chrome.Span
+	SPAN_LEFT_MIN_WIDTH = options.Chrome.SpanLeftMin
+	SPAN_RIGHT_MIN_WIDTH = options.Chrome.SpanRightMin
 
 	SCROLL_THRESHOLD_TOP = options.Config.ScrollThreshold
 	SCROLL_THRESHOLD_BOTTOM = options.Config.ScrollThreshold
