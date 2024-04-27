@@ -1411,6 +1411,7 @@ var options struct {
 		Span string `long:"span" value-name:"MODE" env:"ALIGN" default:"fit-right" description:"Line spanning mode/size"`
 		SpanLeftMin int `long:"span-left-min" value-name:"COLS" env:"SPAN_LEFT_MIN" default:"8" description:"Left column minimum span"`
 		SpanRightMin int `long:"span-right-min" value-name:"COLS" env:"SPAN_RIGHT_MIN" default:"6" description:"Right column minimum span"`
+		Tab int `long:"tab" value-name:"COLS" env:"TABSIZE" default:"8" description:"Tab size"`
 	} `group:"Chrome"`
 
 	Config struct {
@@ -1475,6 +1476,7 @@ func startup() Result {
 	SPAN_MODE = options.Chrome.Span
 	SPAN_LEFT_MIN_WIDTH = options.Chrome.SpanLeftMin
 	SPAN_RIGHT_MIN_WIDTH = options.Chrome.SpanRightMin
+	TAB_SIZE = options.Chrome.Tab
 
 	SCROLL_THRESHOLD_TOP = options.Config.ScrollThreshold
 	SCROLL_THRESHOLD_BOTTOM = options.Config.ScrollThreshold
