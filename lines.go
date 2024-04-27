@@ -7,14 +7,6 @@
 *	- live search/filtering
 *
 *
-* XXX BUG: tabs can lead to printing outside of bounds...
-*		to reproduce:
-*			$ echo -e 'aa\tbbbb\tcccc\tdddd\naaaa\tbbbb' \
-*				| go run lines \
-*					-l debug.log \
-*   				--size "50%,50%" \
-*   				--theme background:darkblue:darkblue	
-*			reize terminal window to nearest tab...
 * XXX BUG: ./lines -c ls produces an extra empty line at the end...
 *		...fixed by trimming output, not sure if this is a good idea...
 * XXX BUG: scrollbar sometimes is off by 1 cell when scrolling down (small overflow)...
@@ -341,7 +333,6 @@ func ansi2style(seq string, style tcell.Style) tcell.Style {
 
 	return style }
 
-// XXX should we only use env vars???
 var isEnvVar = regexp.MustCompile(`(\$[a-zA-Z_]+|\$\{[a-zA-Z_]+\})`)
 var isPlaceholder = regexp.MustCompile(`(%[a-zA-Z_]+|%\{[a-zA-Z_]+\})`)
 func populateTemplateLine(str string, cmd string) string {
@@ -1002,8 +993,9 @@ func callAction(actions string) Result {
 				// XXX stdout should be read line by line as it comes...
 				// XXX keep selection and current item and screen position 
 				//		relative to current..
-				// XXX do we need screen.Sync() here???
-				str2buffer(strings.TrimSpace(output)) }
+				for output[len(output)-1] == '\n' && len(output) > 0 {
+					output = string(output[:len(output)-1]) }
+				str2buffer(output) }
 			// output to stdout...
 			if slices.Contains(prefix, '>') {
 				STDOUT += output }
