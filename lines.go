@@ -399,8 +399,8 @@ func populateTemplateLine(str string, cmd string) string {
 			return []byte(val) }))
 
 	// %SPAN / fit width...
-	// contract...
 	if size {
+		// contract...
 		if len(str) > COLS {
 			overflow := (len(str) - COLS) + 3
 			parts := strings.SplitN(str, SPAN_MARKER, 2)
@@ -635,11 +635,9 @@ func drawScreen(screen tcell.Screen, theme Theme){
 				continue }
 
 			// tab -- offset output to next tabstop... 
-			// XXX BUG: '1234567\t7654321\t1234567\t7654321' -- still a bit off...
-			//		...the first offset is off by 1, the rest seem OK
 			if c == '\t' {
-				// XXX revise this -- the -1's seem off...
-				offset := TAB_SIZE - ((buf_col + col_offset - 1) % TAB_SIZE) - 1
+				// NOTE: the -1 here is to compensate fot the removed '\t'...
+				offset := TAB_SIZE - ((buf_col + col_offset) % TAB_SIZE) - 1
 				i := 0
 				for ; i <= offset && cur_col + i < LEFT + COLS ; i++ {
 					screen.SetContent(cur_col + i, row, ' ', nil, style) }
