@@ -7,36 +7,20 @@
 *	- live search/filtering
 *
 *
-* XXX BUG: ./lines -c ls produces an extra empty line at the end...
-*		...fixed by trimming output, not sure if this is a good idea...
 * XXX BUG: scrollbar sometimes is off by 1 cell when scrolling down (small overflow)...
 *
 *
 * XXX handle paste (and copy) -- actions...
-* XXX add hover style...
 * XXX can we run two instances and tee input/output???
 * XXX can we load a screen with the curent terminal state as content???
 *		modes:
 *			inline (just after the current line)
 *			floating
 *			fill (current)
-* XXX add ability to size and center the ui...
-*		size:
-*			fill-screen (default)
-*			fit-content
-*			WxH
-*		position:
-*			center
-*			top/bottom left/right
-*			L,T
-*			...
-* XXX should returning a non-0 from a command close lines??? (currently it does)
-*		...I'd prefer to ignore errors unless explicitly required...
 * XXX might be fun to add a stack of views...
 *		...the top most one is shown and we can pop/push views to stack...
 *		...this can be usefull to implement viewers and the like...
 *		...this can also can be done by calling lines again...
-* XXX need a way to show a box over the curent terminal content...
 * XXX might be fun to add an inline mode -- if # of lines is less that 
 *		term height Println(..) them and then play with that region of 
 *		the terminal, otherwise open normally...
@@ -989,10 +973,11 @@ func callAction(actions string) Result {
 				return Fail }
 
 			// list output...
+			// XXX stdout should be read line by line as it comes...
+			// XXX keep selection and current item and screen position 
+			//		relative to current..
 			if slices.Contains(prefix, '<') {
-				// XXX stdout should be read line by line as it comes...
-				// XXX keep selection and current item and screen position 
-				//		relative to current..
+				// ignore trailing \n's...
 				for output[len(output)-1] == '\n' && len(output) > 0 {
 					output = string(output[:len(output)-1]) }
 				str2buffer(output) }
@@ -1401,8 +1386,10 @@ var options struct {
 		Size string `long:"size" value-name:"WIDTH,HEIGHT" env:"SIZE" default:"auto,auto" description:"Widget size"`
 		Align string `long:"align" value-name:"LEFT,TOP" env:"ALIGN" default:"center,center" description:"Widget alignment"`
 		Span string `long:"span" value-name:"MODE" env:"ALIGN" default:"fit-right" description:"Line spanning mode/size"`
+		SpanSeparator string `long:"span-separator" value-name:"CHR" env:"SPAN_SEPARATOR" default:" " description:"Span separator character"`
 		SpanLeftMin int `long:"span-left-min" value-name:"COLS" env:"SPAN_LEFT_MIN" default:"8" description:"Left column minimum span"`
 		SpanRightMin int `long:"span-right-min" value-name:"COLS" env:"SPAN_RIGHT_MIN" default:"6" description:"Right column minimum span"`
+		OverflowIndicator string `long:"overflow-indicator" value-name:"CHR" env:"OVERFLOW_INDICATOR" default:"}" description:"Line overflow character"`
 		Tab int `long:"tab" value-name:"COLS" env:"TABSIZE" default:"8" description:"Tab size"`
 	} `group:"Chrome"`
 
@@ -1468,6 +1455,8 @@ func startup() Result {
 	SPAN_MODE = options.Chrome.Span
 	SPAN_LEFT_MIN_WIDTH = options.Chrome.SpanLeftMin
 	SPAN_RIGHT_MIN_WIDTH = options.Chrome.SpanRightMin
+	SPAN_SEPARATOR = []rune(options.Chrome.SpanSeparator)[0]
+	OVERFLOW_INDICATOR = []rune(options.Chrome.OverflowIndicator)[0]
 	TAB_SIZE = options.Chrome.Tab
 
 	SCROLL_THRESHOLD_TOP = options.Config.ScrollThreshold
