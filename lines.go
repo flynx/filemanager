@@ -167,6 +167,7 @@ var STATUS_CMD string
 var STATUS_LINE = false
 var STATUS_LINE_FMT = ""
 
+// XXX should this be '|' ???
 var SPAN_MARKER = "%SPAN"
 //var SPAN_MODE = "fit-right"
 var SPAN_MODE = "10"
