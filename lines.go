@@ -60,11 +60,21 @@ type Lines struct {
 
 	Keybindings Keybindings
 
+	// width, height
+	Size []string
+	// left, top
+	Align []string
+
 	ListCMD string
 	TransformCMD string
 	InputFile string
 	// XXX should this be bytes.Buffer???
 	Output string
+
+	Left int
+	Top int
+	Width int
+	Height int
 
 	Cols uint
 	Rows uint
@@ -86,17 +96,57 @@ type Lines struct {
 	ScrollThreshold uint
 
 	Actions Actions
+
+	TitleLine bool
+	TitleCmd string
+	TitleLineFmt string
+
+	StatusLine bool
+	StatusCmd string
+	StatusLineFmt string
+
+	SpanMarker string
+	SpanMode string
+	SpanLeftMinWidth int
+	SpanRightMinWidth int
+	SpanSeparator rune
+	OverflowIndicator rune
+}
+// XXX this part I do not like about Go -- no clean way to define the 
+//		structure and te defaults in one place...
+var LinesDefaults = Lines{
+	TabSize: 8,
+	Shell: "bash -c",
+	Size: []string{"auto", "auto"},
+	Align: []string{"center", "center"},
+	ScrollbarFG: tcell.RuneCkBoard,
+	ScrollbarBG: tcell.RuneBoard,
+	ScrollThreshold: 3,
+
+	TitleCmd: "",
+	TitleLineFmt: "",
+
+	StatusCmd: "",
+	StatusLineFmt: "",
+
+	SpanMarker: "%SPAN",
+	SpanMode: "fit-right",
+	SpanLeftMinWidth: 8,
+	SpanRightMinWidth: 8,
+	//SpanSeparator: tcell.RuneVLine,
+	SpanSeparator: ' ',
+	OverflowIndicator: '}',
+
+	Theme: THEME,
+	Keybindings: KEYBINDINGS,
+	Actions: ACTIONS,
 }
 
+
 func New() Lines {
-	return Lines{
-		TabSize: 8,
-		Shell: "bash -c",
-		Theme: THEME,
-		Keybindings: KEYBINDINGS,
-		// XXX
-	}
-}
+	copy := Lines(LinesDefaults)
+	// XXX
+	return copy }
 //*/
 
 
@@ -145,8 +195,7 @@ var STATUS_LINE_FMT = ""
 
 // XXX should this be '|' ???
 var SPAN_MARKER = "%SPAN"
-//var SPAN_MODE = "fit-right"
-var SPAN_MODE = "10"
+var SPAN_MODE = "fit-right"
 var SPAN_LEFT_MIN_WIDTH = 8
 var SPAN_RIGHT_MIN_WIDTH = 8
 //var SPAN_SEPARATOR = tcell.RuneVLine
