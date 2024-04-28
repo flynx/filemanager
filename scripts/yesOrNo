@@ -1,0 +1,13 @@
+#!/usr/bin/bash
+
+MSG=${1:-Are you sure?}
+
+echo -e '%SPAN YES \n%SPAN NO ' \
+	| ./lines \
+		--title "$MSG" \
+		--size 20,3 \
+		--status "" \
+		-s '> [ "${TEXT/\%SPAN /}" == "YES " ] \n Exit' \
+		--key y:'Exit' \
+		--key n:'Fail' \
+		--theme background:darkblue:darkblue

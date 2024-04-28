@@ -196,6 +196,7 @@ var STATUS_LINE_FMT = ""
 // XXX should this be '|' ???
 var SPAN_MARKER = "%SPAN"
 var SPAN_MODE = "fit-right"
+var SPAN_EXTEND = "auto"
 var SPAN_LEFT_MIN_WIDTH = 8
 var SPAN_RIGHT_MIN_WIDTH = 8
 //var SPAN_SEPARATOR = tcell.RuneVLine
@@ -299,9 +300,6 @@ var THEME = Theme {
 	"background": tcell.StyleDefault.
 		Background(tcell.ColorReset).
 		Foreground(tcell.ColorReset),
-	//"hover": tcell.StyleDefault.
-	//	Background(tcell.ColorGray).
-	//	Foreground(tcell.ColorReset),
 }
 
 
@@ -467,6 +465,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 		ROWS + 
 		bottom_offset
 
+	var extend_separator_col = -1
 	var col, row int
 	style := theme["default"]
 	for row = TOP ; row < TOP + height ; row++ {
@@ -484,10 +483,6 @@ func drawScreen(screen tcell.Screen, theme Theme){
 			// mark selected...
 			} else if TEXT_BUFFER[buf_row].selected {
 				style, non_default_style = theme["selected"]
-			// hover...
-			// XXX do we need this???
-			//} else if HOVER_ROW == row - top_offset - TOP {
-			//	style, non_default_style = theme["hover"] 
 			// current...
 			} else if CURRENT_ROW == row - top_offset - TOP {
 				style, non_default_style = theme["current"] } } 
@@ -508,12 +503,18 @@ func drawScreen(screen tcell.Screen, theme Theme){
 					TEXT_BUFFER[buf_row].text = text
 					TEXT_BUFFER[buf_row].transformed = true } }
 			line = []rune(TEXT_BUFFER[buf_row].text) 
+			// extend span separator...
+			if SPAN_EXTEND == "auto" && 
+					! strings.Contains(TEXT_BUFFER[buf_row].text, SPAN_MARKER) {
+				extend_separator_col = -1 }
 		// chrome...
 		} else {
 			str, cmd := "", ""
 			// title...
 			if TITLE_LINE && 
 					row == TOP {
+				if SPAN_EXTEND == "always" {
+					extend_separator_col = -1 }
 				str = TITLE_LINE_FMT
 				style, non_default_style = theme["title-line"]
 				if TITLE_CMD != "" {
@@ -521,6 +522,8 @@ func drawScreen(screen tcell.Screen, theme Theme){
 			// status...
 			} else if STATUS_LINE && 
 					row == TOP + height-1 {
+				if SPAN_EXTEND != "always" {
+					extend_separator_col = -1 }
 				str = STATUS_LINE_FMT
 				style, non_default_style = theme["status-line"] 
 				if STATUS_CMD != "" {
@@ -561,7 +564,11 @@ func drawScreen(screen tcell.Screen, theme Theme){
 			// get rune...
 			c := ' '
 			if buf_col < len(line) {
-				c = line[buf_col] } 
+				c = line[buf_col] 
+			// extend span separator...
+			} else if SPAN_EXTEND != "never" && 
+					col == extend_separator_col {
+				c = SPAN_SEPARATOR }
 
 			// escape sequences...
 			// see: 
@@ -642,6 +649,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 						} else {
 							c = v } }
 					offset = c - buf_col - len(SPAN_MARKER) }
+				// fill offset...
 				i := cur_col
 				for ; i < cur_col + offset + len(SPAN_MARKER) - 1 && i < LEFT + COLS ; i++ {
 					screen.SetContent(i, row, ' ', nil, style) } 
@@ -650,6 +658,8 @@ func drawScreen(screen tcell.Screen, theme Theme){
 					sep := SPAN_SEPARATOR
 					if offset - col_offset + len(SPAN_MARKER) - 1 < 0 {
 						sep = OVERFLOW_INDICATOR }
+					extend_separator_col = col + offset + len(SPAN_MARKER) - 1
+					log.Println("SEP", extend_separator_col)
 					screen.SetContent(col + offset + len(SPAN_MARKER) - 1, row, sep, nil, style) 
 				} else {
 					screen.SetContent(LEFT + COLS - SCROLLBAR - 1, row, OVERFLOW_INDICATOR, nil, style) }
@@ -676,9 +686,6 @@ func drawScreen(screen tcell.Screen, theme Theme){
 
 
 // Actions...
-// XXX since termbox is global, is there a point in holding any local 
-//		data here???
-// XXX can this be a map???
 type Actions struct {}
 
 type Result int
@@ -1434,7 +1441,10 @@ var options struct {
 		StatusCommand string `long:"status-cmd" value-name:"CMD" env:"STATUS_CMD" description:"Status command"`
 		Size string `long:"size" value-name:"WIDTH,HEIGHT" env:"SIZE" default:"auto,auto" description:"Widget size"`
 		Align string `long:"align" value-name:"LEFT,TOP" env:"ALIGN" default:"center,center" description:"Widget alignment"`
-		Span string `long:"span" value-name:"MODE" env:"ALIGN" default:"fit-right" description:"Line spanning mode/size"`
+		Span string `long:"span" value-name:"[MODE|SIZE]" env:"SPAN" default:"fit-right" description:"Line spanning mode/size"`
+		// XXX at this point this depends on leading '%'...
+		//SpanMarker string `long:"span-marker" value-name:"STR" env:"SPAN_MARKER" default:"%SPAN" description:"Marker to use to span a line"`
+		SpanExtend string `long:"span-extend" env:"SPAN_EXTEND" choice:"auto" choice:"always" choice:"never" default:"auto" description:"Extend span separator through unspanned and empty lines"`
 		SpanSeparator string `long:"span-separator" value-name:"CHR" env:"SPAN_SEPARATOR" default:" " description:"Span separator character"`
 		SpanLeftMin int `long:"span-left-min" value-name:"COLS" env:"SPAN_LEFT_MIN" default:"8" description:"Left column minimum span"`
 		SpanRightMin int `long:"span-right-min" value-name:"COLS" env:"SPAN_RIGHT_MIN" default:"6" description:"Right column minimum span"`
@@ -1502,6 +1512,8 @@ func startup() Result {
 	SIZE = strings.Split(options.Chrome.Size, ",")
 	ALIGN = strings.Split(options.Chrome.Align, ",")
 	SPAN_MODE = options.Chrome.Span
+	//SPAN_MARKER = options.Chrome.SpanMarker
+	SPAN_EXTEND = options.Chrome.SpanExtend
 	SPAN_LEFT_MIN_WIDTH = options.Chrome.SpanLeftMin
 	SPAN_RIGHT_MIN_WIDTH = options.Chrome.SpanRightMin
 	SPAN_SEPARATOR = []rune(options.Chrome.SpanSeparator)[0]

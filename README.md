@@ -19,9 +19,10 @@ $ ls | lines \
 $ ls -alFh --group-directories-first \
     | sed \
         -e '1,2d' \
-        -e 's/\s*$//' \
-        -e 's/^\(.*[0-9]:[0-9]\{2\}\) \(.*\)$/\2%SPAN \1/' \
-    | lines
+        -e 's/ *$//' \
+        -e 's/^\(.*[0-9]\{2\}:[0-9]\{2\}\) \(.*\)$/\2%SPAN \1/' \
+        -e 's/\(%SPAN \)\([^ ]* \)\([^ ]* \)\{3\}/\1\2/' \
+    | lines --span-separator="│"
 ```
 
 ```shell
