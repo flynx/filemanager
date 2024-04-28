@@ -1449,8 +1449,8 @@ var options struct {
 
 	// Quick actions...
 	Actions struct {
-		Select string `short:"s" long:"select" value-name:"ACTION" env:"SELECT" description:"Command to execute on item select"`
-		Reject string `short:"r" long:"reject" value-name:"ACTION" env:"REJECT" description:"Command to execute on reject"`
+		Select string `short:"s" long:"select" value-name:"ACTION" env:"SELECT" description:"Action to execute on item select"`
+		Reject string `short:"r" long:"reject" value-name:"ACTION" env:"REJECT" description:"Action to execute on reject"`
 	} `group:"Actions"`
 
 	Keyboard struct {
@@ -1458,9 +1458,9 @@ var options struct {
 	} `group:"Keyboard"`
 
 	Chrome struct {
-		Title string `long:"title" value-name:"FMT" env:"TITLE" default:" %CMD " description:"Title format"`
+		Title string `long:"title" value-name:"STR" env:"TITLE" default:" %CMD " description:"Title format"`
 		TitleCommand string `long:"title-cmd" value-name:"CMD" env:"TITLE_CMD" description:"Title command"`
-		Status string `long:"status" value-name:"FMT" env:"STATUS" default:" %CMD %SPAN $LINE/$LINES " description:"Status format"`
+		Status string `long:"status" value-name:"STR" env:"STATUS" default:" %CMD %SPAN $LINE/$LINES " description:"Status format"`
 		StatusCommand string `long:"status-cmd" value-name:"CMD" env:"STATUS_CMD" description:"Status command"`
 		Size string `long:"size" value-name:"WIDTH,HEIGHT" env:"SIZE" default:"auto,auto" description:"Widget size"`
 		Align string `long:"align" value-name:"LEFT,TOP" env:"ALIGN" default:"center,center" description:"Widget alignment"`
