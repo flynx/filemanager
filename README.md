@@ -22,7 +22,10 @@ $ ls -alFh --group-directories-first \
         -e 's/ *$//' \
         -e 's/^\(.*[0-9]\{2\}:[0-9]\{2\}\) \(.*\)$/\2%SPAN \1/' \
         -e 's/\(%SPAN \)\([^ ]* \)\([^ ]* \)\{3\}/\1\2/' \
-    | lines --span-separator="│"
+    | lines \
+        -s '@ [[ "$LEFT_TEXT" =~ \/$ ]] || less "$LEFT_TEXT"' \
+        --key Delete:'@ scriots/yesOrNo "Delete: $TEXR_LEFT?" && rm "$TEXR_LEFT" || true' \
+        --span-separator="│"
 ```
 
 ```shell

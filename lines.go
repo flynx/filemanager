@@ -10,6 +10,7 @@
 * XXX BUG: scrollbar sometimes is off by 1 cell when scrolling down (small overflow)...
 *
 *
+* XXX for file argument, track changes to file and update... (+ option to disable)
 * XXX handle paste (and copy) -- actions...
 * XXX can we run two instances and tee input/output???
 * XXX can we load a screen with the curent terminal state as content???
@@ -199,6 +200,9 @@ var SPAN_MODE = "fit-right"
 var SPAN_EXTEND = "auto"
 var SPAN_LEFT_MIN_WIDTH = 8
 var SPAN_RIGHT_MIN_WIDTH = 8
+var SPAN_FILLER = ' '
+var SPAN_FILLER_TITLE = SPAN_FILLER
+var SPAN_FILLER_STATUS = SPAN_FILLER
 //var SPAN_SEPARATOR = tcell.RuneVLine
 var SPAN_SEPARATOR = ' '
 
@@ -268,7 +272,7 @@ var KEYBINDINGS = Keybindings {
 	"ctrl+i": "SelectInverse",
 	"ctrl+d": "SelectNone",
 
-	"ctrl+r": "Refresh",
+	"ctrl+r": "Update",
 }
 
 
@@ -412,7 +416,7 @@ func populateTemplateLine(str string, cmd string) string {
 					val = ""
 					if current.selected {
 						val = "*" }
-				case "SELECTION":
+				case "SELECTED_COUNT":
 					val = fmt.Sprint(len(SELECTION))
 					if val == "0" {
 						val = "" }
@@ -428,12 +432,7 @@ func populateTemplateLine(str string, cmd string) string {
 			parts := strings.SplitN(str, SPAN_MARKER, 2)
 			str = string(parts[0][:len(parts[0])-overflow]) + "..."
 			if len(parts) > 1 {
-				str += parts[1] }
-		// expand...
-		} else {
-			// XXX need a way to indicate the character to use for expansion...
-			str = strings.Replace(str, SPAN_MARKER, 
-				fmt.Sprintf("%"+fmt.Sprint(COLS - len(str) + len(SPAN_MARKER)) +"v", ""), 1) } }
+				str += parts[1] } } } 
 	return str }
 
 func drawScreen(screen tcell.Screen, theme Theme){
@@ -470,6 +469,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 	style := theme["default"]
 	for row = TOP ; row < TOP + height ; row++ {
 		var buf_row = row - top_offset + ROW_OFFSET - TOP
+		span_filler := SPAN_FILLER
 
 		// row theming...
 		style = theme["default"]
@@ -490,6 +490,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 		// normalize...
 		line := []rune{}
 		// buffer line...
+		chrome_line := false
 		if buf_row >= 0 && 
 				buf_row < len(TEXT_BUFFER) && 
 				row >= TOP + top_offset &&
@@ -509,10 +510,12 @@ func drawScreen(screen tcell.Screen, theme Theme){
 				extend_separator_col = -1 }
 		// chrome...
 		} else {
+			chrome_line = true
 			str, cmd := "", ""
 			// title...
 			if TITLE_LINE && 
 					row == TOP {
+				span_filler = SPAN_FILLER_TITLE
 				if SPAN_EXTEND == "always" {
 					extend_separator_col = -1 }
 				str = TITLE_LINE_FMT
@@ -522,6 +525,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 			// status...
 			} else if STATUS_LINE && 
 					row == TOP + height-1 {
+				span_filler = SPAN_FILLER_STATUS
 				if SPAN_EXTEND != "always" {
 					extend_separator_col = -1 }
 				str = STATUS_LINE_FMT
@@ -566,7 +570,8 @@ func drawScreen(screen tcell.Screen, theme Theme){
 			if buf_col < len(line) {
 				c = line[buf_col] 
 			// extend span separator...
-			} else if SPAN_EXTEND != "never" && 
+			} else if ! chrome_line && 
+					SPAN_EXTEND != "never" && 
 					col == extend_separator_col {
 				c = SPAN_SEPARATOR }
 
@@ -652,14 +657,15 @@ func drawScreen(screen tcell.Screen, theme Theme){
 				// fill offset...
 				i := cur_col
 				for ; i < cur_col + offset + len(SPAN_MARKER) - 1 && i < LEFT + COLS ; i++ {
-					screen.SetContent(i, row, ' ', nil, style) } 
-				// separator...
+					screen.SetContent(i, row, span_filler, nil, style) } 
+				// separator/overflow...
 				if col + offset + len(SPAN_MARKER) < LEFT + COLS { 
 					sep := SPAN_SEPARATOR
+					if chrome_line {
+						sep = span_filler }
 					if offset - col_offset + len(SPAN_MARKER) - 1 < 0 {
 						sep = OVERFLOW_INDICATOR }
 					extend_separator_col = col + offset + len(SPAN_MARKER) - 1
-					log.Println("SEP", extend_separator_col)
 					screen.SetContent(col + offset + len(SPAN_MARKER) - 1, row, sep, nil, style) 
 				} else {
 					screen.SetContent(LEFT + COLS - SCROLLBAR - 1, row, OVERFLOW_INDICATOR, nil, style) }
@@ -839,6 +845,7 @@ func (this Actions) SelectInverse() Result {
 	return this.SelectToggle(rows...) }
 
 // utility...
+// XXX revise behaviour of reupdates on pipe...
 func (this Actions) Update() Result {
 	// file...
 	if INPUT_FILE != "" {
@@ -852,6 +859,8 @@ func (this Actions) Update() Result {
 	} else if LIST_CMD != "" {
 		return callAction("<"+ LIST_CMD)
 	// pipe...
+	// XXX how should this behave on re-update???
+	//		...should we replace, append or simply redraw cache???
 	} else {
 		stat, err := os.Stdin.Stat()
 		if err != nil {
@@ -874,6 +883,11 @@ var ACTIONS Actions
 
 
 var ENV = map[string]string {}
+func getActiveList() []string {
+	if len(SELECTION) == 0 && 
+			len(TEXT_BUFFER) > 0 {
+		return []string{TEXT_BUFFER[ROW_OFFSET + CURRENT_ROW].text} }
+	return SELECTION }
 func makeEnv() map[string]string {
 	// pass data to command via env...
 	selected := ""
@@ -895,6 +909,8 @@ func makeEnv() map[string]string {
 	state := map[string]string {
 		"SELECTED": selected,
 		"SELECTION": strings.Join(SELECTION, "\n"),
+		// either SELECTION or current row...
+		"ACTIVE": strings.Join(getActiveList(), "\n"),
 		// XXX need a way to tell the command the current available width...
 		//"COLS": fmt.Sprint(CONTENT_COLS),
 		//"ROWS": fmt.Sprint(CONTENT_ROWS),
@@ -1448,15 +1464,19 @@ var options struct {
 		StatusCommand string `long:"status-cmd" value-name:"CMD" env:"STATUS_CMD" description:"Status command"`
 		Size string `long:"size" value-name:"WIDTH,HEIGHT" env:"SIZE" default:"auto,auto" description:"Widget size"`
 		Align string `long:"align" value-name:"LEFT,TOP" env:"ALIGN" default:"center,center" description:"Widget alignment"`
+		Tab int `long:"tab" value-name:"COLS" env:"TABSIZE" default:"8" description:"Tab size"`
 		Span string `long:"span" value-name:"[MODE|SIZE]" env:"SPAN" default:"fit-right" description:"Line spanning mode/size"`
 		// XXX at this point this depends on leading '%'...
 		//SpanMarker string `long:"span-marker" value-name:"STR" env:"SPAN_MARKER" default:"%SPAN" description:"Marker to use to span a line"`
 		SpanExtend string `long:"span-extend" env:"SPAN_EXTEND" choice:"auto" choice:"always" choice:"never" default:"auto" description:"Extend span separator through unspanned and empty lines"`
+		// XXX if not explicitly given set this to SpanFiller
 		SpanSeparator string `long:"span-separator" value-name:"CHR" env:"SPAN_SEPARATOR" default:" " description:"Span separator character"`
 		SpanLeftMin int `long:"span-left-min" value-name:"COLS" env:"SPAN_LEFT_MIN" default:"8" description:"Left column minimum span"`
 		SpanRightMin int `long:"span-right-min" value-name:"COLS" env:"SPAN_RIGHT_MIN" default:"6" description:"Right column minimum span"`
 		OverflowIndicator string `long:"overflow-indicator" value-name:"CHR" env:"OVERFLOW_INDICATOR" default:"}" description:"Line overflow character"`
-		Tab int `long:"tab" value-name:"COLS" env:"TABSIZE" default:"8" description:"Tab size"`
+		SpanFiller string `long:"span-filler" value-name:"CHR" env:"SPAN_FILLER" default:" " description:"Span fill character"`
+		SpanFillerTitle string `long:"span-filler-title" value-name:"CHR" env:"SPAN_FILLER_TITLE" default:" " description:"Title span fill character"`
+		SpanFillerStatus string `long:"span-filler-status" value-name:"CHR" env:"SPAN_FILLER_STATUS" default:" " description:"Status span fill character"`
 	} `group:"Chrome"`
 
 	Config struct {
@@ -1465,8 +1485,8 @@ var options struct {
 		// XXX might be fun to be able to set this to something like "middle"...
 		ScrollThreshold int `long:"scroll-threshold" value-name:"N" default:"3" description:"Number of lines from the edge of screen to triger scrolling"`
 		// XXX not sure how to override the defaults without overriding user options...
-		//ScrollThresholdTop int `long:"scroll-threshold-top" value-name:"N" default:"3" description:"Number of lines from the top edge of screen to triger scrolling"`
-		//ScrollThresholdBottom int `long:"scroll-threshold-bottom" value-name:"N" default:"3" description:"Number of lines from the bottom edge of screen to triger scrolling"`
+		ScrollThresholdTop int `long:"scroll-threshold-top" value-name:"N" default:"3" description:"Number of lines from the top edge of screen to triger scrolling"`
+		ScrollThresholdBottom int `long:"scroll-threshold-bottom" value-name:"N" default:"3" description:"Number of lines from the bottom edge of screen to triger scrolling"`
 		// XXX add named themes...
 		Theme map[string]string `long:"theme" value-name:"NAME:FGCOLOR:BGCOLOR" description:"Set theme color"`
 	} `group:"Configuration"`
@@ -1480,7 +1500,9 @@ var options struct {
 
 
 func startup() Result {
-	_, err := flags.Parse(&options)
+	parser := flags.NewParser(&options, flags.Default)
+
+	_, err := parser.Parse()
 	if err != nil {
 		if flags.WroteHelp(err) {
 			return OK }
@@ -1518,18 +1540,31 @@ func startup() Result {
 
 	SIZE = strings.Split(options.Chrome.Size, ",")
 	ALIGN = strings.Split(options.Chrome.Align, ",")
+	TAB_SIZE = options.Chrome.Tab
 	SPAN_MODE = options.Chrome.Span
 	//SPAN_MARKER = options.Chrome.SpanMarker
 	SPAN_EXTEND = options.Chrome.SpanExtend
 	SPAN_LEFT_MIN_WIDTH = options.Chrome.SpanLeftMin
 	SPAN_RIGHT_MIN_WIDTH = options.Chrome.SpanRightMin
-	SPAN_SEPARATOR = []rune(options.Chrome.SpanSeparator)[0]
+	SPAN_FILLER = []rune(options.Chrome.SpanFiller)[0]
+	SPAN_FILLER_TITLE = []rune(options.Chrome.SpanFillerTitle)[0]
+	SPAN_FILLER_STATUS = []rune(options.Chrome.SpanFillerStatus)[0]
+	// defaults to SPAN_FILLER...
+	SPAN_SEPARATOR = SPAN_FILLER
+	if opt := parser.FindOptionByLongName("span-separator"); 
+			opt != nil && ! opt.IsSetDefault() {
+		SPAN_SEPARATOR = []rune(options.Chrome.SpanSeparator)[0] }
 	OVERFLOW_INDICATOR = []rune(options.Chrome.OverflowIndicator)[0]
-	TAB_SIZE = options.Chrome.Tab
-
+	// defaults to .ScrollThreshold...
 	SCROLL_THRESHOLD_TOP = options.Config.ScrollThreshold
+	if opt := parser.FindOptionByLongName("scroll-threshold-top"); 
+			opt != nil && opt.IsSetDefault() {
+		SCROLL_THRESHOLD_TOP = options.Config.ScrollThresholdTop }
 	SCROLL_THRESHOLD_BOTTOM = options.Config.ScrollThreshold
-
+	if opt := parser.FindOptionByLongName("scroll-threshold-bottom"); 
+			opt != nil && opt.IsSetDefault() {
+		SCROLL_THRESHOLD_BOTTOM = options.Config.ScrollThresholdBottom }
+	
 	// action aliases...
 	if options.Actions.Select != "" {
 		KEYBINDINGS["Select"] = 
