@@ -8,6 +8,7 @@ echo -e '%SPAN YES \n%SPAN NO ' \
 		--size 20,3 \
 		--status "" \
 		-s '> [ "${TEXT/\%SPAN /}" == "YES " ] \n Exit' \
+		-r 'Fail' \
 		--key y:'Exit' \
 		--key n:'Fail' \
 		--theme background:darkblue:darkblue

@@ -887,6 +887,11 @@ func makeEnv() map[string]string {
 	for k, v := range ENV {
 		if v != "" {
 			env[k] = v } }
+	text_parts := strings.Split(text, SPAN_MARKER)
+	text_left := strings.TrimSpace(text_parts[0])
+	text_right := ""
+	if len(text_parts) > 1 {
+		text_right = strings.TrimSpace(text_parts[1]) }
 	state := map[string]string {
 		"SELECTED": selected,
 		"SELECTION": strings.Join(SELECTION, "\n"),
@@ -897,6 +902,8 @@ func makeEnv() map[string]string {
 		"LINE": fmt.Sprint(ROW_OFFSET + CURRENT_ROW + 1),
 		"INDEX": fmt.Sprint(ROW_OFFSET + CURRENT_ROW),
 		"TEXT": text,
+		"TEXT_LEFT": text_left, 
+		"TEXT_RIGHT": text_right, 
 	}
 	for k, v := range state {
 		if v != "" {
