@@ -10,10 +10,6 @@
 * XXX BUG: scrollbar sometimes is off by 1 cell when scrolling down (small overflow)...
 *
 *
-* XXX set text position from commandline:
-*		- text index + screen offset
-*		- offsets + cur
-*		- string|pattern...
 * XXX set selection from commandline...
 * XXX for file argument, track changes to file and update... (+ option to disable)
 * XXX handle paste (and copy) -- actions...
@@ -483,10 +479,19 @@ func drawScreen(screen tcell.Screen, theme Theme){
 			if FOCUS[0] == '\\' {
 				FOCUS = string(FOCUS[1:]) }
 			for i, r := range TEXT_BUFFER {
-				// XXX regexp???
 				if r.text == FOCUS {
 					f = i
-					break } } }
+					break 
+				// match parts/spans...
+				} else if strings.Contains(r.text, SPAN_MARKER) {
+					match := false
+					for _, span := range strings.Split(r.text, SPAN_MARKER) {
+						if strings.TrimSpace(span) == FOCUS {
+							f = i
+							match = true
+							break } }
+					if match {
+						break } } } }
 		// negative values...
 		if f < 0 {
 			f = len(TEXT_BUFFER) + f }
@@ -1489,6 +1494,7 @@ var options struct {
 	// XXX
 	SelectionCommand string `long:"selection" value-name:"ACTION" env:"REJECT" description:"Command to filter selection from input"`
 
+	// XXX doc: to match a number explicitly escape it with '\\'...
 	Focus string `short:"f" long:"focus" value-nmae:"[N|STR]" env:"FOCUS" description:"Line number to focus"`
 	//FocusStr int `long:"focus-str" value-nmae:"STR" env:"FOCUS" description:"Line to focus"`
 	FocusRow int `long:"focus-row" value-nmae:"N" env:"FOCUS_ROW" description:"Screen line number of focused line"`
