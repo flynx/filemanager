@@ -10,6 +10,11 @@
 * XXX BUG: scrollbar sometimes is off by 1 cell when scrolling down (small overflow)...
 *
 *
+* XXX set text position from commandline:
+*		- text index + screen offset
+*		- offsets + cur
+*		- string|pattern...
+* XXX set selection from commandline...
 * XXX for file argument, track changes to file and update... (+ option to disable)
 * XXX handle paste (and copy) -- actions...
 * XXX can we run two instances and tee input/output???
@@ -208,6 +213,8 @@ var SPAN_SEPARATOR = ' '
 
 var OVERFLOW_INDICATOR = '}'
 
+var FOCUS string
+
 // current row relative to viewport...
 var CURRENT_ROW = 0
 
@@ -310,7 +317,7 @@ var THEME = Theme {
 // XXX these are almost identical, can we generalize?
 // XXX option to maintain current row...
 func str2buffer(str string){
-	CURRENT_ROW = 0
+	//CURRENT_ROW = 0
 	TEXT_BUFFER = []Row{}
 	n := 0
 	for _, str := range strings.Split(str, "\n") {
@@ -327,7 +334,7 @@ func str2buffer(str string){
 		TEXT_BUFFER = append(TEXT_BUFFER, Row{}) } }
 func file2buffer(file *os.File){
 	// XXX set this to a logical value...
-	CURRENT_ROW = 0
+	//CURRENT_ROW = 0
 	TEXT_BUFFER = []Row{}
 	n := 0
 	scanner := bufio.NewScanner(file)
@@ -464,6 +471,41 @@ func drawScreen(screen tcell.Screen, theme Theme){
 		ROWS + 
 		bottom_offset
 
+	// set initial focus...
+	if FOCUS != "" {
+		log.Println("FOCUS", FOCUS)
+		f := 0
+		// number...
+		if i, err := strconv.Atoi(FOCUS); err == nil {
+			f = i
+		// string...
+		} else {
+			if FOCUS[0] == '\\' {
+				FOCUS = string(FOCUS[1:]) }
+			for i, r := range TEXT_BUFFER {
+				// XXX regexp???
+				if r.text == FOCUS {
+					f = i
+					break } } }
+		// negative values...
+		if f < 0 {
+			f = len(TEXT_BUFFER) + f }
+		// normalize...
+		if f < 0 {
+			f = 0 }
+		if f > len(TEXT_BUFFER) {
+			f = len(TEXT_BUFFER) - 1 }
+		// set...
+		if len(TEXT_BUFFER) < height {
+			ROW_OFFSET = 0
+			CURRENT_ROW = f
+		} else {
+			ROW_OFFSET = f - CURRENT_ROW }
+		// XXX revise -- can we overflow here???
+		if ROW_OFFSET + CURRENT_ROW >= len(TEXT_BUFFER) {
+			CURRENT_ROW = len(TEXT_BUFFER) - ROW_OFFSET }
+		FOCUS = "" }
+
 	var extend_separator_col = -1
 	var col, row int
 	style := theme["default"]
@@ -510,13 +552,13 @@ func drawScreen(screen tcell.Screen, theme Theme){
 				extend_separator_col = -1 }
 		// chrome...
 		} else {
-			chrome_line = true
 			str, cmd := "", ""
 			// title...
 			if TITLE_LINE && 
 					row == TOP {
+				chrome_line = true
 				span_filler = SPAN_FILLER_TITLE
-				if SPAN_EXTEND == "always" {
+				if SPAN_EXTEND != "always" {
 					extend_separator_col = -1 }
 				str = TITLE_LINE_FMT
 				style, non_default_style = theme["title-line"]
@@ -525,6 +567,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 			// status...
 			} else if STATUS_LINE && 
 					row == TOP + height-1 {
+				chrome_line = true
 				span_filler = SPAN_FILLER_STATUS
 				if SPAN_EXTEND != "always" {
 					extend_separator_col = -1 }
@@ -533,7 +576,8 @@ func drawScreen(screen tcell.Screen, theme Theme){
 				if STATUS_CMD != "" {
 					cmd = STATUS_CMD } }
 			// populate the line...
-			line = []rune(populateTemplateLine(str, cmd)) }
+			if chrome_line {
+				line = []rune(populateTemplateLine(str, cmd)) } }
 
 		// set default style...
 		if ! non_default_style {
@@ -570,9 +614,9 @@ func drawScreen(screen tcell.Screen, theme Theme){
 			if buf_col < len(line) {
 				c = line[buf_col] 
 			// extend span separator...
-			} else if ! chrome_line && 
+			} else if ! chrome_line &&
 					SPAN_EXTEND != "never" && 
-					col == extend_separator_col {
+					cur_col == extend_separator_col {
 				c = SPAN_SEPARATOR }
 
 			// escape sequences...
@@ -1422,25 +1466,37 @@ func lines() Result {
 
 
 // command line args...
+// XXX can we set default values from variables???
+//		...doing ` ... `+ VAR +` ... ` breaks things...
+// XXX formatting the config string seems to break things...
+//ListCommand string `
+//	short:"c" 
+//	long:"cmd" 
+//	value-name:"CMD" 
+//	env:"CMD" 
+//	description:"List command"`
 var options struct {
 	Pos struct {
 		FILE string
 	} `positional-args:"yes"`
 
-	// XXX can we set default values from variables???
-	//		...doing ` ... `+ VAR +` ... ` breaks things...
-	// XXX formatting the config string seems to break things...
-	//ListCommand string `
-	//	short:"c" 
-	//	long:"cmd" 
-	//	value-name:"CMD" 
-	//	env:"CMD" 
-	//	description:"List command"`
 	// NOTE: this is not the same as filtering the input as it will be 
 	ListCommand string `short:"c" long:"cmd" value-name:"CMD" env:"CMD" description:"List command"`
 	// NOTE: this is not the same as filtering the input as it will be 
 	//		done lazily when the line reaches view.
 	TransformCommand string `short:"t" long:"transform" value-name:"CMD" env:"TRANSFORM" description:"Row transform command"`
+
+	// XXX
+	SelectionCommand string `long:"selection" value-name:"ACTION" env:"REJECT" description:"Command to filter selection from input"`
+
+	Focus string `short:"f" long:"focus" value-nmae:"[N|STR]" env:"FOCUS" description:"Line number to focus"`
+	//FocusStr int `long:"focus-str" value-nmae:"STR" env:"FOCUS" description:"Line to focus"`
+	FocusRow int `long:"focus-row" value-nmae:"N" env:"FOCUS_ROW" description:"Screen line number of focused line"`
+
+	/* XXX
+	RowOffset int `long:"row-offset" value-name:"N" env:"ROW_OFFSET" description:"Row offset of visible lines"`
+	//ColOffset int `long:"col-offset" value-name:"N" env:"COL_OFFSET" description:"Column offset of visible lines"`
+	//*/
 
 	// XXX chicken-egg: need to first parse the args then parse the ini 
 	//		and then merge the two...
@@ -1469,7 +1525,6 @@ var options struct {
 		// XXX at this point this depends on leading '%'...
 		//SpanMarker string `long:"span-marker" value-name:"STR" env:"SPAN_MARKER" default:"%SPAN" description:"Marker to use to span a line"`
 		SpanExtend string `long:"span-extend" env:"SPAN_EXTEND" choice:"auto" choice:"always" choice:"never" default:"auto" description:"Extend span separator through unspanned and empty lines"`
-		// XXX if not explicitly given set this to SpanFiller
 		SpanSeparator string `long:"span-separator" value-name:"CHR" env:"SPAN_SEPARATOR" default:" " description:"Span separator character"`
 		SpanLeftMin int `long:"span-left-min" value-name:"COLS" env:"SPAN_LEFT_MIN" default:"8" description:"Left column minimum span"`
 		SpanRightMin int `long:"span-right-min" value-name:"COLS" env:"SPAN_RIGHT_MIN" default:"6" description:"Right column minimum span"`
@@ -1484,10 +1539,9 @@ var options struct {
 		Separator string `long:"separator" value-name:"STRING" default:"\\n" env:"SEPARATOR" description:"Command separator"`
 		// XXX might be fun to be able to set this to something like "middle"...
 		ScrollThreshold int `long:"scroll-threshold" value-name:"N" default:"3" description:"Number of lines from the edge of screen to triger scrolling"`
-		// XXX not sure how to override the defaults without overriding user options...
 		ScrollThresholdTop int `long:"scroll-threshold-top" value-name:"N" default:"3" description:"Number of lines from the top edge of screen to triger scrolling"`
 		ScrollThresholdBottom int `long:"scroll-threshold-bottom" value-name:"N" default:"3" description:"Number of lines from the bottom edge of screen to triger scrolling"`
-		// XXX add named themes...
+		// XXX add named themes/presets...
 		Theme map[string]string `long:"theme" value-name:"NAME:FGCOLOR:BGCOLOR" description:"Set theme color"`
 	} `group:"Configuration"`
 
@@ -1530,6 +1584,10 @@ func startup() Result {
 	LIST_CMD = options.ListCommand
 	TRANSFORM_CMD = options.TransformCommand
 
+	// focus/positioning...
+	FOCUS = options.Focus
+	CURRENT_ROW = options.FocusRow
+
 	TITLE_LINE_FMT = options.Chrome.Title
 	TITLE_LINE = TITLE_LINE_FMT != ""
 	TITLE_CMD = options.Chrome.TitleCommand
@@ -1551,18 +1609,15 @@ func startup() Result {
 	SPAN_FILLER_STATUS = []rune(options.Chrome.SpanFillerStatus)[0]
 	// defaults to SPAN_FILLER...
 	SPAN_SEPARATOR = SPAN_FILLER
-	if opt := parser.FindOptionByLongName("span-separator"); 
-			opt != nil && ! opt.IsSetDefault() {
+	if ! parser.FindOptionByLongName("span-separator").IsSetDefault() {
 		SPAN_SEPARATOR = []rune(options.Chrome.SpanSeparator)[0] }
 	OVERFLOW_INDICATOR = []rune(options.Chrome.OverflowIndicator)[0]
 	// defaults to .ScrollThreshold...
 	SCROLL_THRESHOLD_TOP = options.Config.ScrollThreshold
-	if opt := parser.FindOptionByLongName("scroll-threshold-top"); 
-			opt != nil && opt.IsSetDefault() {
+	if ! parser.FindOptionByLongName("scroll-threshold-top").IsSetDefault() {
 		SCROLL_THRESHOLD_TOP = options.Config.ScrollThresholdTop }
 	SCROLL_THRESHOLD_BOTTOM = options.Config.ScrollThreshold
-	if opt := parser.FindOptionByLongName("scroll-threshold-bottom"); 
-			opt != nil && opt.IsSetDefault() {
+	if ! parser.FindOptionByLongName("scroll-threshold-bottom").IsSetDefault() {
 		SCROLL_THRESHOLD_BOTTOM = options.Config.ScrollThresholdBottom }
 	
 	// action aliases...
