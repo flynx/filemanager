@@ -469,7 +469,6 @@ func drawScreen(screen tcell.Screen, theme Theme){
 
 	// set initial focus...
 	if FOCUS != "" {
-		log.Println("FOCUS", FOCUS)
 		f := 0
 		// number...
 		if i, err := strconv.Atoi(FOCUS); err == nil {
