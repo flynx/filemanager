@@ -1504,6 +1504,10 @@ var options struct {
 	//ColOffset int `long:"col-offset" value-name:"N" env:"COL_OFFSET" description:"Column offset of visible lines"`
 	//*/
 
+	// XXX
+	//Selection: string ``
+	//SelectionCmd: string ``
+
 	// XXX chicken-egg: need to first parse the args then parse the ini 
 	//		and then merge the two...
 	//ArgsFile string `long:"args-file" value-name:"FILE" env:"ARGS" description:"Arguments file"`
