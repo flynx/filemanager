@@ -7,6 +7,7 @@
 *	- live search/filtering
 *
 *
+* XXX BUG: when borders set the first char of focused line is not styled correctly...
 * XXX BUG: scrollbar sometimes is off by 1 cell when scrolling down (small overflow)...
 *
 *
@@ -181,6 +182,16 @@ var ROWS, COLS int
 var COL_OFFSET = 0
 var ROW_OFFSET = 0
 
+var BORDER = 0
+var BORDER_VERTICAL = tcell.RuneVLine
+var BORDER_HORIZONTAL = tcell.RuneHLine
+var BORDER_CORNERS = map[string]rune{
+	"ul": tcell.RuneULCorner,	
+	"ur": tcell.RuneURCorner,	
+	"ll": tcell.RuneLLCorner,	
+	"lr": tcell.RuneLRCorner,	
+}
+
 var SCROLLBAR = 0
 var SCROLLBAR_FG = tcell.RuneCkBoard
 var SCROLLBAR_BG = tcell.RuneBoard
@@ -317,6 +328,9 @@ var THEME = Theme {
 	"background": tcell.StyleDefault.
 		Background(tcell.ColorReset).
 		Foreground(tcell.ColorReset),
+	"border": tcell.StyleDefault.
+		Background(tcell.ColorReset).
+		Foreground(tcell.ColorReset),
 }
 
 
@@ -401,7 +415,6 @@ func populateTemplateLine(str string, cmd string) string {
 			return []byte("") }))
 
 	// handle placeholders...
-	size := false
 	str = string(isPlaceholder.ReplaceAllFunc(
 		[]byte(str), 
 		func(match []byte) []byte {
@@ -418,7 +431,6 @@ func populateTemplateLine(str string, cmd string) string {
 				// this has to be handled later, when the string is 
 				// otherwise complete...
 				case string(SPAN_MARKER[1:]):
-					size = true
 					val = SPAN_MARKER
 				case "CMD":
 					if cmd != "" {
@@ -436,16 +448,6 @@ func populateTemplateLine(str string, cmd string) string {
 				case "REST":
 					val = current.text[COLS:] }
 			return []byte(val) }))
-
-	// %SPAN / fit width...
-	if size {
-		// contract...
-		if len(str) > COLS {
-			overflow := (len(str) - COLS) + 3
-			parts := strings.SplitN(str, SPAN_MARKER, 2)
-			str = string(parts[0][:len(parts[0])-overflow]) + "..."
-			if len(parts) > 1 {
-				str += parts[1] } } } 
 	return str }
 
 func drawScreen(screen tcell.Screen, theme Theme){
@@ -536,6 +538,9 @@ func drawScreen(screen tcell.Screen, theme Theme){
 		status_separator_style, ok = theme["status-line"] 
 		if ! ok {
 			separator_style = theme["default"] } }
+	border_style, ok := theme["border"]
+	if ! ok {
+		separator_style = theme["default"] }
 
 	var extend_separator_col = -1
 	var col, row int
@@ -626,16 +631,38 @@ func drawScreen(screen tcell.Screen, theme Theme){
 			buf_col := col + buf_offset + COL_OFFSET - LEFT
 			style := style
 
-			// content block...
-			content_block := false
-			if ! (TITLE_LINE &&
-						row < TOP + top_offset) &&
-					! (STATUS_LINE &&
-						row == TOP + height-1) {
-				content_block = true }
+			// border vertical...
+			// XXX do corners...
+			if ! chrome_line && 
+					BORDER > 0 &&
+					(col == LEFT || 
+						// if scrollbar visible do not draw border...
+						(SCROLLBAR < 1 && 
+							col == LEFT + COLS - col_offset - 1)) {
+				style = border_style
+				screen.SetContent(cur_col, row, BORDER_VERTICAL, nil, style) 
+				col_offset += BORDER
+				cur_col += BORDER }
+			// border horizontal...
+			if chrome_line && 
+					BORDER > 0 {
+				span_filler = BORDER_HORIZONTAL 
+				style = border_style 
+				// XXX HACK
+				//screen.SetContent(LEFT, TOP, BORDER_CORNERS["ul"], nil, style) 
+				//screen.SetContent(LEFT+COLS-1, TOP, BORDER_CORNERS["ur"], nil, style) 
+				//screen.SetContent(LEFT, TOP+ROWS+1, BORDER_CORNERS["ll"], nil, style) 
+				//screen.SetContent(LEFT+COLS-1, TOP+ROWS+1, BORDER_CORNERS["lr"], nil, style) 
+			}
+
+			left_offset := 0
+			if BORDER > 0 {
+				left_offset = BORDER
+			} else {
+				left_offset = SCROLLBAR }
 
 			// scrollbar...
-			if content_block &&
+			if ! chrome_line &&
 					SCROLLBAR > 0 && 
 					cur_col == LEFT + COLS-1 {
 				c := SCROLLBAR_BG
@@ -688,8 +715,8 @@ func drawScreen(screen tcell.Screen, theme Theme){
 				continue }
 
 			// overflow indicator...
-			if content_block &&
-					buf_col + col_offset == COLS - SCROLLBAR - 1 && 
+			if ! chrome_line &&
+					buf_col + col_offset == COLS - left_offset - 1 && 
 					buf_col < len(line)-1 {
 				screen.SetContent(cur_col, row, OVERFLOW_INDICATOR, nil, style)
 				continue } 
@@ -704,9 +731,9 @@ func drawScreen(screen tcell.Screen, theme Theme){
 				// XXX should we attempty to draw a sraight vertical line between columns???
 				if SPAN_MODE == "fit-right" {
 					if len(line) - buf_col + SPAN_LEFT_MIN_WIDTH < COLS {
-						offset = COLS - len(line) - SCROLLBAR
+						offset = COLS - len(line) - left_offset
 					} else {
-						offset = -buf_col + SPAN_LEFT_MIN_WIDTH - SCROLLBAR }
+						offset = -buf_col + SPAN_LEFT_MIN_WIDTH - left_offset }
 				// manual...
 				} else {
 					c := 0
@@ -731,7 +758,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 							log.Println("Error parsing:", SPAN_MODE) 
 							continue }
 						if v < 0 {
-							c = COLS + v - SCROLLBAR
+							c = COLS + v - left_offset
 						} else {
 							c = v } }
 					offset = c - buf_col - len(SPAN_MARKER) }
@@ -744,7 +771,9 @@ func drawScreen(screen tcell.Screen, theme Theme){
 						row_style != "current-selected" {
 					style = separator_style }
 				if chrome_line {
-					if TITLE_LINE && row == 0 {
+					if BORDER > 0 {
+						style = border_style
+					} else if TITLE_LINE && row == 0 {
 						style = title_separator_style
 					} else {
 						style = status_separator_style } }
@@ -758,7 +787,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 					extend_separator_col = col + offset + len(SPAN_MARKER) - 1
 					screen.SetContent(col + offset + len(SPAN_MARKER) - 1, row, sep, nil, style) 
 				} else {
-					screen.SetContent(LEFT + COLS - SCROLLBAR - 1, row, OVERFLOW_INDICATOR, nil, style) }
+					screen.SetContent(LEFT + COLS - left_offset - 1, row, OVERFLOW_INDICATOR, nil, style) }
 				col_offset = offset
 				// skip the marker...
 				col += len(SPAN_MARKER) - 1
@@ -1565,13 +1594,14 @@ var options struct {
 	} `group:"Keyboard"`
 
 	Chrome struct {
-		Title string `long:"title" value-name:"STR" env:"TITLE" default:" %CMD " description:"Title format"`
+		Title string `long:"title" value-name:"STR" env:"TITLE" default:" %CMD %SPAN " description:"Title format"`
 		TitleCommand string `long:"title-cmd" value-name:"CMD" env:"TITLE_CMD" description:"Title command"`
 		Status string `long:"status" value-name:"STR" env:"STATUS" default:" %CMD %SPAN $LINE/$LINES " description:"Status format"`
 		StatusCommand string `long:"status-cmd" value-name:"CMD" env:"STATUS_CMD" description:"Status command"`
 		Size string `long:"size" value-name:"WIDTH,HEIGHT" env:"SIZE" default:"auto,auto" description:"Widget size"`
 		Align string `long:"align" value-name:"LEFT,TOP" env:"ALIGN" default:"center,center" description:"Widget alignment"`
 		Tab int `long:"tab" value-name:"COLS" env:"TABSIZE" default:"8" description:"Tab size"`
+		Border bool `long:"border" env:"BORDER" description:"Border"`
 		Span string `long:"span" value-name:"[MODE|SIZE]" env:"SPAN" default:"fit-right" description:"Line spanning mode/size"`
 		// XXX at this point this depends on leading '%'...
 		//SpanMarker string `long:"span-marker" value-name:"STR" env:"SPAN_MARKER" default:"%SPAN" description:"Marker to use to span a line"`
@@ -1638,6 +1668,9 @@ func startup() Result {
 	// focus/positioning...
 	FOCUS = options.Focus
 	CURRENT_ROW = options.FocusRow
+
+	if options.Chrome.Border {
+		BORDER = 1 }
 
 	TITLE_LINE_FMT = options.Chrome.Title
 	TITLE_LINE = TITLE_LINE_FMT != ""
