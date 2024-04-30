@@ -648,7 +648,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 					BORDER > 0 {
 				span_filler = BORDER_HORIZONTAL 
 				style = border_style 
-				// XXX HACK
+				// XXX HACK -- do this once...
 				//screen.SetContent(LEFT, TOP, BORDER_CORNERS["ul"], nil, style) 
 				//screen.SetContent(LEFT+COLS-1, TOP, BORDER_CORNERS["ur"], nil, style) 
 				//screen.SetContent(LEFT, TOP+ROWS+1, BORDER_CORNERS["ll"], nil, style) 
