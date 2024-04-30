@@ -522,6 +522,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 			CURRENT_ROW = len(TEXT_BUFFER) - ROW_OFFSET }
 		FOCUS = "" }
 
+	// chrome detail themeing...
 	separator_style, ok := theme["span-separator"]
 	if ! ok {
 		separator_style = theme["default"] }
@@ -545,7 +546,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 
 		// row theming...
 		style = theme["default"]
-		non_default_style := true
+		missing_style := true
 		row_style := "default"
 		if buf_row >= 0 && 
 				buf_row < len(TEXT_BUFFER) {
@@ -553,15 +554,15 @@ func drawScreen(screen tcell.Screen, theme Theme){
 			if TEXT_BUFFER[buf_row].selected &&
 					CURRENT_ROW == row - top_offset - TOP {
 				row_style = "current-selected"
-				style, non_default_style = theme["current-selected"]
+				style, missing_style = theme["current-selected"]
 			// mark selected...
 			} else if TEXT_BUFFER[buf_row].selected {
 				row_style = "selected"
-				style, non_default_style = theme["selected"]
+				style, missing_style = theme["selected"]
 			// current...
 			} else if CURRENT_ROW == row - top_offset - TOP {
 				row_style = "current"
-				style, non_default_style = theme["current"] } } 
+				style, missing_style = theme["current"] } } 
 
 		// normalize...
 		line := []rune{}
@@ -595,7 +596,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 				if SPAN_EXTEND != "always" {
 					extend_separator_col = -1 }
 				str = TITLE_LINE_FMT
-				style, non_default_style = theme["title-line"]
+				style, missing_style = theme["title-line"]
 				if TITLE_CMD != "" {
 					cmd = TITLE_CMD }
 			// status...
@@ -606,7 +607,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 				if SPAN_EXTEND != "always" {
 					extend_separator_col = -1 }
 				str = STATUS_LINE_FMT
-				style, non_default_style = theme["status-line"] 
+				style, missing_style = theme["status-line"] 
 				if STATUS_CMD != "" {
 					cmd = STATUS_CMD } }
 			// populate the line...
@@ -614,7 +615,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 				line = []rune(populateTemplateLine(str, cmd)) } }
 
 		// set default style...
-		if ! non_default_style {
+		if ! missing_style {
 			style = theme["default"] }
 
 		// draw row...
@@ -738,7 +739,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 				i := cur_col
 				for ; i < cur_col + offset + len(SPAN_MARKER) - 1 && i < LEFT + COLS ; i++ {
 					screen.SetContent(i, row, span_filler, nil, style) } 
-				// separator/overflow...
+				// separator theming...
 				if row_style != "current" && 
 						row_style != "current-selected" {
 					style = separator_style }
@@ -747,6 +748,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 						style = title_separator_style
 					} else {
 						style = status_separator_style } }
+				// separator/overflow...
 				if col + offset + len(SPAN_MARKER) < LEFT + COLS { 
 					sep := SPAN_SEPARATOR
 					if chrome_line {
