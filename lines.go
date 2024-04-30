@@ -10,6 +10,7 @@
 * XXX BUG: scrollbar sometimes is off by 1 cell when scrolling down (small overflow)...
 *
 *
+* XXX style separator...
 * XXX set selection from commandline...
 * XXX for file argument, track changes to file and update... (+ option to disable)
 * XXX handle paste (and copy) -- actions...
@@ -298,10 +299,19 @@ var THEME = Theme {
 		Background(tcell.ColorReset).
 		Foreground(tcell.ColorYellow).
 		Reverse(true),
+	"span-separator": tcell.StyleDefault.
+		Background(tcell.ColorReset).
+		Foreground(tcell.ColorGray),
 	"status-line": tcell.StyleDefault.
 		Background(tcell.ColorGray).
 		Foreground(tcell.ColorReset),
+	"status-span-separator": tcell.StyleDefault.
+		Background(tcell.ColorGray).
+		Foreground(tcell.ColorReset),
 	"title-line": tcell.StyleDefault.
+		Background(tcell.ColorGray).
+		Foreground(tcell.ColorReset),
+	"title-span-separator": tcell.StyleDefault.
 		Background(tcell.ColorGray).
 		Foreground(tcell.ColorReset),
 	"background": tcell.StyleDefault.
@@ -477,6 +487,8 @@ func drawScreen(screen tcell.Screen, theme Theme){
 		} else {
 			if FOCUS[0] == '\\' {
 				FOCUS = string(FOCUS[1:]) }
+			// XXX might also be a good idea to match content (and other) 
+			//		then select best match...
 			for i, r := range TEXT_BUFFER {
 				if r.text == FOCUS {
 					f = i
@@ -510,6 +522,20 @@ func drawScreen(screen tcell.Screen, theme Theme){
 			CURRENT_ROW = len(TEXT_BUFFER) - ROW_OFFSET }
 		FOCUS = "" }
 
+	separator_style, ok := theme["span-separator"]
+	if ! ok {
+		separator_style = theme["default"] }
+	title_separator_style, ok := theme["title-span-separator"]
+	if ! ok {
+		title_separator_style, ok = theme["title-line"] 
+		if ! ok {
+			separator_style = theme["default"] } }
+	status_separator_style, ok := theme["status-span-separator"]
+	if ! ok {
+		status_separator_style, ok = theme["status-line"] 
+		if ! ok {
+			separator_style = theme["default"] } }
+
 	var extend_separator_col = -1
 	var col, row int
 	style := theme["default"]
@@ -520,17 +546,21 @@ func drawScreen(screen tcell.Screen, theme Theme){
 		// row theming...
 		style = theme["default"]
 		non_default_style := true
+		row_style := "default"
 		if buf_row >= 0 && 
 				buf_row < len(TEXT_BUFFER) {
 			// current+selected...
 			if TEXT_BUFFER[buf_row].selected &&
 					CURRENT_ROW == row - top_offset - TOP {
+				row_style = "current-selected"
 				style, non_default_style = theme["current-selected"]
 			// mark selected...
 			} else if TEXT_BUFFER[buf_row].selected {
+				row_style = "selected"
 				style, non_default_style = theme["selected"]
 			// current...
 			} else if CURRENT_ROW == row - top_offset - TOP {
+				row_style = "current"
 				style, non_default_style = theme["current"] } } 
 
 		// normalize...
@@ -621,6 +651,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 			} else if ! chrome_line &&
 					SPAN_EXTEND != "never" && 
 					cur_col == extend_separator_col {
+				style = separator_style
 				c = SPAN_SEPARATOR }
 
 			// escape sequences...
@@ -707,6 +738,15 @@ func drawScreen(screen tcell.Screen, theme Theme){
 				for ; i < cur_col + offset + len(SPAN_MARKER) - 1 && i < LEFT + COLS ; i++ {
 					screen.SetContent(i, row, span_filler, nil, style) } 
 				// separator/overflow...
+				style := style
+				if row_style != "current" && 
+						row_style != "current-selected" {
+					style = separator_style }
+				if chrome_line {
+					if TITLE_LINE && row == 0 {
+						style = title_separator_style
+					} else {
+						style = status_separator_style } }
 				if col + offset + len(SPAN_MARKER) < LEFT + COLS { 
 					sep := SPAN_SEPARATOR
 					if chrome_line {
