@@ -641,8 +641,10 @@ func drawScreen(screen tcell.Screen, theme Theme){
 							col == LEFT + COLS - col_offset - 1)) {
 				style = border_style
 				screen.SetContent(cur_col, row, BORDER_VERTICAL, nil, style) 
-				col_offset += BORDER
-				cur_col += BORDER }
+				//col_offset += BORDER
+				cur_col += BORDER 
+				if col == LEFT {
+					continue } }
 			// border horizontal...
 			if chrome_line && 
 					BORDER > 0 {
