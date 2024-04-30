@@ -643,6 +643,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 				screen.SetContent(cur_col, row, BORDER_VERTICAL, nil, style) 
 				//col_offset += BORDER
 				cur_col += BORDER 
+				// NOTE: we still need to handle scrollbar (over the right border)...
 				if col == LEFT {
 					continue } }
 			// border horizontal...
