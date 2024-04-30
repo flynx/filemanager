@@ -623,6 +623,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 		for col = LEFT ; col < LEFT + COLS - col_offset ; col++ {
 			cur_col := col + col_offset
 			buf_col := col + buf_offset + COL_OFFSET - LEFT
+			style := style
 
 			// content block...
 			content_block := false
@@ -738,7 +739,6 @@ func drawScreen(screen tcell.Screen, theme Theme){
 				for ; i < cur_col + offset + len(SPAN_MARKER) - 1 && i < LEFT + COLS ; i++ {
 					screen.SetContent(i, row, span_filler, nil, style) } 
 				// separator/overflow...
-				style := style
 				if row_style != "current" && 
 						row_style != "current-selected" {
 					style = separator_style }
