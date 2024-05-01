@@ -25,7 +25,11 @@ $ ls -alFh --group-directories-first \
     | lines \
         -s '@ [[ "$LEFT_TEXT" =~ \/$ ]] || less "$LEFT_TEXT"' \
         --key Delete:'@ scriots/yesOrNo "Delete: $TEXR_LEFT?" && rm "$TEXR_LEFT" || true' \
-        --span-separator="│"
+        --span-separator="│" \
+        --title " $TEXT_LEFT %SPAN" \
+        -f "lines.go" \
+        --border \
+        --selection 'grep "\.go"'
 ```
 
 ```shell
