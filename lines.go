@@ -11,10 +11,9 @@
 *		...can't reproduce...
 *
 *
-* XXX set selection from commandline...
 * XXX for file argument, track changes to file and update... (+ option to disable)
 * XXX handle paste (and copy) -- actions...
-* XXX can we run two instances and tee input/output???
+* XXX move globals to struct (refactoring)...
 * XXX can we load a screen with the curent terminal state as content???
 *		modes:
 *			inline (just after the current line)
@@ -28,6 +27,7 @@
 *		term height Println(..) them and then play with that region of 
 *		the terminal, otherwise open normally...
 * XXX concurent update + keep selection position/value...
+* XXX might be fun to add border themes...
 *
 */
 
@@ -156,6 +156,7 @@ func New() Lines {
 
 var LIST_CMD string
 var TRANSFORM_CMD string
+var SELECTION_CMD string
 var INPUT_FILE string
 // XXX should this be a buffer???
 var STDOUT string
@@ -335,6 +336,7 @@ var THEME = Theme {
 }
 
 
+// XXX do we need another layer not operating on the global TEXT_BUFFER???
 // XXX these are almost identical, can we generalize?
 // XXX option to maintain current row...
 func str2buffer(str string){
@@ -371,7 +373,11 @@ func file2buffer(file *os.File){
 	// XXX should we do this here or in the looping code???
 	if n == 0 {
 		TEXT_BUFFER = append(TEXT_BUFFER, Row{}) } }
-
+func buffer2str() string {
+	lines := []string{}
+	for _, line := range TEXT_BUFFER {
+		lines = append(lines, line.text) }
+	return strings.Join(lines, "\n") }
 
 
 // XXX add support for ansi escape sequences...
@@ -1405,6 +1411,31 @@ func lines() Result {
 	// XXX should this be done in the event loop???
 	ACTIONS.Update()
 
+	if SELECTION_CMD != "" {
+		var stdin bytes.Buffer
+		stdin.Write([]byte(buffer2str()))
+		stdout, _, err := callCommand(SELECTION_CMD, stdin)
+		if err != nil {
+			log.Println("Error executing:", SELECTION_CMD) 
+		} else {
+			i := 0
+			for _, match := range strings.Split(stdout.String(), "\n") {
+				// NOTE: since we expect the general case output to be in 
+				//		the same order as the input we'll start the next 
+				//		search from the next spot we found the last match...
+				j := i
+				for {
+					// roll around...
+					if TEXT_BUFFER[j].text == match {
+						TEXT_BUFFER[j].selected = true
+						break } 
+					j++
+					if j >= len(TEXT_BUFFER) {
+						j = 0 } 
+					if j == i {
+						break } }
+				i = j } } }
+
 	for {
 		updateGeometry(screen)
 
@@ -1518,14 +1549,12 @@ var options struct {
 		FILE string
 	} `positional-args:"yes"`
 
-	// NOTE: this is not the same as filtering the input as it will be 
 	ListCommand string `short:"c" long:"cmd" value-name:"CMD" env:"CMD" description:"List command"`
 	// NOTE: this is not the same as filtering the input as it will be 
 	//		done lazily when the line reaches view.
 	TransformCommand string `short:"t" long:"transform" value-name:"CMD" env:"TRANSFORM" description:"Row transform command"`
 
-	// XXX
-	SelectionCommand string `long:"selection" value-name:"ACTION" env:"REJECT" description:"Command to filter selection from input"`
+	SelectionCommand string `short:"e" long:"selection" value-name:"ACTION" env:"REJECT" description:"Command to filter selection from input"`
 
 	// XXX doc: to match a number explicitly escape it with '\\'...
 	Focus string `short:"f" long:"focus" value-nmae:"[N|STR]" env:"FOCUS" description:"Line number to focus"`
@@ -1628,16 +1657,19 @@ func startup() Result {
 	INPUT_FILE = options.Pos.FILE
 	LIST_CMD = options.ListCommand
 	TRANSFORM_CMD = options.TransformCommand
+	SELECTION_CMD = options.SelectionCommand
 
 	// focus/positioning...
 	FOCUS = options.Focus
 	CURRENT_ROW = options.FocusRow
 
-	if options.Chrome.Border {
+	if options.Chrome.Border ||  
+			! parser.FindOptionByLongName("border-chars").IsSetDefault() {
 		BORDER = 1 
 		// char order: 
 		//		 01234567
 		//		"│┌─┐│└─┘"
+		// XXX might be fun to add border themes...
 		border_chars := []rune(
 			// normalize length...
 			fmt.Sprintf("%-8v", options.Chrome.BorderChars))
