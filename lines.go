@@ -800,7 +800,6 @@ func toExitCode(r Result) int {
 	return 0 }
 
 // vertical navigation...
-// XXX changing only CURRENT_ROW can be donwe by redrawing only two lines...
 func (this Actions) Up() Result {
 	if CURRENT_ROW > 0 && 
 			// account for SCROLL_THRESHOLD_TOP...
@@ -1197,7 +1196,6 @@ func callHandler(key string) Result {
 	return OK }
 
 
-// XXX modifier building in is not done yet...
 func evt2keys(evt tcell.EventKey) []string {
 	key_seq := []string{}
 	mods := []string{}
@@ -1535,15 +1533,16 @@ func lines() Result {
 
 
 // command line args...
-// XXX can we set default values from variables???
+// XXX flags: can we set default values from variables???
 //		...doing ` ... `+ VAR +` ... ` breaks things...
-// XXX formatting the config string seems to break things...
-//ListCommand string `
-//	short:"c" 
-//	long:"cmd" 
-//	value-name:"CMD" 
-//	env:"CMD" 
-//	description:"List command"`
+// XXX flags: formatting the config string breaks things...
+//		e.g.:
+//			ListCommand string `
+//				short:"c" 
+//				long:"cmd" 
+//				value-name:"CMD" 
+//				env:"CMD" 
+//				description:"List command"`
 var options struct {
 	Pos struct {
 		FILE string
