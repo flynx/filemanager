@@ -563,7 +563,7 @@ func drawLine(col, row, width int,
 			//		row_style != "current-selected" {
 			//	style = separator_style }
 			// separator/overflow...
-			if i + offset + len(SPAN_MARKER) < width { 
+			if i + offset + len(SPAN_MARKER) <= width { 
 				sep := span_separator
 				if offset - col_offset + len(SPAN_MARKER) - 1 < 0 {
 					sep = OVERFLOW_INDICATOR }
@@ -669,6 +669,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 		FOCUS = "" }
 
 	// chrome detail themeing...
+	/*
 	separator_style, ok := theme["span-separator"]
 	if ! ok {
 		separator_style = theme["default"] }
@@ -682,22 +683,38 @@ func drawScreen(screen tcell.Screen, theme Theme){
 		status_separator_style, ok = theme["status-line"] 
 		if ! ok {
 			separator_style = theme["default"] } }
+	//*/
 	border_style, ok := theme["border"]
 	if ! ok {
-		separator_style = theme["default"] }
+		border_style = theme["default"] }
 
-
-
-
-
-	//log.Println("---", ROWS, HEIGHT)
 	row := TOP
 	rows := HEIGHT
 	cols := COLS
 	style := theme["default"]
+
+	left_offset := BORDER
+	right_offset := BORDER
+	if SCROLLBAR > 0 && BORDER < 1 {
+		right_offset = SCROLLBAR }
+
+	span_filler_title := SPAN_FILLER_TITLE
+	span_filler_status := SPAN_FILLER_STATUS
+	if BORDER > 0 {
+		span_filler_title = BORDER_HORIZONTAL
+		span_filler_status = BORDER_HORIZONTAL }
+
 	// title...
 	if TITLE_LINE {
-		drawLine(LEFT, row, COLS, populateTemplateLine(TITLE_LINE_FMT, TITLE_CMD), SPAN_FILLER_TITLE, SPAN_FILLER_TITLE, theme["title-line"]) 
+		title_style := theme["title-line"]
+		pre, post := "", ""
+		if BORDER > 0 {
+			pre, post = string(BORDER_CORNERS["ul"]), string(BORDER_CORNERS["ur"])
+			title_style = border_style } 
+		drawLine(LEFT, row, COLS, 
+			pre + populateTemplateLine(TITLE_LINE_FMT, TITLE_CMD) + post, 
+			span_filler_title, span_filler_title, 
+			title_style) 
 		rows--
 		row++ }
 	if STATUS_LINE {
@@ -705,10 +722,6 @@ func drawScreen(screen tcell.Screen, theme Theme){
 	// buffer...
 	for i := 0 ; i < rows ; i++ {
 		buf_row := i + ROW_OFFSET 
-		left_offset := BORDER
-		right_offset := BORDER
-		if SCROLLBAR > 0 && BORDER < 1 {
-			right_offset = SCROLLBAR }
 
 		line := ""
 		if buf_row < len(TEXT_BUFFER) {
@@ -734,12 +747,15 @@ func drawScreen(screen tcell.Screen, theme Theme){
 		if ! missing_style {
 			style = theme["default"] }
 
-		// border...
+		// border vertical...
 		if BORDER > 0 {
 			screen.SetContent(LEFT, row, BORDER_VERTICAL, nil, border_style) }
 		// line...
-		drawLine(LEFT + BORDER, row, cols - left_offset - right_offset, line, SPAN_FILLER, SPAN_SEPARATOR, style) 
-		// border
+		drawLine(LEFT + BORDER, row, cols - left_offset - right_offset, 
+			line, 
+			SPAN_FILLER, SPAN_SEPARATOR, 
+			style) 
+		// border verticl...
 		if BORDER > 0 && SCROLLBAR < 1 {
 			screen.SetContent(LEFT + cols - 1, row, BORDER_VERTICAL, nil, border_style)
 		// scrollbar...
@@ -752,297 +768,15 @@ func drawScreen(screen tcell.Screen, theme Theme){
 		row++ }
 	// status...
 	if STATUS_LINE {
-		drawLine(LEFT, row, COLS, populateTemplateLine(STATUS_LINE_FMT, STATUS_CMD), SPAN_FILLER_STATUS, SPAN_FILLER_STATUS, theme["status-line"]) }
-
-	return
-
-
-
-
-
-	extend_separator_col := -1
-	//var col, row int
-	col := 0
-	//style := theme["default"]
-	for row = TOP ; row < TOP + height ; row++ {
-		buf_row := row - top_offset + ROW_OFFSET - TOP
-		span_filler := SPAN_FILLER
-
-		// row theming...
-		style = theme["default"]
-		missing_style := true
-		row_style := "default"
-		if buf_row >= 0 && 
-				buf_row < len(TEXT_BUFFER) {
-			// current+selected...
-			if TEXT_BUFFER[buf_row].selected &&
-					CURRENT_ROW == row - top_offset - TOP {
-				row_style = "current-selected"
-				style, missing_style = theme["current-selected"]
-			// mark selected...
-			} else if TEXT_BUFFER[buf_row].selected {
-				row_style = "selected"
-				style, missing_style = theme["selected"]
-			// current...
-			} else if CURRENT_ROW == row - top_offset - TOP {
-				row_style = "current"
-				style, missing_style = theme["current"] } } 
-
-		// normalize...
-		line := []rune{}
-		// buffer line...
-		chrome_line := false
-		if buf_row >= 0 && 
-				buf_row < len(TEXT_BUFFER) && 
-				row >= TOP + top_offset &&
-				row <= TOP + ROWS {
-			// transform (lazy)...
-			// XXX should we do this in advance +/- screen (a-la ImageGrid ribbons)???
-			if TRANSFORM_CMD != "" && 
-					! TEXT_BUFFER[buf_row].transformed {
-				text, err := callTransform(TRANSFORM_CMD, TEXT_BUFFER[buf_row].text)
-				if err == nil {
-					TEXT_BUFFER[buf_row].text = text
-					TEXT_BUFFER[buf_row].transformed = true } }
-			line = []rune(TEXT_BUFFER[buf_row].text) 
-			// extend span separator...
-			if SPAN_EXTEND == "auto" && 
-					! strings.Contains(TEXT_BUFFER[buf_row].text, SPAN_MARKER) {
-				extend_separator_col = -1 }
-		// chrome...
-		} else {
-			str, cmd := "", ""
-			// title...
-			if TITLE_LINE && 
-					row == TOP {
-				chrome_line = true
-				span_filler = SPAN_FILLER_TITLE
-				if SPAN_EXTEND != "always" {
-					extend_separator_col = -1 }
-				str = TITLE_LINE_FMT
-				style, missing_style = theme["title-line"]
-				if TITLE_CMD != "" {
-					cmd = TITLE_CMD }
-			// status...
-			} else if STATUS_LINE && 
-					row == TOP + height-1 {
-				chrome_line = true
-				span_filler = SPAN_FILLER_STATUS
-				if SPAN_EXTEND != "always" {
-					extend_separator_col = -1 }
-				str = STATUS_LINE_FMT
-				style, missing_style = theme["status-line"] 
-				if STATUS_CMD != "" {
-					cmd = STATUS_CMD } }
-			// populate the line...
-			if chrome_line {
-				line = []rune(populateTemplateLine(str, cmd)) } }
-
-		// set default style...
-		if ! missing_style {
-			style = theme["default"] }
-
-		// draw row...
-		var col_offset = 0
-		var buf_offset = 0
-		for col = LEFT ; col < LEFT + COLS - col_offset ; col++ {
-			cur_col := col + col_offset
-			buf_col := col + buf_offset + COL_OFFSET - LEFT
-			style := style
-
-			// border/scrollbar offset...
-			right_offset := 0
-			if BORDER > 0 {
-				right_offset = BORDER
-			} else {
-				right_offset = SCROLLBAR }
-			// border vertical...
-			if ! chrome_line && 
-					BORDER > 0 &&
-					(col == LEFT || 
-						// if scrollbar visible do not draw border...
-						(SCROLLBAR < 1 && 
-							col == LEFT + COLS - col_offset - 1)) {
-				style = border_style
-				screen.SetContent(cur_col, row, BORDER_VERTICAL, nil, style) 
-				//col_offset += BORDER
-				//buf_offset -= BORDER
-				cur_col += BORDER
-				// NOTE: we still need to handle scrollbar (over the right border)...
-				if col <= LEFT + BORDER {
-					continue } }
-			// border horizontal...
-			// XXX BUG: we still have empty cells before/after the corners...
-			if chrome_line && 
-					BORDER > 0 {
-				span_filler = BORDER_HORIZONTAL 
-				style = border_style 
-				// border corners...
-				// NOTE: I do not like this, we can print all the corners 
-				//		before the loops but then we'd have to do the tests 
-				//		to skip the cells they are in anyway...
-				if row == TOP { 
-					if cur_col == LEFT {
-						screen.SetContent(cur_col, row, BORDER_CORNERS["ul"], nil, style) 
-						continue }
-					if cur_col == LEFT + COLS - 1 { 
-						screen.SetContent(cur_col, row, BORDER_CORNERS["ur"], nil, style) 
-						continue } }
-				if row == TOP + ROWS + 1 {
-					if cur_col == LEFT {
-						screen.SetContent(cur_col, row, BORDER_CORNERS["ll"], nil, style) 
-						continue }
-					if cur_col == LEFT + COLS - 1 {
-						screen.SetContent(cur_col, row, BORDER_CORNERS["lr"], nil, style) 
-						continue } } }
-
-			// scrollbar...
-			if ! chrome_line &&
-					SCROLLBAR > 0 && 
-					cur_col == LEFT + COLS-1 {
-				c := SCROLLBAR_BG
-				if row - top_offset - TOP >= scroller_offset && 
-						row - top_offset - TOP < scroller_offset + scroller_size {
-					c = SCROLLBAR_FG }
-				screen.SetContent(cur_col, row, c, nil, scroller_style)
-				continue }
-
-			// get rune...
-			c := ' '
-			if buf_col < len(line) {
-				c = line[buf_col] 
-			// extend span separator...
-			} else if ! chrome_line &&
-					SPAN_EXTEND != "never" && 
-					cur_col == extend_separator_col {
-				style = separator_style
-				c = SPAN_SEPARATOR }
-
-			// escape sequences...
-			// see: 
-			//	https://gist.github.com/fnky/458719343aabd01cfb17a3a4f7296797 
-			// XXX need to handle colors at least...
-			if c == '\x1B' {
-				for c == '\x1B' {
-					i := buf_col + 1
-					if line[i] == '[' {
-						ansi_commands := "HfABCDEFGnsuJKmhlp"
-						for i < len(line) && 
-								! strings.ContainsRune(ansi_commands, line[i]) {
-							i++ }
-						/*/ XXX handle color...
-						if line[i] == 'm' {
-							style = ansi2style(string(line[buf_col:i+1]), style) }
-						//*/
-					} else {
-						ansi_direct_commands := "M78"
-						for i < len(line) && 
-								! strings.ContainsRune(ansi_direct_commands, line[i]) {
-							i++ } } 
-					buf_offset += (i + 1) - buf_col
-					buf_col = i + 1
-					if buf_col >= len(line) {
-						c = ' ' 
-					} else {
-						c = line[buf_col] } }
-				// pass the next rune throu the whole stack...
-				col--
-				continue }
-
-			// overflow indicator...
-			if ! chrome_line &&
-					buf_col + col_offset == COLS - right_offset - 1 && 
-					buf_col < len(line)-1 {
-				screen.SetContent(cur_col, row, OVERFLOW_INDICATOR, nil, style)
-				continue } 
-
-			// "%SPAN" -- expand/contract line to fit width...
-			if c == '%' && 
-					string(line[buf_col:buf_col+len(SPAN_MARKER)]) == SPAN_MARKER {
-				offset := 0
-				// automatic -- align to left/right edges...
-				// NOTE: this essentially rigth-aligns the right side, it 
-				//		will not attempt to left-align to the SPAN_SEPARATOR...
-				// XXX should we attempty to draw a sraight vertical line between columns???
-				if SPAN_MODE == "fit-right" {
-					if len(line) - buf_col + SPAN_LEFT_MIN_WIDTH < COLS {
-						offset = COLS - len(line) - right_offset
-					} else {
-						offset = -buf_col + SPAN_LEFT_MIN_WIDTH - right_offset }
-				// manual...
-				} else {
-					c := 0
-					// %...
-					if SPAN_MODE[len(SPAN_MODE)-1] == '%' {
-						p, err := strconv.ParseFloat(string(SPAN_MODE[0:len(SPAN_MODE)-1]), 64)
-						if err != nil {
-							log.Println("Error parsing:", SPAN_MODE) }
-						c = int(float64(COLS) * (p / 100))
-						// normalize...
-						if c < SPAN_LEFT_MIN_WIDTH {
-							c = SPAN_LEFT_MIN_WIDTH }
-						if COLS - c < SPAN_RIGHT_MIN_WIDTH {
-							c = COLS - SPAN_RIGHT_MIN_WIDTH }
-						if COLS < SPAN_LEFT_MIN_WIDTH + SPAN_RIGHT_MIN_WIDTH {
-							r := float64(SPAN_LEFT_MIN_WIDTH) / float64(SPAN_RIGHT_MIN_WIDTH) 
-							c = int(float64(COLS) * r) }
-					// cols...
-					} else {
-						v, err := strconv.Atoi(SPAN_MODE) 
-						if err != nil {
-							log.Println("Error parsing:", SPAN_MODE) 
-							continue }
-						if v < 0 {
-							c = COLS + v - right_offset
-						} else {
-							c = v } }
-					offset = c - buf_col - len(SPAN_MARKER) }
-				// fill offset...
-				i := cur_col
-				for ; i < cur_col + offset + len(SPAN_MARKER) - 1 && i < LEFT + COLS ; i++ {
-					screen.SetContent(i, row, span_filler, nil, style) } 
-				// separator theming...
-				if row_style != "current" && 
-						row_style != "current-selected" {
-					style = separator_style }
-				if chrome_line {
-					if BORDER > 0 {
-						style = border_style
-					} else if TITLE_LINE && row == 0 {
-						style = title_separator_style
-					} else {
-						style = status_separator_style } }
-				// separator/overflow...
-				if col + offset + len(SPAN_MARKER) < LEFT + COLS { 
-					sep := SPAN_SEPARATOR
-					if chrome_line {
-						sep = span_filler }
-					if offset - col_offset + len(SPAN_MARKER) - 1 < 0 {
-						sep = OVERFLOW_INDICATOR }
-					extend_separator_col = col + offset + len(SPAN_MARKER) - 1
-					screen.SetContent(col + offset + len(SPAN_MARKER) - 1, row, sep, nil, style) 
-				} else {
-					screen.SetContent(LEFT + COLS - right_offset - 1, row, OVERFLOW_INDICATOR, nil, style) }
-				col_offset = offset
-				// skip the marker...
-				col += len(SPAN_MARKER) - 1
-				continue }
-
-			// tab -- offset output to next tabstop... 
-			if c == '\t' {
-				// NOTE: the -1 here is to compensate fot the removed '\t'...
-				offset := TAB_SIZE - ((buf_col + col_offset) % TAB_SIZE) - 1
-				i := 0
-				for ; i <= offset && cur_col + i < LEFT + COLS ; i++ {
-					screen.SetContent(cur_col + i, row, ' ', nil, style) }
-				// overflow indicator...
-				if cur_col + i >= LEFT + COLS {
-					screen.SetContent(cur_col + i - 1, row, OVERFLOW_INDICATOR, nil, style) }
-				col_offset += offset 
-				continue }
-
-			// normal characters...
-			screen.SetContent(cur_col, row, c, nil, style) } } }
+		status_style := theme["status-line"]
+		pre, post := "", ""
+		if BORDER > 0 {
+			pre, post = string(BORDER_CORNERS["ll"]), string(BORDER_CORNERS["lr"])
+			status_style = border_style } 
+		drawLine(LEFT, row, COLS, 
+			pre + populateTemplateLine(STATUS_LINE_FMT, STATUS_CMD) + post, 
+			span_filler_status, span_filler_status, 
+			status_style) } }
 
 
 // Actions...
@@ -1829,9 +1563,9 @@ var options struct {
 	} `group:"Keyboard"`
 
 	Chrome struct {
-		Title string `long:"title" value-name:"STR" env:"TITLE" default:" %CMD %SPAN " description:"Title format"`
+		Title string `long:"title" value-name:"STR" env:"TITLE" default:"%CMD%SPAN" description:"Title format"`
 		TitleCommand string `long:"title-cmd" value-name:"CMD" env:"TITLE_CMD" description:"Title command"`
-		Status string `long:"status" value-name:"STR" env:"STATUS" default:" %CMD %SPAN $LINE/$LINES " description:"Status format"`
+		Status string `long:"status" value-name:"STR" env:"STATUS" default:"%CMD%SPAN $LINE/$LINES " description:"Status format"`
 		StatusCommand string `long:"status-cmd" value-name:"CMD" env:"STATUS_CMD" description:"Status command"`
 		Size string `long:"size" value-name:"WIDTH,HEIGHT" env:"SIZE" default:"auto,auto" description:"Widget size"`
 		Align string `long:"align" value-name:"LEFT,TOP" env:"ALIGN" default:"center,center" description:"Widget alignment"`
