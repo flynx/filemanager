@@ -450,6 +450,150 @@ func populateTemplateLine(str string, cmd string) string {
 			return []byte(val) }))
 	return str }
 
+var EXTEND_SEPARATOR_COL = -1
+func drawLine(col, row, width int, 
+		str string, 
+		span_filler rune, span_separator rune, 
+		base_style tcell.Style){
+	line := []rune(str)
+
+	//separator_style := 
+
+	col_offset := 0
+	buf_offset := 0
+	for i := 0; i < width - col_offset; i++ {
+		cur_col := i + col_offset
+		screen_col := col + cur_col
+		buf_col := i + buf_offset
+		style := base_style
+
+		// get rune...
+		c := ' '
+		if buf_col < len(line) {
+			c = line[buf_col]
+		// extend span separator...
+		} else if SPAN_EXTEND != "never" && 
+				cur_col == EXTEND_SEPARATOR_COL {
+			// XXX
+			//style = separator_style
+			c = SPAN_SEPARATOR }
+
+		// overflow indicator...
+		if buf_col + col_offset == width - 1 && 
+				buf_col < len(line)-1 {
+			SCREEN.SetContent(screen_col, row, OVERFLOW_INDICATOR, nil, style)
+			continue } 
+
+		// escape sequences...
+		// see: 
+		//	https://gist.github.com/fnky/458719343aabd01cfb17a3a4f7296797 
+		if c == '\x1B' {
+			// handle multiple adjacent sequences...
+			for c == '\x1B' {
+				j := buf_col + 1
+				if line[j] == '[' {
+					ansi_commands := "HfABCDEFGnsuJKmhlp"
+					for j < len(line) && 
+							! strings.ContainsRune(ansi_commands, line[j]) {
+						j++ }
+					// XXX handle color...
+					//if line[j] == 'm' {
+					//	style = ansi2style(string(line[buf_col:j+1]), style) }
+				} else {
+					ansi_direct_commands := "M78"
+					for j < len(line) && 
+							! strings.ContainsRune(ansi_direct_commands, line[j]) {
+						j++ } } 
+				buf_offset += (j + 1) - buf_col
+				buf_col = j + 1
+				if buf_col >= len(line) {
+					c = ' ' 
+				} else {
+					c = line[buf_col] } }
+			i--
+			continue }
+
+		// "%SPAN" -- expand/contract line to fit width...
+		if c == '%' && 
+				string(line[buf_col:buf_col+len(SPAN_MARKER)]) == SPAN_MARKER {
+			offset := 0
+			// automatic -- align to left/right edges...
+			// NOTE: this essentially rigth-aligns the right side, it 
+			//		will not attempt to left-align to the SPAN_SEPARATOR...
+			// XXX should we attempty to draw a sraight vertical line between columns???
+			if SPAN_MODE == "fit-right" {
+				if len(line) - buf_col + SPAN_LEFT_MIN_WIDTH < width {
+					offset = width - len(line)
+				} else {
+					offset = -buf_col + SPAN_LEFT_MIN_WIDTH }
+			// manual...
+			} else {
+				c := 0
+				// %...
+				if SPAN_MODE[len(SPAN_MODE)-1] == '%' {
+					// XXX parse this once...
+					p, err := strconv.ParseFloat(string(SPAN_MODE[0:len(SPAN_MODE)-1]), 64)
+					if err != nil {
+						log.Println("Error parsing:", SPAN_MODE) }
+					c = int(float64(width) * (p / 100))
+					// normalize...
+					if c < SPAN_LEFT_MIN_WIDTH {
+						c = SPAN_LEFT_MIN_WIDTH }
+					if width - c < SPAN_RIGHT_MIN_WIDTH {
+						c = width - SPAN_RIGHT_MIN_WIDTH }
+					if width < SPAN_LEFT_MIN_WIDTH + SPAN_RIGHT_MIN_WIDTH {
+						r := float64(SPAN_LEFT_MIN_WIDTH) / float64(SPAN_RIGHT_MIN_WIDTH) 
+						c = int(float64(width) * r) }
+				// cols...
+				} else {
+					v, err := strconv.Atoi(SPAN_MODE) 
+					if err != nil {
+						log.Println("Error parsing:", SPAN_MODE) 
+						continue }
+					if v < 0 {
+						c = width + v
+					} else {
+						c = v } }
+				offset = c - buf_col - len(SPAN_MARKER) }
+			// fill offset...
+			for j := screen_col ; j < screen_col + offset + len(SPAN_MARKER) && j < col + width ; j++ {
+				SCREEN.SetContent(j, row, span_filler, nil, style) } 
+			// XXX separator theming...
+			//if row_style != "current" && 
+			//		row_style != "current-selected" {
+			//	style = separator_style }
+			// separator/overflow...
+			if i + offset + len(SPAN_MARKER) < width { 
+				sep := span_separator
+				if offset - col_offset + len(SPAN_MARKER) - 1 < 0 {
+					sep = OVERFLOW_INDICATOR }
+				EXTEND_SEPARATOR_COL = i + offset + len(SPAN_MARKER) - 1
+				SCREEN.SetContent(col + EXTEND_SEPARATOR_COL, row, sep, nil, style) 
+			} else {
+				// XXX is EXTEND_SEPARATOR_COL correct here?
+				//		...can we reach this point BEFORE setting it???
+				SCREEN.SetContent(col + EXTEND_SEPARATOR_COL, row, OVERFLOW_INDICATOR, nil, style) }
+			col_offset = offset
+			// skip the marker...
+			i += len(SPAN_MARKER) - 1
+			continue }
+
+		// tab -- offset output to next tabstop... 
+		if c == '\t' { 
+			// NOTE: the -1 here is to compensate fot the removed '\t'...
+			offset := TAB_SIZE - ((buf_col + col_offset) % TAB_SIZE) - 1
+			i := 0
+			for ; i <= offset && cur_col + i < width ; i++ {
+				SCREEN.SetContent(screen_col + i, row, ' ', nil, style) }
+			// overflow indicator...
+			if cur_col + i >= width {
+				SCREEN.SetContent(screen_col + i - 1, row, OVERFLOW_INDICATOR, nil, style) }
+			col_offset += offset 
+			continue }
+
+		// draw the rune...
+		SCREEN.SetContent(screen_col, row, c, nil, base_style) } }
+
 func drawScreen(screen tcell.Screen, theme Theme){
 	screen.Clear()
 
@@ -542,11 +686,86 @@ func drawScreen(screen tcell.Screen, theme Theme){
 	if ! ok {
 		separator_style = theme["default"] }
 
-	var extend_separator_col = -1
-	var col, row int
+
+
+
+
+	//log.Println("---", ROWS, HEIGHT)
+	row := TOP
+	rows := HEIGHT
+	cols := COLS
 	style := theme["default"]
+	// title...
+	if TITLE_LINE {
+		drawLine(LEFT, row, COLS, populateTemplateLine(TITLE_LINE_FMT, TITLE_CMD), SPAN_FILLER_TITLE, SPAN_FILLER_TITLE, theme["title-line"]) 
+		rows--
+		row++ }
+	if STATUS_LINE {
+		rows-- }
+	// buffer...
+	for i := 0 ; i < rows ; i++ {
+		buf_row := i + ROW_OFFSET 
+		left_offset := BORDER
+		right_offset := BORDER
+		if SCROLLBAR > 0 && BORDER < 1 {
+			right_offset = SCROLLBAR }
+
+		line := ""
+		if buf_row < len(TEXT_BUFFER) {
+			line = TEXT_BUFFER[buf_row].text }
+
+		// theme...
+		row_style := "default"
+		missing_style := false
+		if buf_row >= 0 && 
+				buf_row < len(TEXT_BUFFER) {
+			// current+selected...
+			if TEXT_BUFFER[buf_row].selected &&
+					CURRENT_ROW == i + ROW_OFFSET {
+				row_style = "current-selected"
+			// mark selected...
+			} else if TEXT_BUFFER[buf_row].selected {
+				row_style = "selected"
+			// current...
+			} else if CURRENT_ROW == i + ROW_OFFSET {
+				row_style = "current" } 
+			style, missing_style = theme[row_style] }
+		// set default style...
+		if ! missing_style {
+			style = theme["default"] }
+
+		// border...
+		if BORDER > 0 {
+			screen.SetContent(LEFT, row, BORDER_VERTICAL, nil, border_style) }
+		// line...
+		drawLine(LEFT + BORDER, row, cols - left_offset - right_offset, line, SPAN_FILLER, SPAN_SEPARATOR, style) 
+		// border
+		if BORDER > 0 && SCROLLBAR < 1 {
+			screen.SetContent(LEFT + cols - 1, row, BORDER_VERTICAL, nil, border_style)
+		// scrollbar...
+		} else if SCROLLBAR > 0 {
+			c := SCROLLBAR_BG
+			if i >= scroller_offset && 
+					i < scroller_offset + scroller_size {
+				c = SCROLLBAR_FG }
+			screen.SetContent(LEFT + cols - 1, row, c, nil, scroller_style) }
+		row++ }
+	// status...
+	if STATUS_LINE {
+		drawLine(LEFT, row, COLS, populateTemplateLine(STATUS_LINE_FMT, STATUS_CMD), SPAN_FILLER_STATUS, SPAN_FILLER_STATUS, theme["status-line"]) }
+
+	return
+
+
+
+
+
+	extend_separator_col := -1
+	//var col, row int
+	col := 0
+	//style := theme["default"]
 	for row = TOP ; row < TOP + height ; row++ {
-		var buf_row = row - top_offset + ROW_OFFSET - TOP
+		buf_row := row - top_offset + ROW_OFFSET - TOP
 		span_filler := SPAN_FILLER
 
 		// row theming...
@@ -631,8 +850,13 @@ func drawScreen(screen tcell.Screen, theme Theme){
 			buf_col := col + buf_offset + COL_OFFSET - LEFT
 			style := style
 
+			// border/scrollbar offset...
+			right_offset := 0
+			if BORDER > 0 {
+				right_offset = BORDER
+			} else {
+				right_offset = SCROLLBAR }
 			// border vertical...
-			// XXX do corners...
 			if ! chrome_line && 
 					BORDER > 0 &&
 					(col == LEFT || 
@@ -642,27 +866,35 @@ func drawScreen(screen tcell.Screen, theme Theme){
 				style = border_style
 				screen.SetContent(cur_col, row, BORDER_VERTICAL, nil, style) 
 				//col_offset += BORDER
-				cur_col += BORDER 
+				//buf_offset -= BORDER
+				cur_col += BORDER
 				// NOTE: we still need to handle scrollbar (over the right border)...
-				if col == LEFT {
+				if col <= LEFT + BORDER {
 					continue } }
 			// border horizontal...
+			// XXX BUG: we still have empty cells before/after the corners...
 			if chrome_line && 
 					BORDER > 0 {
 				span_filler = BORDER_HORIZONTAL 
 				style = border_style 
-				// XXX HACK -- do this once...
-				//screen.SetContent(LEFT, TOP, BORDER_CORNERS["ul"], nil, style) 
-				//screen.SetContent(LEFT+COLS-1, TOP, BORDER_CORNERS["ur"], nil, style) 
-				//screen.SetContent(LEFT, TOP+ROWS+1, BORDER_CORNERS["ll"], nil, style) 
-				//screen.SetContent(LEFT+COLS-1, TOP+ROWS+1, BORDER_CORNERS["lr"], nil, style) 
-			}
-
-			left_offset := 0
-			if BORDER > 0 {
-				left_offset = BORDER
-			} else {
-				left_offset = SCROLLBAR }
+				// border corners...
+				// NOTE: I do not like this, we can print all the corners 
+				//		before the loops but then we'd have to do the tests 
+				//		to skip the cells they are in anyway...
+				if row == TOP { 
+					if cur_col == LEFT {
+						screen.SetContent(cur_col, row, BORDER_CORNERS["ul"], nil, style) 
+						continue }
+					if cur_col == LEFT + COLS - 1 { 
+						screen.SetContent(cur_col, row, BORDER_CORNERS["ur"], nil, style) 
+						continue } }
+				if row == TOP + ROWS + 1 {
+					if cur_col == LEFT {
+						screen.SetContent(cur_col, row, BORDER_CORNERS["ll"], nil, style) 
+						continue }
+					if cur_col == LEFT + COLS - 1 {
+						screen.SetContent(cur_col, row, BORDER_CORNERS["lr"], nil, style) 
+						continue } } }
 
 			// scrollbar...
 			if ! chrome_line &&
@@ -719,7 +951,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 
 			// overflow indicator...
 			if ! chrome_line &&
-					buf_col + col_offset == COLS - left_offset - 1 && 
+					buf_col + col_offset == COLS - right_offset - 1 && 
 					buf_col < len(line)-1 {
 				screen.SetContent(cur_col, row, OVERFLOW_INDICATOR, nil, style)
 				continue } 
@@ -734,9 +966,9 @@ func drawScreen(screen tcell.Screen, theme Theme){
 				// XXX should we attempty to draw a sraight vertical line between columns???
 				if SPAN_MODE == "fit-right" {
 					if len(line) - buf_col + SPAN_LEFT_MIN_WIDTH < COLS {
-						offset = COLS - len(line) - left_offset
+						offset = COLS - len(line) - right_offset
 					} else {
-						offset = -buf_col + SPAN_LEFT_MIN_WIDTH - left_offset }
+						offset = -buf_col + SPAN_LEFT_MIN_WIDTH - right_offset }
 				// manual...
 				} else {
 					c := 0
@@ -761,7 +993,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 							log.Println("Error parsing:", SPAN_MODE) 
 							continue }
 						if v < 0 {
-							c = COLS + v - left_offset
+							c = COLS + v - right_offset
 						} else {
 							c = v } }
 					offset = c - buf_col - len(SPAN_MARKER) }
@@ -790,7 +1022,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 					extend_separator_col = col + offset + len(SPAN_MARKER) - 1
 					screen.SetContent(col + offset + len(SPAN_MARKER) - 1, row, sep, nil, style) 
 				} else {
-					screen.SetContent(LEFT + COLS - left_offset - 1, row, OVERFLOW_INDICATOR, nil, style) }
+					screen.SetContent(LEFT + COLS - right_offset - 1, row, OVERFLOW_INDICATOR, nil, style) }
 				col_offset = offset
 				// skip the marker...
 				col += len(SPAN_MARKER) - 1
