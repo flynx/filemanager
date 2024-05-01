@@ -587,6 +587,7 @@ func drawLine(col, row, width int,
 		// draw the rune...
 		SCREEN.SetContent(screen_col, row, c, nil, style) } }
 
+// XXX how do we handle borders when title/status does not contain %SPAN
 func drawScreen(screen tcell.Screen, theme Theme){
 	screen.Clear()
 
@@ -603,19 +604,6 @@ func drawScreen(screen tcell.Screen, theme Theme){
 		r := float64(ROWS) / float64(len(TEXT_BUFFER))
 		scroller_size = 1 + int(float64(ROWS - 1) * r)
 		scroller_offset = int(float64(ROW_OFFSET + 1) * r) }
-
-	/*/ XXX CONTENT_ROWS... (???)
-	top_offset := 0
-	bottom_offset := 0
-	if TITLE_LINE {
-		top_offset++ }
-	if STATUS_LINE {
-		bottom_offset++ }
-	height := 
-		top_offset + 
-		ROWS + 
-		bottom_offset
-	//*/
 
 	// set initial focus...
 	if FOCUS != "" {
@@ -666,17 +654,17 @@ func drawScreen(screen tcell.Screen, theme Theme){
 	separator_style, ok := theme["span-separator"]
 	if ! ok {
 		separator_style = theme["default"] }
-	/*
+	/* XXX do we need these??
 	title_separator_style, ok := theme["title-span-separator"]
 	if ! ok {
 		title_separator_style, ok = theme["title-line"] 
 		if ! ok {
-			separator_style = theme["default"] } }
+			title_separator_style = theme["default"] } }
 	status_separator_style, ok := theme["status-span-separator"]
 	if ! ok {
 		status_separator_style, ok = theme["status-line"] 
 		if ! ok {
-			separator_style = theme["default"] } }
+			status_separator_style = theme["default"] } }
 	//*/
 	border_style, ok := theme["border"]
 	if ! ok {
