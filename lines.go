@@ -604,7 +604,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 		scroller_size = 1 + int(float64(ROWS - 1) * r)
 		scroller_offset = int(float64(ROW_OFFSET + 1) * r) }
 
-	// XXX CONTENT_ROWS... (???)
+	/*/ XXX CONTENT_ROWS... (???)
 	top_offset := 0
 	bottom_offset := 0
 	if TITLE_LINE {
@@ -615,6 +615,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 		top_offset + 
 		ROWS + 
 		bottom_offset
+	//*/
 
 	// set initial focus...
 	if FOCUS != "" {
@@ -651,7 +652,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 		if f > len(TEXT_BUFFER) {
 			f = len(TEXT_BUFFER) - 1 }
 		// set...
-		if len(TEXT_BUFFER) < height {
+		if len(TEXT_BUFFER) < ROWS {
 			ROW_OFFSET = 0
 			CURRENT_ROW = f
 		} else {
@@ -697,7 +698,9 @@ func drawScreen(screen tcell.Screen, theme Theme){
 		span_filler_title = BORDER_HORIZONTAL
 		span_filler_status = BORDER_HORIZONTAL }
 
+
 	// title...
+	EXTEND_SEPARATOR_COL = -1
 	if TITLE_LINE {
 		title_style := theme["title-line"]
 		pre, post := "", ""
@@ -765,6 +768,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 		row++ }
 
 	// status...
+	EXTEND_SEPARATOR_COL = -1
 	if STATUS_LINE {
 		status_style := theme["status-line"]
 		pre, post := "", ""
