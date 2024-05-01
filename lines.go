@@ -8,6 +8,7 @@
 *
 *
 * XXX BUG: scrollbar sometimes is off by 1 cell when scrolling down (small overflow)...
+*		...can't reproduce...
 *
 *
 * XXX set selection from commandline...
@@ -181,8 +182,10 @@ var COL_OFFSET = 0
 var ROW_OFFSET = 0
 
 var BORDER = 0
-var BORDER_VERTICAL = tcell.RuneVLine
-var BORDER_HORIZONTAL = tcell.RuneHLine
+var BORDER_LEFT = tcell.RuneVLine
+var BORDER_RIGHT = tcell.RuneVLine
+var BORDER_TOP = tcell.RuneHLine
+var BORDER_BOTTOM = tcell.RuneHLine
 var BORDER_CORNERS = map[string]rune{
 	"ul": tcell.RuneULCorner,	
 	"ur": tcell.RuneURCorner,	
@@ -684,8 +687,8 @@ func drawScreen(screen tcell.Screen, theme Theme){
 	span_filler_title := SPAN_FILLER_TITLE
 	span_filler_status := SPAN_FILLER_STATUS
 	if BORDER > 0 {
-		span_filler_title = BORDER_HORIZONTAL
-		span_filler_status = BORDER_HORIZONTAL }
+		span_filler_title = BORDER_TOP
+		span_filler_status = BORDER_BOTTOM }
 
 
 	// title...
@@ -736,7 +739,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 
 		// border vertical...
 		if BORDER > 0 {
-			screen.SetContent(LEFT, row, BORDER_VERTICAL, nil, border_style) }
+			screen.SetContent(LEFT, row, BORDER_LEFT, nil, border_style) }
 
 		// line...
 		drawLine(LEFT + BORDER, row, cols - left_offset - right_offset, 
@@ -746,7 +749,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 
 		// border verticl...
 		if BORDER > 0 && SCROLLBAR < 1 {
-			screen.SetContent(LEFT + cols - 1, row, BORDER_VERTICAL, nil, border_style)
+			screen.SetContent(LEFT + cols - 1, row, BORDER_RIGHT, nil, border_style)
 		// scrollbar...
 		} else if SCROLLBAR > 0 {
 			c := SCROLLBAR_BG
@@ -1561,7 +1564,8 @@ var options struct {
 		Size string `long:"size" value-name:"WIDTH,HEIGHT" env:"SIZE" default:"auto,auto" description:"Widget size"`
 		Align string `long:"align" value-name:"LEFT,TOP" env:"ALIGN" default:"center,center" description:"Widget alignment"`
 		Tab int `long:"tab" value-name:"COLS" env:"TABSIZE" default:"8" description:"Tab size"`
-		Border bool `long:"border" env:"BORDER" description:"Border"`
+		Border bool `short:"b" long:"border" env:"BORDER" description:"Toggle border on"`
+		BorderChars string `long:"border-chars" env:"BORDER_CHARS" default:"│┌─┐│└─┘" description:"Border characters"`
 		Span string `long:"span" value-name:"[MODE|SIZE]" env:"SPAN" default:"fit-right" description:"Line spanning mode/size"`
 		// XXX at this point this depends on leading '%'...
 		//SpanMarker string `long:"span-marker" value-name:"STR" env:"SPAN_MARKER" default:"%SPAN" description:"Marker to use to span a line"`
@@ -1630,7 +1634,23 @@ func startup() Result {
 	CURRENT_ROW = options.FocusRow
 
 	if options.Chrome.Border {
-		BORDER = 1 }
+		BORDER = 1 
+		// char order: 
+		//		 01234567
+		//		"│┌─┐│└─┘"
+		border_chars := []rune(
+			// normalize length...
+			fmt.Sprintf("%-8v", options.Chrome.BorderChars))
+		BORDER_LEFT = border_chars[0] 
+		BORDER_RIGHT = border_chars[4] 
+		BORDER_TOP = border_chars[2] 
+		BORDER_BOTTOM = border_chars[6] 
+		BORDER_CORNERS = map[string]rune{
+			"ul": border_chars[1],	
+			"ur": border_chars[3],	
+			"ll": border_chars[5],	
+			"lr": border_chars[7],	
+		} }
 
 	TITLE_LINE_FMT = options.Chrome.Title
 	TITLE_LINE = TITLE_LINE_FMT != ""
