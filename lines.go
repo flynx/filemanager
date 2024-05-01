@@ -7,11 +7,9 @@
 *	- live search/filtering
 *
 *
-* XXX BUG: scroll/nav broken...
 * XXX BUG: scrollbar sometimes is off by 1 cell when scrolling down (small overflow)...
 *
 *
-* XXX style separator...
 * XXX set selection from commandline...
 * XXX for file argument, track changes to file and update... (+ option to disable)
 * XXX handle paste (and copy) -- actions...
@@ -588,6 +586,9 @@ func drawLine(col, row, width int,
 		SCREEN.SetContent(screen_col, row, c, nil, style) } }
 
 // XXX how do we handle borders when title/status does not contain %SPAN
+//			$ ls | ./lines --title ' moo ' --border
+//		vs:
+//			$ ls | ./lines --title ' moo %SPAN' --border
 func drawScreen(screen tcell.Screen, theme Theme){
 	screen.Clear()
 
