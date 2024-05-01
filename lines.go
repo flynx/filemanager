@@ -454,10 +454,8 @@ var EXTEND_SEPARATOR_COL = -1
 func drawLine(col, row, width int, 
 		str string, 
 		span_filler rune, span_separator rune, 
-		base_style tcell.Style){
+		base_style tcell.Style, separator_style tcell.Style){
 	line := []rune(str)
-
-	//separator_style := 
 
 	col_offset := 0
 	buf_offset := 0
@@ -474,8 +472,7 @@ func drawLine(col, row, width int,
 		// extend span separator...
 		} else if SPAN_EXTEND != "never" && 
 				cur_col == EXTEND_SEPARATOR_COL {
-			// XXX
-			//style = separator_style
+			style = separator_style
 			c = SPAN_SEPARATOR }
 
 		// overflow indicator...
@@ -558,21 +555,17 @@ func drawLine(col, row, width int,
 			// fill offset...
 			for j := screen_col ; j < screen_col + offset + len(SPAN_MARKER) && j < col + width ; j++ {
 				SCREEN.SetContent(j, row, span_filler, nil, style) } 
-			// XXX separator theming...
-			//if row_style != "current" && 
-			//		row_style != "current-selected" {
-			//	style = separator_style }
 			// separator/overflow...
 			if i + offset + len(SPAN_MARKER) <= width { 
 				sep := span_separator
 				if offset - col_offset + len(SPAN_MARKER) - 1 < 0 {
 					sep = OVERFLOW_INDICATOR }
 				EXTEND_SEPARATOR_COL = i + offset + len(SPAN_MARKER) - 1
-				SCREEN.SetContent(col + EXTEND_SEPARATOR_COL, row, sep, nil, style) 
+				SCREEN.SetContent(col + EXTEND_SEPARATOR_COL, row, sep, nil, separator_style) 
 			} else {
 				// XXX is EXTEND_SEPARATOR_COL correct here?
 				//		...can we reach this point BEFORE setting it???
-				SCREEN.SetContent(col + EXTEND_SEPARATOR_COL, row, OVERFLOW_INDICATOR, nil, style) }
+				SCREEN.SetContent(col + EXTEND_SEPARATOR_COL, row, OVERFLOW_INDICATOR, nil, separator_style) }
 			col_offset = offset
 			// skip the marker...
 			i += len(SPAN_MARKER) - 1
@@ -592,7 +585,7 @@ func drawLine(col, row, width int,
 			continue }
 
 		// draw the rune...
-		SCREEN.SetContent(screen_col, row, c, nil, base_style) } }
+		SCREEN.SetContent(screen_col, row, c, nil, style) } }
 
 func drawScreen(screen tcell.Screen, theme Theme){
 	screen.Clear()
@@ -669,10 +662,10 @@ func drawScreen(screen tcell.Screen, theme Theme){
 		FOCUS = "" }
 
 	// chrome detail themeing...
-	/*
 	separator_style, ok := theme["span-separator"]
 	if ! ok {
 		separator_style = theme["default"] }
+	/*
 	title_separator_style, ok := theme["title-span-separator"]
 	if ! ok {
 		title_separator_style, ok = theme["title-line"] 
@@ -714,13 +707,14 @@ func drawScreen(screen tcell.Screen, theme Theme){
 		drawLine(LEFT, row, COLS, 
 			pre + populateTemplateLine(TITLE_LINE_FMT, TITLE_CMD) + post, 
 			span_filler_title, span_filler_title, 
-			title_style) 
+			title_style, title_style) 
 		rows--
 		row++ }
 	if STATUS_LINE {
 		rows-- }
 	// buffer...
 	for i := 0 ; i < rows ; i++ {
+		separator_style := separator_style
 		buf_row := i + ROW_OFFSET 
 
 		line := ""
@@ -728,21 +722,22 @@ func drawScreen(screen tcell.Screen, theme Theme){
 			line = TEXT_BUFFER[buf_row].text }
 
 		// theme...
-		row_style := "default"
 		missing_style := false
 		if buf_row >= 0 && 
 				buf_row < len(TEXT_BUFFER) {
 			// current+selected...
+			style, missing_style = theme["default"] 
 			if TEXT_BUFFER[buf_row].selected &&
 					CURRENT_ROW == i + ROW_OFFSET {
-				row_style = "current-selected"
-			// mark selected...
-			} else if TEXT_BUFFER[buf_row].selected {
-				row_style = "selected"
+				style, missing_style = theme["current-selected"]
+				separator_style = style
 			// current...
 			} else if CURRENT_ROW == i + ROW_OFFSET {
-				row_style = "current" } 
-			style, missing_style = theme[row_style] }
+				style, missing_style = theme["current"]
+				separator_style = style
+			// mark selected...
+			} else if TEXT_BUFFER[buf_row].selected {
+				style, missing_style = theme["selected"] } }
 		// set default style...
 		if ! missing_style {
 			style = theme["default"] }
@@ -750,11 +745,13 @@ func drawScreen(screen tcell.Screen, theme Theme){
 		// border vertical...
 		if BORDER > 0 {
 			screen.SetContent(LEFT, row, BORDER_VERTICAL, nil, border_style) }
+
 		// line...
 		drawLine(LEFT + BORDER, row, cols - left_offset - right_offset, 
 			line, 
 			SPAN_FILLER, SPAN_SEPARATOR, 
-			style) 
+			style, separator_style) 
+
 		// border verticl...
 		if BORDER > 0 && SCROLLBAR < 1 {
 			screen.SetContent(LEFT + cols - 1, row, BORDER_VERTICAL, nil, border_style)
@@ -766,6 +763,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 				c = SCROLLBAR_FG }
 			screen.SetContent(LEFT + cols - 1, row, c, nil, scroller_style) }
 		row++ }
+
 	// status...
 	if STATUS_LINE {
 		status_style := theme["status-line"]
@@ -776,7 +774,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 		drawLine(LEFT, row, COLS, 
 			pre + populateTemplateLine(STATUS_LINE_FMT, STATUS_CMD) + post, 
 			span_filler_status, span_filler_status, 
-			status_style) } }
+			status_style, status_style) } }
 
 
 // Actions...
