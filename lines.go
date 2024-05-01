@@ -7,7 +7,7 @@
 *	- live search/filtering
 *
 *
-* XXX BUG: when borders set the first char of focused line is not styled correctly...
+* XXX BUG: scroll/nav broken...
 * XXX BUG: scrollbar sometimes is off by 1 cell when scrolling down (small overflow)...
 *
 *
@@ -719,11 +719,11 @@ func drawScreen(screen tcell.Screen, theme Theme){
 			// current+selected...
 			style, missing_style = theme["default"] 
 			if TEXT_BUFFER[buf_row].selected &&
-					CURRENT_ROW == i + ROW_OFFSET {
+					i == CURRENT_ROW {
 				style, missing_style = theme["current-selected"]
 				separator_style = style
 			// current...
-			} else if CURRENT_ROW == i + ROW_OFFSET {
+			} else if i == CURRENT_ROW {
 				style, missing_style = theme["current"]
 				separator_style = style
 			// mark selected...
