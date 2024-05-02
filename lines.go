@@ -1593,9 +1593,9 @@ var options struct {
 	SelectionCommand string `short:"e" long:"selection" value-name:"ACTION" env:"REJECT" description:"Command to filter selection from input"`
 
 	// XXX doc: to match a number explicitly escape it with '\\'...
-	Focus string `short:"f" long:"focus" value-nmae:"[N|STR]" env:"FOCUS" description:"Line number to focus"`
+	Focus string `short:"f" long:"focus" value-name:"[N|STR]" env:"FOCUS" description:"Line number to focus"`
 	//FocusStr int `long:"focus-str" value-nmae:"STR" env:"FOCUS" description:"Line to focus"`
-	FocusRow int `long:"focus-row" value-nmae:"N" env:"FOCUS_ROW" description:"Screen line number of focused line"`
+	FocusRow int `long:"focus-row" value-name:"N" env:"FOCUS_ROW" description:"Screen line number of focused line"`
 
 	/* XXX
 	RowOffset int `long:"row-offset" value-name:"N" env:"ROW_OFFSET" description:"Row offset of visible lines"`
