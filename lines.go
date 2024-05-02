@@ -1754,12 +1754,12 @@ func startup() Result {
 	SPAN_LEFT_MIN_WIDTH = options.Chrome.SpanLeftMin
 	SPAN_RIGHT_MIN_WIDTH = options.Chrome.SpanRightMin
 	SPAN_FILLER = []rune(options.Chrome.SpanFiller)[0]
-	SPAN_FILLER_TITLE = []rune(options.Chrome.SpanFillerTitle)[0]
-	SPAN_FILLER_STATUS = []rune(options.Chrome.SpanFillerStatus)[0]
+	SPAN_FILLER_TITLE = []rune(fmt.Sprintf("%1v", options.Chrome.SpanFillerTitle))[0]
+	SPAN_FILLER_STATUS = []rune(fmt.Sprintf("%1v", options.Chrome.SpanFillerStatus))[0]
 	// defaults to SPAN_FILLER...
 	SPAN_SEPARATOR = SPAN_FILLER
 	if ! parser.FindOptionByLongName("span-separator").IsSetDefault() {
-		SPAN_SEPARATOR = []rune(options.Chrome.SpanSeparator)[0] }
+		SPAN_SEPARATOR = []rune(fmt.Sprintf("%1v", options.Chrome.SpanSeparator))[0] }
 	OVERFLOW_INDICATOR = []rune(options.Chrome.OverflowIndicator)[0]
 	// defaults to .ScrollThreshold...
 	SCROLL_THRESHOLD_TOP = options.Config.ScrollThreshold
