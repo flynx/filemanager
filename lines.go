@@ -13,7 +13,7 @@
 *
 * XXX for file argument, track changes to file and update... (+ option to disable)
 * XXX handle paste (and copy) -- actions...
-* XXX move globals to struct (refactoring)...
+* XXX move globals to struct and make the thing reusable (refactoring)...
 * XXX can we load a screen with the curent terminal state as content???
 *		modes:
 *			inline (just after the current line)
@@ -344,6 +344,20 @@ var THEME = Theme {
 	"border": tcell.StyleDefault.
 		Background(tcell.ColorReset).
 		Foreground(tcell.ColorReset),
+}
+
+type BorderTheme map[string]string
+var BORDER_THEME = BorderTheme {
+	"single": "│┌─┐│└─┘",
+	"thick": "┃┏━┓┃┗━┛",
+	"double": "║╔═╗║╚═╝",
+	"mixed": "│┌─┒┃┕━┛",
+	"mixed-double": "│┌─╖║╘═╝",
+	"single-double": "│╒═╕│╘═╛",
+	"double-single": "║╓─╖║╙─╜",
+	"shaded": "│┌─┐┃└━┛",
+	"shaded-double": "│┌─┐║└═╝",
+	"ascii": "|+-+|+-+",
 }
 
 
@@ -1616,7 +1630,10 @@ var options struct {
 		Align string `long:"align" value-name:"LEFT,TOP" env:"ALIGN" default:"center,center" description:"Widget alignment"`
 		Tab int `long:"tab" value-name:"COLS" env:"TABSIZE" default:"8" description:"Tab size"`
 		Border bool `short:"b" long:"border" env:"BORDER" description:"Toggle border on"`
-		BorderChars string `long:"border-chars" env:"BORDER_CHARS" default:"│┌─┐│└─┘" description:"Border characters"`
+		//BorderChars string `long:"border-chars" env:"BORDER_CHARS" default:"│┌─┐│└─┘" description:"Border characters"`
+		BorderChars string `long:"border-chars" env:"BORDER_CHARS" default:"single" description:"Border theme name or border characters"`
+		// XXX
+		//SpinnerChars string `long:"spinner-chars" env:"SPINNER_CHARS" default:"\|/-" description:"Spinner characters"`
 		Span string `long:"span" value-name:"[MODE|SIZE]" env:"SPAN" default:"fit-right" description:"Line spanning mode/size"`
 		// XXX at this point this depends on leading '%'...
 		//SpanMarker string `long:"span-marker" value-name:"STR" env:"SPAN_MARKER" default:"%SPAN" description:"Marker to use to span a line"`
@@ -1644,6 +1661,7 @@ var options struct {
 	Introspection struct {
 		ListActions bool `long:"list-actions" description:"List available actions"`
 		ListThemeable bool `long:"list-themeable" description:"List available themable element names"`
+		ListBorderThemes bool `long:"list-border-themes" description:"List border theme names"`
 		ListColors bool `long:"list-colors" description:"List usable color names"`
 	} `group:"Introspection"`
 }
@@ -1670,6 +1688,14 @@ func startup() Result {
 		for name, _ := range THEME {
 			fmt.Println("    "+ name) }
 		return OK }
+	if options.Introspection.ListBorderThemes {
+		names := []string{}
+		for name, _ := range BORDER_THEME {
+			names = append(names, name) }
+		slices.Sort(names)
+		for _, name := range names {
+			fmt.Printf("    %-16v \"%v\"\n", name, BORDER_THEME[name]) }
+		return OK }
 	if options.Introspection.ListColors {
 		for name, _ := range tcell.ColorNames {
 			fmt.Println("    "+ name) }
@@ -1692,9 +1718,14 @@ func startup() Result {
 		//		 01234567
 		//		"│┌─┐│└─┘"
 		// XXX might be fun to add border themes...
-		border_chars := []rune(
-			// normalize length...
-			fmt.Sprintf("%-8v", options.Chrome.BorderChars))
+		chars, ok := BORDER_THEME[options.Chrome.BorderChars]
+		border_chars := []rune{}
+		if ok {
+			border_chars = []rune(chars)
+		} else {
+			border_chars = []rune(
+				// normalize length...
+				fmt.Sprintf("%-8v", options.Chrome.BorderChars)) }
 		BORDER_LEFT = border_chars[0] 
 		BORDER_RIGHT = border_chars[4] 
 		BORDER_TOP = border_chars[2] 
