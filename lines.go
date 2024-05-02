@@ -1690,11 +1690,14 @@ func startup() Result {
 		return OK }
 	if options.Introspection.ListBorderThemes {
 		names := []string{}
+		l := 0
 		for name, _ := range BORDER_THEME {
+			if len(name) > l {
+				l = len(name) }
 			names = append(names, name) }
 		slices.Sort(names)
 		for _, name := range names {
-			fmt.Printf("    %-16v \"%v\"\n", name, BORDER_THEME[name]) }
+			fmt.Printf("    %-"+ fmt.Sprint(l) +"v \"%v\"\n", name, BORDER_THEME[name]) }
 		return OK }
 	if options.Introspection.ListColors {
 		for name, _ := range tcell.ColorNames {
