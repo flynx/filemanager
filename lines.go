@@ -278,6 +278,17 @@ var KEYBINDINGS = Keybindings {
 	//"a": "A=! A=${A:-1} echo $(( A + 1 ))",
 	//"w": "! echo $A >> sum.log",
 
+	// XXX these trigget up/down twice -- double triggering??
+	"shift+Up": `
+		SelectToggle
+		Up`,
+	"shift+Down": `
+		SelectToggle
+		Down`,
+	//*/
+
+	// XXX need shift+home/end/pgup/pgdown
+
 	"Insert": `
 		SelectToggle
 		Down`,
@@ -792,6 +803,9 @@ const (
 
 	// Returning this will quite lines with error (exit code 1)
 	Fail
+
+	// Action missing and can not be called -- test next or fail
+	Missing
 )
 // Convert from Result type to propper exit code.
 func toExitCode(r Result) int {
@@ -1193,7 +1207,7 @@ func callHandler(key string) Result {
 			if _action, exists = KEYBINDINGS[_action] ; exists {
 				action = _action } }
 		return callAction(action) }
-	return OK }
+	return Missing }
 
 
 func evt2keys(evt tcell.EventKey) []string {
@@ -1462,8 +1476,11 @@ func lines() Result {
 			case *tcell.EventKey:
 				for _, key := range evt2keys(*evt) {
 					res := callHandler(key)
+					if res == Missing {
+						continue }
 					if res != OK {
-						return res } }
+						return res } 
+					break }
 				//log.Println("KEY:", evt.Name())
 				// defaults...
 				if evt.Key() == tcell.KeyEscape || evt.Key() == tcell.KeyCtrlC {
@@ -1509,6 +1526,8 @@ func lines() Result {
 					// XXX this triggers on drag... is this a bug???
 					} else if row - top_offset - TOP == CURRENT_ROW {
 						res := callHandler("ClickSelected") 
+						if res == Missing {
+							res = OK }
 						if res != OK {
 							return res }
 					// below list...
@@ -1522,11 +1541,15 @@ func lines() Result {
 
 				} else if buttons & tcell.WheelUp != 0 {
 					res := callHandler("WheelUp")
+					if res == Missing {
+						res = OK }
 					if res != OK {
 						return res }
 
 				} else if buttons & tcell.WheelDown != 0 {
 					res := callHandler("WheelDown")
+					if res == Missing {
+						res = OK }
 					if res != OK {
 						return res } } } } }
 
