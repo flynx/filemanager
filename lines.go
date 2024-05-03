@@ -302,19 +302,19 @@ var KEYBINDINGS = Keybindings {
 	"shift+PgUp": `
 		SelectionStart
 		PageUp
-		SelectMotionEndCurrent`,
+		SelectEndCurrent`,
 	"shift+PgDn": `
 		SelectionStart
 		PageDown
-		SelectMotionEndCurrent`,
+		SelectEndCurrent`,
 	"shift+Home": `
 		SelectionStart
 		Top
-		SelectMotionEndCurrent`,
+		SelectEndCurrent`,
 	"shift+End": `
 		SelectionStart
 		Bottom
-		SelectMotionEndCurrent`,
+		SelectEndCurrent`,
 	"ctrl+a": "SelectAll",
 	// XXX ctrl-i is Tab -- can we destinguish the two in the terminal???
 	"ctrl+i": "SelectInverse",
@@ -975,11 +975,33 @@ func (this *Actions) RightEdge() Result {
 //*/
 
 // selection...
-func updateSelectionList(){
-	SELECTION = []string{}
+func GetSelection() []string {
+	selection := []string{}
 	for _, row := range TEXT_BUFFER {
 		if row.selected {
-			SELECTION = append(SELECTION, row.text) } } }
+			selection = append(selection, row.text) } }
+	return selection }
+// NOTE: the selection is expected to mostly be in order.
+func SetSelection(selection []string){
+	SELECTION = []string{}
+	// clear old selection...
+	// NOTE: we can't avoid this loop as doing this in the main loop can 
+	//		potentially mess up already found results...
+	for _, row := range TEXT_BUFFER {
+		row.selected = false }
+	var i = 0
+	for _, line := range selection {
+		for i < len(TEXT_BUFFER) {
+			if line == TEXT_BUFFER[i].text {
+				TEXT_BUFFER[i].selected = true 
+				SELECTION = append(SELECTION, TEXT_BUFFER[i].text) } 
+			i++ }
+		// loop over TEXT_BUFFER in case we've got the selection out of 
+		// order...
+		if i >= len(TEXT_BUFFER) - 1 {
+			i = 0 } } }
+func updateSelectionList(){
+	SELECTION = GetSelection() }
 func (this *Actions) Select(rows ...int) Result {
 	this.Action()
 	if len(rows) == 0 {
@@ -1068,12 +1090,15 @@ func (this *Actions) SelectionEnd(rows ...int) Result {
 		this.SelectToggle(lines...) }
 	this.Action()
 	return OK }
-func (this *Actions) SelectMotionEndCurrent() Result {
+func (this *Actions) SelectEndCurrent() Result {
 	return this.SelectionEnd(CURRENT_ROW + ROW_OFFSET) }
 
 // utility...
 // XXX revise behaviour of reupdates on pipe...
 func (this *Actions) Update() Result {
+	selection := GetSelection()
+	log.Println("---", selection)
+	res := OK
 	// file...
 	if INPUT_FILE != "" {
 		file, err := os.Open(INPUT_FILE)
@@ -1084,7 +1109,7 @@ func (this *Actions) Update() Result {
 		file2buffer(file) 
 	// command...
 	} else if LIST_CMD != "" {
-		return callAction("<"+ LIST_CMD)
+		res = callAction("<"+ LIST_CMD)
 	// pipe...
 	// XXX how should this behave on re-update???
 	//		...should we replace, append or simply redraw cache???
@@ -1096,7 +1121,8 @@ func (this *Actions) Update() Result {
 			// XXX do we need to close this??
 			//defer os.Stdin.Close()
 			file2buffer(os.Stdin) } }
-	return OK }
+	SetSelection(selection)
+	return res }
 func (this *Actions) Refresh() Result {
 	SCREEN.Sync()
 	return OK }
@@ -1557,23 +1583,7 @@ func lines() Result {
 		if err != nil {
 			log.Println("Error executing:", SELECTION_CMD) 
 		} else {
-			i := 0
-			for _, match := range strings.Split(stdout.String(), "\n") {
-				// NOTE: since we expect the general case output to be in 
-				//		the same order as the input we'll start the next 
-				//		search from the next spot we found the last match...
-				j := i
-				for {
-					// roll around...
-					if TEXT_BUFFER[j].text == match {
-						TEXT_BUFFER[j].selected = true
-						break } 
-					j++
-					if j >= len(TEXT_BUFFER) {
-						j = 0 } 
-					if j == i {
-						break } }
-				i = j } } }
+			SetSelection(strings.Split(stdout.String(), "\n")) } }
 
 	for {
 		updateGeometry(screen)
