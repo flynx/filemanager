@@ -18,6 +18,9 @@
 * XXX can we handle focus -- i.e. ignore first click if not focused...
 * XXX move globals to struct and make the thing reusable (refactoring)...
 * XXX for file argument, track changes to file and update... (+ option to disable)
+* XXX might be good to handle title/status line clocks...
+*		...preferably within the placeholders -- i.e. map cliks to %LINE, 
+*		%LINES, $TEXT, ... this would require storing a map of the line...
 * XXX can we load a screen with the curent terminal state as content???
 *		modes:
 *			inline (just after the current line)
@@ -982,6 +985,8 @@ func GetSelection() []string {
 			selection = append(selection, row.text) } }
 	return selection }
 // NOTE: the selection is expected to mostly be in order.
+// XXX would be nice to be able to match only left/right side of span...
+//		...not sure how to configure this...
 func SetSelection(selection []string){
 	SELECTION = []string{}
 	// clear old selection...
@@ -1097,7 +1102,6 @@ func (this *Actions) SelectEndCurrent() Result {
 // XXX revise behaviour of reupdates on pipe...
 func (this *Actions) Update() Result {
 	selection := GetSelection()
-	log.Println("---", selection)
 	res := OK
 	// file...
 	if INPUT_FILE != "" {
@@ -1634,7 +1638,7 @@ func lines() Result {
 					if col < LEFT || col >= LEFT + WIDTH || 
 							row < TOP || row >= TOP + HEIGHT {
 						continue }
-					// title/status bars...
+					// title/status bars and borders...
 					top_offset := 0
 					if TITLE_LINE {
 						top_offset = 1
@@ -1646,6 +1650,12 @@ func lines() Result {
 						if row - TOP == ROWS + 1 {
 							// XXX handle statusbar click???
 							//log.Println("STATUS_LINE")
+							continue } }
+					if BORDER > 0 {
+						if col == LEFT ||
+								(SCROLLBAR <= 0 && 
+									col == LEFT + COLS - 1) {
+							//log.Println("BORDER")
 							continue } }
 					// scrollbar...
 					// XXX sould be nice if we started in the scrollbar 
