@@ -10,6 +10,7 @@
 * XXX BUG: scrollbar sometimes is off by 1 cell when scrolling down (small overflow)...
 *		...can't reproduce...
 *
+* XXX Q: can we get key down/up "events" (incl. for shift/ctrl/alt keys)???
 *
 * XXX for file argument, track changes to file and update... (+ option to disable)
 * XXX handle paste (and copy) -- actions...
@@ -33,6 +34,7 @@
 
 package main
 
+import "runtime"
 import "os"
 import "os/exec"
 //import "io"
@@ -278,29 +280,46 @@ var KEYBINDINGS = Keybindings {
 	//"a": "A=! A=${A:-1} echo $(( A + 1 ))",
 	//"w": "! echo $A >> sum.log",
 
-	// XXX these trigget up/down twice -- double triggering??
-	"shift+Up": `
-		SelectToggle
-		Up`,
-	"shift+Down": `
-		SelectToggle
-		Down`,
-	//*/
-
-	// XXX need shift+home/end/pgup/pgdown
-
+	// Selection...
+	// XXX should these be the same as shift-down or pure toggle (now)???
 	"Insert": `
 		SelectToggle
 		Down`,
 	"Space": `
 		SelectToggle
 		Down`,
+	"shift+Up": `
+		SelectMotionStart
+		Up
+		SelectMotionEnd`,
+	"shift+Down": `
+		SelectMotionStart
+		Down
+		SelectMotionEnd`,
+	"shift+PgUp": `
+		SelectMotionStart
+		PageUp
+		SelectMotionEndCurrent`,
+	"shift+PgDn": `
+		SelectMotionStart
+		PageDown
+		SelectMotionEndCurrent`,
+	"shift+Home": `
+		SelectMotionStart
+		Top
+		SelectMotionEndCurrent`,
+	"shift+End": `
+		SelectMotionStart
+		Bottom
+		SelectMotionEndCurrent`,
 	"ctrl+a": "SelectAll",
 	// XXX ctrl-i is Tab -- can we destinguish the two in the terminal???
 	"ctrl+i": "SelectInverse",
+	"^": "SelectInverse",
 	"ctrl+d": "SelectNone",
 
 	"ctrl+r": "Update",
+	"ctrl+l": "Refresh",
 }
 
 
@@ -805,7 +824,9 @@ func drawScreen(screen tcell.Screen, theme Theme){
 
 
 // Actions...
-type Actions struct {}
+type Actions struct {
+	last string
+}
 
 type Result int
 const (
@@ -827,8 +848,18 @@ func toExitCode(r Result) int {
 		return int(Fail) }
 	return 0 }
 
+// base action...
+func (this *Actions) Action() Result {
+	pc, _, _, ok := runtime.Caller(1)
+	this.last = ""
+	if ok {
+		path := strings.Split(runtime.FuncForPC(pc).Name(), ".")
+		this.last = path[len(path)-1] }
+	return OK }
+
 // vertical navigation...
-func (this Actions) Up() Result {
+func (this *Actions) Up() Result {
+	this.Action()
 	if CURRENT_ROW > 0 && 
 			// account for SCROLL_THRESHOLD_TOP...
 			(CURRENT_ROW > SCROLL_THRESHOLD_TOP ||
@@ -838,7 +869,8 @@ func (this Actions) Up() Result {
 	} else {
 		this.ScrollUp() }
 	return OK }
-func (this Actions) Down() Result {
+func (this *Actions) Down() Result {
+	this.Action()
 	// within the text buffer...
 	if CURRENT_ROW + ROW_OFFSET < len(TEXT_BUFFER)-1 && 
 			// within screen...
@@ -857,16 +889,19 @@ func (this Actions) Down() Result {
 
 // XXX should these track CURRENT_ROW relative to screen (current) or 
 //		relative to content???
-func (this Actions) ScrollUp() Result {
+func (this *Actions) ScrollUp() Result {
+	this.Action()
 	if ROW_OFFSET > 0 {
 		ROW_OFFSET-- }
 	return OK }
-func (this Actions) ScrollDown() Result {
+func (this *Actions) ScrollDown() Result {
+	this.Action()
 	if ROW_OFFSET + ROWS < len(TEXT_BUFFER) {
 		ROW_OFFSET++ } 
 	return OK }
 
-func (this Actions) PageUp() Result {
+func (this *Actions) PageUp() Result {
+	this.Action()
 	if ROW_OFFSET > 0 {
 		ROW_OFFSET -= ROWS 
 		if ROW_OFFSET < 0 {
@@ -874,7 +909,8 @@ func (this Actions) PageUp() Result {
 	} else if ROW_OFFSET == 0 {
 		this.Top() } 
 	return OK }
-func (this Actions) PageDown() Result {
+func (this *Actions) PageDown() Result {
+	this.Action()
 	if len(TEXT_BUFFER) < ROWS {
 		CURRENT_ROW = len(TEXT_BUFFER) - 1
 		return OK }
@@ -887,13 +923,15 @@ func (this Actions) PageDown() Result {
 		this.Bottom() } 
 	return OK }
 
-func (this Actions) Top() Result {
+func (this *Actions) Top() Result {
+	this.Action()
 	if ROW_OFFSET == 0 {
 		CURRENT_ROW = 0 
 	} else {
 		ROW_OFFSET = 0 }
 	return OK }
-func (this Actions) Bottom() Result {
+func (this *Actions) Bottom() Result {
+	this.Action()
 	if len(TEXT_BUFFER) < ROWS {
 		CURRENT_ROW = len(TEXT_BUFFER) - 1
 		return OK }
@@ -905,24 +943,30 @@ func (this Actions) Bottom() Result {
 	return OK }
 
 /*// XXX horizontal navigation...
-func (this Actions) Left() Result {
+func (this *Actions) Left() Result {
+	this.Action()
 	// XXX
 	return OK }
-func (this Actions) Right() Result {
-	// XXX
-	return OK }
-
-func (this Actions) ScrollLeft() Result {
-	// XXX
-	return OK }
-func (this Actions) ScrollRight() Result {
+func (this *Actions) Right() Result {
+	this.Action()
 	// XXX
 	return OK }
 
-func (this Actions) LeftEdge() Result {
+func (this *Actions) ScrollLeft() Result {
+	this.Action()
 	// XXX
 	return OK }
-func (this Actions) RightEdge() Result {
+func (this *Actions) ScrollRight() Result {
+	this.Action()
+	// XXX
+	return OK }
+
+func (this *Actions) LeftEdge() Result {
+	this.Action()
+	// XXX
+	return OK }
+func (this *Actions) RightEdge() Result {
+	this.Action()
 	// XXX
 	return OK }
 //*/
@@ -933,7 +977,24 @@ func updateSelectionList(){
 	for _, row := range TEXT_BUFFER {
 		if row.selected {
 			SELECTION = append(SELECTION, row.text) } } }
-func (this Actions) SelectToggle(rows ...int) Result {
+func (this *Actions) Select(rows ...int) Result {
+	this.Action()
+	if len(rows) == 0 {
+		rows = []int{CURRENT_ROW + ROW_OFFSET} }
+	for _, i := range rows {
+		TEXT_BUFFER[i].selected = true }
+	updateSelectionList()
+	return OK }
+func (this *Actions) Deselect(rows ...int) Result {
+	this.Action()
+	if len(rows) == 0 {
+		rows = []int{CURRENT_ROW + ROW_OFFSET} }
+	for _, i := range rows {
+		TEXT_BUFFER[i].selected = false }
+	updateSelectionList()
+	return OK }
+func (this *Actions) SelectToggle(rows ...int) Result {
+	this.Action()
 	if len(rows) == 0 {
 		rows = []int{CURRENT_ROW + ROW_OFFSET} }
 	for _, i := range rows {
@@ -943,25 +1004,72 @@ func (this Actions) SelectToggle(rows ...int) Result {
 			TEXT_BUFFER[i].selected = true } }
 	updateSelectionList()
 	return OK }
-func (this Actions) SelectAll() Result {
+func (this *Actions) SelectAll() Result {
+	this.Action()
 	for i := 0; i < len(TEXT_BUFFER); i++ {
 		TEXT_BUFFER[i].selected = true } 
 	updateSelectionList()
 	return OK }
-func (this Actions) SelectNone() Result {
+func (this *Actions) SelectNone() Result {
+	this.Action()
 	for i := 0; i < len(TEXT_BUFFER); i++ {
 		TEXT_BUFFER[i].selected = false } 
 	SELECTION = []string{}
 	return OK }
-func (this Actions) SelectInverse() Result {
+func (this *Actions) SelectInverse() Result {
+	this.Action()
 	rows := []int{}
 	for i := 0 ; i < len(TEXT_BUFFER) ; i++ {
 		rows = append(rows, i) }
 	return this.SelectToggle(rows...) }
+// can be:
+//	"select"
+//	"deselect"
+//	""			- toggle
+var SELECT_MOTION = ""
+var SELECT_MOTION_START int
+// XXX not sure how to set toggle mode....
+func (this *Actions) SelectMotionStart() Result {
+	if this.last != "SelectMotionEnd" {
+		log.Println("NEW SELECTION", this.last)
+		SELECT_MOTION = "select"
+		if TEXT_BUFFER[CURRENT_ROW+ROW_OFFSET].selected {
+			SELECT_MOTION = "deselect" } }
+	log.Println("SELECTION", SELECT_MOTION)
+	this.Action()
+	SELECT_MOTION_START = CURRENT_ROW + ROW_OFFSET
+	return OK }
+func (this *Actions) SelectMotionEnd(rows ...int) Result {
+	this.Action()
+	var start, end int
+	if len(rows) >= 2 {
+		start, end = rows[0], rows[1] 
+	} else if len(rows) == 1 {
+		start, end = SELECT_MOTION_START, rows[0]
+	} else {
+		start = SELECT_MOTION_START
+		// NOTE: we are not selecting the last item intentionally...
+		end = CURRENT_ROW + ROW_OFFSET - 1 }
+	// normalize direction...
+	if SELECT_MOTION_START > end {
+		start, end = end, start }
+	lines := []int{}
+	for i := start ; i <= end; i++ {
+		lines = append(lines, i) }
+	if SELECT_MOTION == "select" {
+		this.Select(lines...)
+	} else if SELECT_MOTION == "deselect" {
+		this.Deselect(lines...)
+	} else {
+		this.SelectToggle(lines...) }
+	this.Action()
+	return OK }
+func (this *Actions) SelectMotionEndCurrent() Result {
+	return this.SelectMotionEnd(CURRENT_ROW + ROW_OFFSET) }
 
 // utility...
 // XXX revise behaviour of reupdates on pipe...
-func (this Actions) Update() Result {
+func (this *Actions) Update() Result {
 	// file...
 	if INPUT_FILE != "" {
 		file, err := os.Open(INPUT_FILE)
@@ -985,16 +1093,16 @@ func (this Actions) Update() Result {
 			//defer os.Stdin.Close()
 			file2buffer(os.Stdin) } }
 	return OK }
-func (this Actions) Refresh() Result {
+func (this *Actions) Refresh() Result {
 	SCREEN.Sync()
 	return OK }
 
-func (this Actions) Fail() Result {
+func (this *Actions) Fail() Result {
 	return Fail }
-func (this Actions) Exit() Result {
+func (this *Actions) Exit() Result {
 	return Exit }
 
-var ACTIONS Actions
+var ACTIONS = Actions{}
 
 
 var ENV = map[string]string {}
@@ -1405,6 +1513,7 @@ func updateGeometry(screen tcell.Screen){
 
 var SCREEN tcell.Screen
 
+// XXX RENAME -- this does init and event handling...
 func lines() Result {
 	// setup...
 	screen, err := tcell.NewScreen()
