@@ -12,9 +12,12 @@
 *
 * XXX Q: can we get key down/up "events" (incl. for shift/ctrl/alt keys)???
 *
-* XXX for file argument, track changes to file and update... (+ option to disable)
-* XXX handle paste (and copy) -- actions...
+* XXX ASAP handle/test mouse button actions -- e.g. shift+LClick, etc...
+* XXX ASAP handle paste (and copy) -- actions...
+* XXX ASAP async actions...
+* XXX can we handle focus -- i.e. ignore first click if not focused...
 * XXX move globals to struct and make the thing reusable (refactoring)...
+* XXX for file argument, track changes to file and update... (+ option to disable)
 * XXX can we load a screen with the curent terminal state as content???
 *		modes:
 *			inline (just after the current line)
@@ -289,27 +292,27 @@ var KEYBINDINGS = Keybindings {
 		SelectToggle
 		Down`,
 	"shift+Up": `
-		SelectMotionStart
+		SelectionStart
 		Up
-		SelectMotionEnd`,
+		SelectionEnd`,
 	"shift+Down": `
-		SelectMotionStart
+		SelectionStart
 		Down
-		SelectMotionEnd`,
+		SelectionEnd`,
 	"shift+PgUp": `
-		SelectMotionStart
+		SelectionStart
 		PageUp
 		SelectMotionEndCurrent`,
 	"shift+PgDn": `
-		SelectMotionStart
+		SelectionStart
 		PageDown
 		SelectMotionEndCurrent`,
 	"shift+Home": `
-		SelectMotionStart
+		SelectionStart
 		Top
 		SelectMotionEndCurrent`,
 	"shift+End": `
-		SelectMotionStart
+		SelectionStart
 		Bottom
 		SelectMotionEndCurrent`,
 	"ctrl+a": "SelectAll",
@@ -1028,9 +1031,10 @@ func (this *Actions) SelectInverse() Result {
 //	""			- toggle
 var SELECT_MOTION = ""
 var SELECT_MOTION_START int
-// XXX not sure how to set toggle mode....
-func (this *Actions) SelectMotionStart() Result {
-	if this.last != "SelectMotionEnd" {
+// XXX should these be usable standalone???
+// XXX not sure how/if to set toggle mode....
+func (this *Actions) SelectionStart() Result {
+	if this.last != "SelectionEnd" {
 		log.Println("NEW SELECTION", this.last)
 		SELECT_MOTION = "select"
 		if TEXT_BUFFER[CURRENT_ROW+ROW_OFFSET].selected {
@@ -1039,7 +1043,7 @@ func (this *Actions) SelectMotionStart() Result {
 	this.Action()
 	SELECT_MOTION_START = CURRENT_ROW + ROW_OFFSET
 	return OK }
-func (this *Actions) SelectMotionEnd(rows ...int) Result {
+func (this *Actions) SelectionEnd(rows ...int) Result {
 	this.Action()
 	var start, end int
 	if len(rows) >= 2 {
@@ -1065,7 +1069,7 @@ func (this *Actions) SelectMotionEnd(rows ...int) Result {
 	this.Action()
 	return OK }
 func (this *Actions) SelectMotionEndCurrent() Result {
-	return this.SelectMotionEnd(CURRENT_ROW + ROW_OFFSET) }
+	return this.SelectionEnd(CURRENT_ROW + ROW_OFFSET) }
 
 // utility...
 // XXX revise behaviour of reupdates on pipe...
