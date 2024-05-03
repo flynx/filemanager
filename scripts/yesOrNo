@@ -4,11 +4,11 @@ MSG=${1:-Are you sure?}
 
 echo -e '%SPAN YES \n%SPAN NO ' \
 	| ./lines \
-		--title "$MSG" \
-		--size 20,3 \
-		--status "" \
+		--title " $MSG %SPAN" \
+		--size 20,4 \
+		--status "%SPAN" \
 		-s '> [ "${TEXT/\%SPAN /}" == "YES " ] \n Exit' \
 		-r 'Fail' \
 		--key y:'Exit' \
 		--key n:'Fail' \
-		--theme background:darkblue:darkblue
+		--border
