@@ -1376,8 +1376,6 @@ func goCallAction(actions string) Result {
 				log.Println("Error:", err)
 				return Fail }
 
-			scanner := bufio.NewScanner(&stdout)
-
 			// strip trailing '\n'...
 			//if len(output) > 0 && output[len(output)-1] == '\n' {
 			//	output = string(output[:len(output)-1]) }
@@ -1387,6 +1385,7 @@ func goCallAction(actions string) Result {
 			// XXX keep selection and current item and screen position 
 			//		relative to current..
 			if slices.Contains(prefix, '<') {
+				scanner := bufio.NewScanner(&stdout)
 				// XXX should this be a goroutine/async???
 				TEXT_BUFFER = []Row{}
 				for scanner.Scan() {
@@ -1401,7 +1400,10 @@ func goCallAction(actions string) Result {
 					append2buffer(line) } 
 				SCREEN.Sync()
 				if len(TEXT_BUFFER) == 0 {
-					TEXT_BUFFER = append(TEXT_BUFFER, Row{}) } } 
+					TEXT_BUFFER = append(TEXT_BUFFER, Row{}) } 
+			} else {
+				<-cmd.Done
+				output = stdout.String() }
 			// output to stdout...
 			if slices.Contains(prefix, '>') {
 				STDOUT += output + "\n" }
