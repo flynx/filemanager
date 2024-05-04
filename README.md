@@ -3,6 +3,19 @@
 ## `lines`
 
 
+Basic browser/viewer
+```shell
+$ DIR=`pwd` \
+    lines \
+        -c 'echo "../"; ls -F --group-directories-first "$DIR"' \
+        -k F3:'@ [[ "$TEXT_LEFT" =~ \/$ ]] || less "$DIR/${TEXT_LEFT%[*/=>@|]}"' \
+        -s 'DIR=> [[ "$TEXT_LEFT" =~ \/$ ]] && realpath -s "$DIR/${TEXT_LEFT}" || realpath -s "$DIR" \n Update' \
+        --title ' $DIR %SPAN' 
+        -b --span-separator="│" \
+```
+
+
+
 ```shell
 $ lines -c ls --title ' Lines: $PWD/$TEXT' -s '@ less $TEXT'
 ```

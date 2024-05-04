@@ -7,6 +7,9 @@
 *	- live search/filtering
 *
 *
+* XXX BUG: this works:
+*			$ scripts/fileBrowser "~/archive/img/"
+*		while navigating to the same dir in fileBrowser fails...
 * XXX BUG: scrollbar sometimes is off by 1 cell when scrolling down (small overflow)...
 *		...can't reproduce...
 *
@@ -1215,6 +1218,7 @@ func callAtCommand(code string, stdin bytes.Buffer) error {
 	var err error
 	if err = cmd.Run(); err != nil {
 		log.Println("Error executing: \""+ code +"\":", err) 
+		log.Println("    ERR:", os.Stderr)
 		log.Println("    ENV:", env) }
 
 	return err }
@@ -1241,6 +1245,7 @@ func callCommand(code string, stdin bytes.Buffer) (bytes.Buffer, bytes.Buffer, e
 	var err error
 	if err = cmd.Run(); err != nil {
 		log.Println("Error executing: \""+ code +"\":", err) 
+		log.Println("    ERR:", stderr.String())
 		log.Println("    ENV:", env) }
 
 	return stdout, stderr, err }
@@ -1308,18 +1313,22 @@ func callAction(actions string) Result {
 				log.Println("Error:", err)
 				return Fail }
 
+			// strip trailing '\n'...
+			if len(output) > 0 && output[len(output)-1] == '\n' {
+				output = string(output[:len(output)-1]) }
+
 			// list output...
 			// XXX stdout should be read line by line as it comes...
 			// XXX keep selection and current item and screen position 
 			//		relative to current..
 			if slices.Contains(prefix, '<') {
 				// ignore trailing \n's...
-				for output[len(output)-1] == '\n' && len(output) > 0 {
-					output = string(output[:len(output)-1]) }
+				//for output[len(output)-1] == '\n' && len(output) > 0 {
+				//	output = string(output[:len(output)-1]) }
 				str2buffer(output) }
 			// output to stdout...
 			if slices.Contains(prefix, '>') {
-				STDOUT += output }
+				STDOUT += output + "\n" }
 			// output to env...
 			if slices.Contains(prefix, '!') {
 				for _, str := range strings.Split(output, "\n") {
@@ -1334,7 +1343,7 @@ func callAction(actions string) Result {
 			// handle env...
 			if name != "" {
 				if name == "STDOUT" {
-					STDOUT += output
+					STDOUT += output + "\n"
 				} else {
 					ENV[name] = output } }
 

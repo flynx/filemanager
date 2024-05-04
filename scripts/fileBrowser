@@ -1,0 +1,14 @@
+#!/usr/bin/bash
+
+DIR=${1:-`pwd`}
+
+DIR=$DIR \
+	go run lines \
+		-l debug.log \
+		-c 'echo "../"; ls -F --group-directories-first "$DIR"' \
+		--span-separator='│' \
+		--title ' $DIR %SPAN' \
+		-b \
+		-k F3:'@ [[ "$TEXT_LEFT" =~ \/$ ]] || less "$DIR/${TEXT_LEFT%[*/=>@|]}"' \
+		-s 'DIR=> [[ "$TEXT_LEFT" =~ \/$ ]] && realpath -s "$DIR/${TEXT_LEFT}" || realpath -s "$DIR" \n Update'
+
