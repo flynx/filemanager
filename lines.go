@@ -46,7 +46,7 @@ package main
 import "runtime"
 import "os"
 import "os/exec"
-//import "io"
+import "io"
 //import "path"
 import "fmt"
 import "log"
@@ -388,7 +388,13 @@ var BORDER_THEME = BorderTheme {
 	"ascii": "|+-+|+-+",
 }
 
-
+func append2buffer(str string){
+	row := Row{ text: str }
+	TEXT_BUFFER = append(TEXT_BUFFER, row)
+	// set max line width...
+	l := len([]rune(row.text))
+	if TEXT_BUFFER_WIDTH < l {
+		TEXT_BUFFER_WIDTH = l } }
 // XXX do we need another layer not operating on the global TEXT_BUFFER???
 // XXX these are almost identical, can we generalize?
 // XXX option to maintain current row...
@@ -397,12 +403,7 @@ func str2buffer(str string){
 	TEXT_BUFFER = []Row{}
 	n := 0
 	for _, str := range strings.Split(str, "\n") {
-		row := Row{ text: str }
-		TEXT_BUFFER = append(TEXT_BUFFER, row)
-		// set max line width...
-		l := len([]rune(row.text))
-		if TEXT_BUFFER_WIDTH < l {
-			TEXT_BUFFER_WIDTH = l }
+		append2buffer(str)
 		n++ }
 	// keep at least one empty line in buffer...
 	// XXX should we do this here or in the looping code???
@@ -1191,24 +1192,88 @@ func makeCallEnv(cmd *exec.Cmd) []string {
 		env = append(env, k +"="+ v) }
 	return append(cmd.Environ(), env...) }
 
+
+type Spinner struct {
+	frames string
+	state int
+}
+func (this *Spinner) Spin() *Spinner {
+	return this }
+func (this *Spinner) Done() *Spinner {
+	return this }
+
+
+type Command struct {
+	Done chan bool
+	Kill chan bool
+	Stdout *bytes.Buffer 
+	Stderr *bytes.Buffer
+}
+func goCallCommand(code string, stdin io.Reader) Command {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	shell := strings.Fields(SHELL)
+	cmd := exec.Command(shell[0], append(shell[1:], code)...)
+	env := makeCallEnv(cmd)
+	cmd.Env = env
+	// XXX can we make these optional???
+	cmd.Stdin = stdin
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	// handle killing the process when needed...
+	done := make(chan bool)
+	kill := make(chan bool)
+	watchdogDone := make(chan bool)
+	go func(){
+		select {
+			case <-kill:
+				if err := cmd.Process.Kill() ; err != nil {
+					log.Panic(err) } 
+			case <-watchdogDone:
+				return } }()
+
+	// run...
+	if err := cmd.Start(); err != nil {
+		log.Panic(err) }
+
+	// cleanup...
+	go func(){
+		if err := cmd.Wait(); err != nil {
+			log.Println("Error executing: \""+ code +"\"", err) 
+			log.Println("    ERR:", stderr.String())
+			//log.Println("    ENV:", env)
+			watchdogDone <- true
+			done <- false 
+			return }
+		watchdogDone <- true
+		done <- true }()
+
+	return Command {
+		Done: done,
+		Kill: kill,
+		Stdout: &stdout, 
+		Stderr: &stderr,
+	} }
+
+
 // XXX needs revision -- feels hacky...
 // XXX use more generic input types -- io.Reader / io.Writer...
 // XXX generalize and combine callAtCommand(..) and callCommand(..)
 func callAtCommand(code string, stdin bytes.Buffer) error {
 	shell := strings.Fields(SHELL)
 	cmd := exec.Command(shell[0], append(shell[1:], code)...)
+	env := makeCallEnv(cmd)
+	cmd.Env = env
 
 	cmd.Stdin = &stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	env := makeCallEnv(cmd)
-	cmd.Env = env
-
 	// NOTE: order here is significant...
 	defer SCREEN.Sync()
 	defer SCREEN.Resume()
-
 	// XXX can we suspend but without flusing the screen???
 	SCREEN.Suspend()
 
@@ -1228,14 +1293,13 @@ func callCommand(code string, stdin bytes.Buffer) (bytes.Buffer, bytes.Buffer, e
 
 	shell := strings.Fields(SHELL)
 	cmd := exec.Command(shell[0], append(shell[1:], code)...)
+	env := makeCallEnv(cmd)
+	cmd.Env = env
 
 	// XXX can we make these optional???
 	cmd.Stdin = &stdin
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-
-	env := makeCallEnv(cmd)
-	cmd.Env = env
 
 	//defer SCREEN.Sync()
 
@@ -1249,14 +1313,132 @@ func callCommand(code string, stdin bytes.Buffer) (bytes.Buffer, bytes.Buffer, e
 		log.Println("    ENV:", env) }
 
 	return stdout, stderr, err }
-
-func callTransform(cmd string, line string) (string, error) {
+func callTransform(code string, line string) (string, error) {
 	var stdin bytes.Buffer
 	stdin.Write([]byte(line))
-	stdout, _, err := callCommand(cmd, stdin)
+	stdout, _, err := callCommand(code, stdin)
 	return stdout.String(), err }
 var isVarCommand = regexp.MustCompile(`^\s*[a-zA-Z_]+=`)
 // XXX add support for async commands...
+func goCallAction(actions string) Result {
+	// XXX make split here a bit more cleaver:
+	//		- support ";"
+	//		- support quoting of separators, i.e. ".. \\\n .." and ".. \; .."
+	//		- ignore string literal content...
+	for _, action := range strings.Split(actions, "\n") {
+		//action = strings.Trim(action, " \t")
+		action = strings.TrimSpace(action)
+		if len(action) == 0 {
+			continue }
+
+		// NAME=ACTION...
+		name := ""
+		if isVarCommand.Match([]byte(action)) {
+			parts := regexp.MustCompile("=").Split(action, 2)
+			name, action = parts[0], parts[1] }
+		// empty value -> remove from env...
+		if name != "" && action == "" {
+			delete(ENV, name) 
+			continue }
+
+		// shell commands:
+		//		@ CMD	- simple/interactive command
+		//					NOTE: this uses os.Stdout...
+		//		! CMD	- stdout treated as env variables, one per line
+		//		< CMD	- stdout read into buffer
+		//		> CMD	- stdout printed to lines stdout
+		//		| CMD	- current line passed to stdin
+		//		XXX & CMD	- async command (XXX not implemented...)
+		// NOTE: commands can be combined.
+		prefixes := "@!<>|"
+		prefix := []rune{}
+		code := action
+		// split out the prefixes...
+		for strings.ContainsRune(prefixes, rune(code[0])) {
+			prefix = append(prefix, rune(code[0]))
+			code = strings.TrimSpace(string(code[1:])) }
+		if len(prefix) > 0 {
+
+			var stdin bytes.Buffer
+			if slices.Contains(prefix, '|') {
+				stdin.Write([]byte(TEXT_BUFFER[CURRENT_ROW].text)) }
+
+			// call the command...
+			var err error
+			var output string
+			var stdout bytes.Buffer
+			if slices.Contains(prefix, '@') {
+				err = callAtCommand(code, stdin)
+			} else {
+				cmd := goCallCommand(code, &stdin)
+				stdout = *cmd.Stdout }
+			if err != nil {
+				log.Println("Error:", err)
+				return Fail }
+
+			scanner := bufio.NewScanner(&stdout)
+
+			// strip trailing '\n'...
+			//if len(output) > 0 && output[len(output)-1] == '\n' {
+			//	output = string(output[:len(output)-1]) }
+
+			// list output...
+			// XXX stdout should be read line by line as it comes...
+			// XXX keep selection and current item and screen position 
+			//		relative to current..
+			if slices.Contains(prefix, '<') {
+				// XXX should this be a goroutine/async???
+				TEXT_BUFFER = []Row{}
+				for scanner.Scan() {
+					if len(TEXT_BUFFER) == CURRENT_ROW || 
+							len(TEXT_BUFFER) == CURRENT_ROW + ROW_OFFSET {
+						SCREEN.Sync() }
+					line := scanner.Text()
+					if len(TEXT_BUFFER) == 0 {
+						output = line
+					} else {
+						output += "\n"+ line }
+					append2buffer(line) } 
+				SCREEN.Sync()
+				if len(TEXT_BUFFER) == 0 {
+					TEXT_BUFFER = append(TEXT_BUFFER, Row{}) } } 
+			// output to stdout...
+			if slices.Contains(prefix, '>') {
+				STDOUT += output + "\n" }
+			// output to env...
+			if slices.Contains(prefix, '!') {
+				for _, str := range strings.Split(output, "\n") {
+					if strings.TrimSpace(str) == "" ||
+							! isVarCommand.Match([]byte(str)) {
+						continue }
+					res := strings.SplitN(str, "=", 1)
+					if len(res) != 2 {
+						continue }
+					ENV[strings.TrimSpace(res[0])] = strings.TrimSpace(res[1]) } }
+
+			// handle env...
+			if name != "" {
+				if name == "STDOUT" {
+					STDOUT += output + "\n"
+				} else {
+					ENV[name] = output } }
+
+		// ACTION...
+		} else {
+			method := reflect.ValueOf(&ACTIONS).MethodByName(action)
+			// test if action exists....
+			if ! method.IsValid() {
+				log.Println("Error: Unknown action:", action) 
+				continue }
+			res := method.Call([]reflect.Value{}) 
+			// exit if action returns false...
+			value, ok := res[0].Interface().(Result)
+			if ! ok {
+				// XXX
+			}
+			if value != OK {
+				return value } } }
+	return OK }
 func callAction(actions string) Result {
 	// XXX make split here a bit more cleaver:
 	//		- support ";"
