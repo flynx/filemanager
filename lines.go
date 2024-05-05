@@ -1193,16 +1193,25 @@ func makeCallEnv(cmd *exec.Cmd) []string {
 	return append(cmd.Environ(), env...) }
 
 
+// Spinner...
 type Spinner struct {
-	frames string
-	state int
+	Frames string
+	State int
 }
-func (this *Spinner) Spin() *Spinner {
-	return this }
-func (this *Spinner) Done() *Spinner {
-	return this }
+func (this *Spinner) Spin() string {
+	this.State++
+	if this.State >= len(this.Frames) {
+		this.State = 0 }
+	return string(this.Frames[this.State]) }
+func (this *Spinner) Done() {
+	this.State = -1 }
+var SPINNER = Spinner {
+	Frames: "-\\|/",
+	State: -1,
+}
 
 
+// XXX need to rethink the external call API...
 type Command struct {
 	Done chan bool
 	Kill chan bool
@@ -1256,6 +1265,132 @@ func goCallCommand(code string, stdin io.Reader) Command {
 		Stdout: &stdout, 
 		Stderr: &stderr,
 	} }
+func goCallAction(actions string) Result {
+	// XXX make split here a bit more cleaver:
+	//		- support ";"
+	//		- support quoting of separators, i.e. ".. \\\n .." and ".. \; .."
+	//		- ignore string literal content...
+	for _, action := range strings.Split(actions, "\n") {
+		//action = strings.Trim(action, " \t")
+		action = strings.TrimSpace(action)
+		if len(action) == 0 {
+			continue }
+
+		// NAME=ACTION...
+		name := ""
+		if isVarCommand.Match([]byte(action)) {
+			parts := regexp.MustCompile("=").Split(action, 2)
+			name, action = parts[0], parts[1] }
+		// empty value -> remove from env...
+		if name != "" && action == "" {
+			delete(ENV, name) 
+			continue }
+
+		// shell commands:
+		//		@ CMD	- simple/interactive command
+		//					NOTE: this uses os.Stdout...
+		//		! CMD	- stdout treated as env variables, one per line
+		//		< CMD	- stdout read into buffer
+		//		> CMD	- stdout printed to lines stdout
+		//		| CMD	- current line passed to stdin
+		//		XXX & CMD	- async command (XXX not implemented...)
+		// NOTE: commands can be combined.
+		prefixes := "@!<>|"
+		prefix := []rune{}
+		code := action
+		// split out the prefixes...
+		for strings.ContainsRune(prefixes, rune(code[0])) {
+			prefix = append(prefix, rune(code[0]))
+			code = strings.TrimSpace(string(code[1:])) }
+		if len(prefix) > 0 {
+
+			var stdin bytes.Buffer
+			if slices.Contains(prefix, '|') {
+				stdin.Write([]byte(TEXT_BUFFER[CURRENT_ROW].text)) }
+
+			// call the command...
+			var err error
+			var output string
+			var stdout bytes.Buffer
+			var done chan bool
+			if slices.Contains(prefix, '@') {
+				// XXX make this async...
+				err = callAtCommand(code, stdin)
+				done <- true
+			} else {
+				cmd := goCallCommand(code, &stdin)
+				done = cmd.Done
+				stdout = *cmd.Stdout }
+			if err != nil {
+				log.Println("Error:", err)
+				return Fail }
+
+			// strip trailing '\n'...
+			//if len(output) > 0 && output[len(output)-1] == '\n' {
+			//	output = string(output[:len(output)-1]) }
+
+			// list output...
+			// XXX stdout should be read line by line as it comes...
+			// XXX keep selection and current item and screen position 
+			//		relative to current..
+			if slices.Contains(prefix, '<') {
+				scanner := bufio.NewScanner(&stdout)
+				// XXX should this be a goroutine/async???
+				// XXX do the spinner....
+				TEXT_BUFFER = []Row{}
+				for scanner.Scan() {
+					if len(TEXT_BUFFER) == CURRENT_ROW || 
+							len(TEXT_BUFFER) == CURRENT_ROW + ROW_OFFSET {
+						SCREEN.Sync() }
+					line := scanner.Text()
+					if len(TEXT_BUFFER) == 0 {
+						output = line
+					} else {
+						output += "\n"+ line }
+					append2buffer(line) } 
+				SCREEN.Sync()
+				if len(TEXT_BUFFER) == 0 {
+					TEXT_BUFFER = append(TEXT_BUFFER, Row{}) } 
+			} else {
+				<-done
+				output = stdout.String() }
+			// output to stdout...
+			if slices.Contains(prefix, '>') {
+				STDOUT += output + "\n" }
+			// output to env...
+			if slices.Contains(prefix, '!') {
+				for _, str := range strings.Split(output, "\n") {
+					if strings.TrimSpace(str) == "" ||
+							! isVarCommand.Match([]byte(str)) {
+						continue }
+					res := strings.SplitN(str, "=", 1)
+					if len(res) != 2 {
+						continue }
+					ENV[strings.TrimSpace(res[0])] = strings.TrimSpace(res[1]) } }
+
+			// handle env...
+			if name != "" {
+				if name == "STDOUT" {
+					STDOUT += output + "\n"
+				} else {
+					ENV[name] = output } }
+
+		// ACTION...
+		} else {
+			method := reflect.ValueOf(&ACTIONS).MethodByName(action)
+			// test if action exists....
+			if ! method.IsValid() {
+				log.Println("Error: Unknown action:", action) 
+				continue }
+			res := method.Call([]reflect.Value{}) 
+			// exit if action returns false...
+			value, ok := res[0].Interface().(Result)
+			if ! ok {
+				// XXX
+			}
+			if value != OK {
+				return value } } }
+	return OK }
 
 
 // XXX needs revision -- feels hacky...
@@ -1320,127 +1455,6 @@ func callTransform(code string, line string) (string, error) {
 	return stdout.String(), err }
 var isVarCommand = regexp.MustCompile(`^\s*[a-zA-Z_]+=`)
 // XXX add support for async commands...
-func goCallAction(actions string) Result {
-	// XXX make split here a bit more cleaver:
-	//		- support ";"
-	//		- support quoting of separators, i.e. ".. \\\n .." and ".. \; .."
-	//		- ignore string literal content...
-	for _, action := range strings.Split(actions, "\n") {
-		//action = strings.Trim(action, " \t")
-		action = strings.TrimSpace(action)
-		if len(action) == 0 {
-			continue }
-
-		// NAME=ACTION...
-		name := ""
-		if isVarCommand.Match([]byte(action)) {
-			parts := regexp.MustCompile("=").Split(action, 2)
-			name, action = parts[0], parts[1] }
-		// empty value -> remove from env...
-		if name != "" && action == "" {
-			delete(ENV, name) 
-			continue }
-
-		// shell commands:
-		//		@ CMD	- simple/interactive command
-		//					NOTE: this uses os.Stdout...
-		//		! CMD	- stdout treated as env variables, one per line
-		//		< CMD	- stdout read into buffer
-		//		> CMD	- stdout printed to lines stdout
-		//		| CMD	- current line passed to stdin
-		//		XXX & CMD	- async command (XXX not implemented...)
-		// NOTE: commands can be combined.
-		prefixes := "@!<>|"
-		prefix := []rune{}
-		code := action
-		// split out the prefixes...
-		for strings.ContainsRune(prefixes, rune(code[0])) {
-			prefix = append(prefix, rune(code[0]))
-			code = strings.TrimSpace(string(code[1:])) }
-		if len(prefix) > 0 {
-
-			var stdin bytes.Buffer
-			if slices.Contains(prefix, '|') {
-				stdin.Write([]byte(TEXT_BUFFER[CURRENT_ROW].text)) }
-
-			// call the command...
-			var err error
-			var output string
-			var stdout bytes.Buffer
-			if slices.Contains(prefix, '@') {
-				err = callAtCommand(code, stdin)
-			} else {
-				cmd := goCallCommand(code, &stdin)
-				stdout = *cmd.Stdout }
-			if err != nil {
-				log.Println("Error:", err)
-				return Fail }
-
-			// strip trailing '\n'...
-			//if len(output) > 0 && output[len(output)-1] == '\n' {
-			//	output = string(output[:len(output)-1]) }
-
-			// list output...
-			// XXX stdout should be read line by line as it comes...
-			// XXX keep selection and current item and screen position 
-			//		relative to current..
-			if slices.Contains(prefix, '<') {
-				scanner := bufio.NewScanner(&stdout)
-				// XXX should this be a goroutine/async???
-				TEXT_BUFFER = []Row{}
-				for scanner.Scan() {
-					if len(TEXT_BUFFER) == CURRENT_ROW || 
-							len(TEXT_BUFFER) == CURRENT_ROW + ROW_OFFSET {
-						SCREEN.Sync() }
-					line := scanner.Text()
-					if len(TEXT_BUFFER) == 0 {
-						output = line
-					} else {
-						output += "\n"+ line }
-					append2buffer(line) } 
-				SCREEN.Sync()
-				if len(TEXT_BUFFER) == 0 {
-					TEXT_BUFFER = append(TEXT_BUFFER, Row{}) } 
-			} else {
-				<-cmd.Done
-				output = stdout.String() }
-			// output to stdout...
-			if slices.Contains(prefix, '>') {
-				STDOUT += output + "\n" }
-			// output to env...
-			if slices.Contains(prefix, '!') {
-				for _, str := range strings.Split(output, "\n") {
-					if strings.TrimSpace(str) == "" ||
-							! isVarCommand.Match([]byte(str)) {
-						continue }
-					res := strings.SplitN(str, "=", 1)
-					if len(res) != 2 {
-						continue }
-					ENV[strings.TrimSpace(res[0])] = strings.TrimSpace(res[1]) } }
-
-			// handle env...
-			if name != "" {
-				if name == "STDOUT" {
-					STDOUT += output + "\n"
-				} else {
-					ENV[name] = output } }
-
-		// ACTION...
-		} else {
-			method := reflect.ValueOf(&ACTIONS).MethodByName(action)
-			// test if action exists....
-			if ! method.IsValid() {
-				log.Println("Error: Unknown action:", action) 
-				continue }
-			res := method.Call([]reflect.Value{}) 
-			// exit if action returns false...
-			value, ok := res[0].Interface().(Result)
-			if ! ok {
-				// XXX
-			}
-			if value != OK {
-				return value } } }
-	return OK }
 func callAction(actions string) Result {
 	// XXX make split here a bit more cleaver:
 	//		- support ";"
