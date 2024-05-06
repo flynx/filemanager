@@ -12,9 +12,16 @@
 *		but has not yet produced any output...
 *
 *
-*
-*
-*
+* XXX BUG: exiting from an interactive command kills the app...
+*		to reproduce:
+*			- run:
+*				$ scripts/fileBrowser
+*			- list a file (F3)
+*			- exit less (q)
+* XXX BUG: partially failed command breaks the execution chain...
+*		...e.g. for 'echo 123 ; ls moo' if ls fails the stdout will be 
+*		smaller than expected and will break things...
+*		...make the code tolerant to unexpected input...
 * XXX BUG: this works:
 *			$ scripts/fileBrowser "~/archive/img/"
 *		while navigating to the same dir in fileBrowser fails...
@@ -525,7 +532,7 @@ func populateTemplateLine(str string, cmd string) string {
 var EXTEND_SEPARATOR_COL = -1
 func drawLine(col, row, width int, 
 		str string, 
-		span_filler rune, span_separator rune, 
+		span_mode string, span_filler rune, span_separator rune, 
 		base_style tcell.Style, separator_style tcell.Style){
 	line := []rune(str)
 
@@ -590,7 +597,7 @@ func drawLine(col, row, width int,
 			// NOTE: this essentially rigth-aligns the right side, it 
 			//		will not attempt to left-align to the SPAN_SEPARATOR...
 			// XXX should we attempty to draw a sraight vertical line between columns???
-			if SPAN_MODE == "fit-right" {
+			if span_mode == "fit-right" {
 				if len(line) - buf_col + SPAN_LEFT_MIN_WIDTH < width {
 					offset = width - len(line)
 				} else {
@@ -599,11 +606,11 @@ func drawLine(col, row, width int,
 			} else {
 				c := 0
 				// %...
-				if SPAN_MODE[len(SPAN_MODE)-1] == '%' {
+				if span_mode[len(span_mode)-1] == '%' {
 					// XXX parse this once...
-					p, err := strconv.ParseFloat(string(SPAN_MODE[0:len(SPAN_MODE)-1]), 64)
+					p, err := strconv.ParseFloat(string(span_mode[0:len(span_mode)-1]), 64)
 					if err != nil {
-						log.Println("Error parsing:", SPAN_MODE) }
+						log.Println("Error parsing:", span_mode) }
 					c = int(float64(width) * (p / 100))
 					// normalize...
 					if c < SPAN_LEFT_MIN_WIDTH {
@@ -615,9 +622,9 @@ func drawLine(col, row, width int,
 						c = int(float64(width) * r) }
 				// cols...
 				} else {
-					v, err := strconv.Atoi(SPAN_MODE) 
+					v, err := strconv.Atoi(span_mode) 
 					if err != nil {
-						log.Println("Error parsing:", SPAN_MODE) 
+						log.Println("Error parsing:", span_mode) 
 						continue }
 					if v < 0 {
 						c = width + v
@@ -774,7 +781,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 			title_style = border_style } 
 		drawLine(LEFT, row, COLS, 
 			pre + populateTemplateLine(TITLE_LINE_FMT, TITLE_CMD) + post, 
-			span_filler_title, span_filler_title, 
+			"fit-right", span_filler_title, span_filler_title, 
 			title_style, title_style) 
 		rows--
 		row++ }
@@ -785,9 +792,9 @@ func drawScreen(screen tcell.Screen, theme Theme){
 		separator_style := separator_style
 		buf_row := i + ROW_OFFSET 
 
-		line := ""
+		line := &Row{}
 		if buf_row < len(TEXT_BUFFER.Lines) {
-			line = TEXT_BUFFER.Lines[buf_row].text }
+			line = &TEXT_BUFFER.Lines[buf_row] }
 
 		// theme...
 		missing_style := false
@@ -815,9 +822,18 @@ func drawScreen(screen tcell.Screen, theme Theme){
 			screen.SetContent(LEFT, row, BORDER_LEFT, nil, border_style) }
 
 		// line...
+		if TRANSFORM_CMD != "" && 
+				line.text != "" &&
+				! line.transformed {
+			log.Println("TRANSFORM")
+			str, err := callTransform(TRANSFORM_CMD, line.text)
+			if err != nil {
+				str = line.text }
+			line.text = str
+			line.transformed = true }
 		drawLine(LEFT + BORDER, row, cols - left_offset - right_offset, 
-			line, 
-			SPAN_FILLER, SPAN_SEPARATOR, 
+			line.text, 
+			SPAN_MODE, SPAN_FILLER, SPAN_SEPARATOR, 
 			style, separator_style) 
 
 		// border verticl...
@@ -842,7 +858,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 			status_style = border_style } 
 		drawLine(LEFT, row, COLS, 
 			pre + populateTemplateLine(STATUS_LINE_FMT, STATUS_CMD) + post, 
-			span_filler_status, span_filler_status, 
+			"fit-right", span_filler_status, span_filler_status, 
 			status_style, status_style) } }
 
 
@@ -1341,11 +1357,7 @@ func callCommand(code string, stdin bytes.Buffer) (bytes.Buffer, bytes.Buffer, e
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	//defer SCREEN.Sync()
-
 	// run the command...
-	// XXX this should be run async???
-	//		...option??
 	var err error
 	if err = cmd.Run(); err != nil {
 		log.Println("Error executing: \""+ code +"\":", err) 

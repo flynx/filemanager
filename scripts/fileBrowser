@@ -2,13 +2,16 @@
 
 DIR=${1:-`pwd`}
 
-
+# NOTE: the ls's -l and -F options are extremely expensive -- more than 10x slower...
+# 	...this is relevant for very large numbers of files in a dir...
 DIR="$DIR" \
 	go run lines \
 		-l debug.log \
-		-c 'echo "../"; ls -F --group-directories-first --dereference-command-line-symlink-to-dir "$DIR" ' \
+		-c 'echo ".."; ls --group-directories-first --dereference-command-line-symlink-to-dir "$DIR" ' \
+		-t 'xargs -i bash -c "[ -d \"${DIR}/{}\" ] && printf \"{}/%%SPAN%8s\" \"<dir>\" || printf \"{}%%SPAN%8s\" \"\$( ls -lh \"${DIR}/{}\" | cut -d\" \" -f5 )\""' \
 		-k F3:'@ [ -d "${LEFT_TEXT%[*/=>@|]}" ] || less "$DIR/${TEXT_LEFT%[*/=>@|]}"' \
 		-s 'DIR=> [ -d "${DIR}/${TEXT_LEFT%[*/=>@|]}" ] && realpath -s "$DIR/${TEXT_LEFT%[*/=>@|]}" || realpath -s "$DIR" \n Update' \
+		--span="-8" \
 		--span-separator="│" \
 		--title ' $DIR %SPAN' \
 		-b 
