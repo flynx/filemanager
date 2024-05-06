@@ -7,6 +7,14 @@
 *	- live search/filtering
 *
 *
+* New call/refresh system
+*	- the text buffer can be invalid when the command has been triggered
+*		but has not yet produced any output...
+*
+*
+*
+*
+*
 * XXX BUG: this works:
 *			$ scripts/fileBrowser "~/archive/img/"
 *		while navigating to the same dir in fileBrowser fails...
@@ -47,6 +55,7 @@ import "runtime"
 import "os"
 import "os/exec"
 import "io"
+import "sync"
 //import "path"
 import "fmt"
 import "log"
@@ -246,14 +255,60 @@ var CURRENT_ROW = 0
 //		- pattern
 
 
-var TEXT_BUFFER_WIDTH = 0
-
 type Row struct {
 	selected bool
 	transformed bool
 	text string
 }
-var TEXT_BUFFER = []Row{}
+//type LinesBuffer []Row
+type LinesBuffer struct {
+	Use sync.Mutex
+	Lines []Row
+	Width int
+}
+func (this *LinesBuffer) Clear() *LinesBuffer {
+	this.Lines = []Row{}
+	this.Width = 0
+	return this }
+func (this *LinesBuffer) String() string {
+	lines := []string{}
+	for _, line := range this.Lines {
+		lines = append(lines, line.text) }
+	return strings.Join(lines, "\n") }
+func (this *LinesBuffer) Push(line string) *LinesBuffer {
+	this.Lines = append(this.Lines, Row{ text: line })
+	l := len([]rune(line))
+	if this.Width < l {
+		this.Width = l }
+	return this }
+func (this *LinesBuffer) Append(str string) *LinesBuffer {
+	for _, str := range strings.Split(str, "\n") {
+		this.Push(str) } 
+	return this }
+func (this *LinesBuffer) AppendBuf(buf io.Reader) *LinesBuffer {
+	scanner := bufio.NewScanner(buf)
+	for scanner.Scan(){
+		this.Push(scanner.Text()) }
+	return this }
+	// XXX should we unlock in the end or at current position/screen...
+func (this *LinesBuffer) Write(str string) *LinesBuffer {
+	this.Use.Lock()
+	defer this.Use.Unlock()
+	this.
+		Clear().
+		Append(str)
+	return this }
+	// XXX should we unlock in the end or at current position/screen...
+func (this *LinesBuffer) WriteBuf(buf io.Reader) *LinesBuffer {
+	this.Use.Lock()
+	defer this.Use.Unlock()
+	this.
+		Clear().
+		AppendBuf(buf)
+	return this }
+
+var TEXT_BUFFER LinesBuffer
+
 
 var SELECTION = []string{}
 
@@ -388,51 +443,6 @@ var BORDER_THEME = BorderTheme {
 	"ascii": "|+-+|+-+",
 }
 
-func append2buffer(str string){
-	row := Row{ text: str }
-	TEXT_BUFFER = append(TEXT_BUFFER, row)
-	// set max line width...
-	l := len([]rune(row.text))
-	if TEXT_BUFFER_WIDTH < l {
-		TEXT_BUFFER_WIDTH = l } }
-// XXX do we need another layer not operating on the global TEXT_BUFFER???
-// XXX these are almost identical, can we generalize?
-// XXX option to maintain current row...
-func str2buffer(str string){
-	//CURRENT_ROW = 0
-	TEXT_BUFFER = []Row{}
-	n := 0
-	for _, str := range strings.Split(str, "\n") {
-		append2buffer(str)
-		n++ }
-	// keep at least one empty line in buffer...
-	// XXX should we do this here or in the looping code???
-	if n == 0 {
-		TEXT_BUFFER = append(TEXT_BUFFER, Row{}) } }
-func file2buffer(file *os.File){
-	// XXX set this to a logical value...
-	//CURRENT_ROW = 0
-	TEXT_BUFFER = []Row{}
-	n := 0
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan(){
-		row := Row{ text: scanner.Text() }
-		TEXT_BUFFER = append(TEXT_BUFFER, row)
-		// set max line width...
-		l := len([]rune(row.text))
-		if TEXT_BUFFER_WIDTH < l {
-			TEXT_BUFFER_WIDTH = l }
-		n++ }
-	// keep at least one empty line in buffer...
-	// XXX should we do this here or in the looping code???
-	if n == 0 {
-		TEXT_BUFFER = append(TEXT_BUFFER, Row{}) } }
-func buffer2str() string {
-	lines := []string{}
-	for _, line := range TEXT_BUFFER {
-		lines = append(lines, line.text) }
-	return strings.Join(lines, "\n") }
-
 
 // XXX add support for ansi escape sequences...
 //		...as a minimum strip them out...
@@ -486,8 +496,9 @@ func populateTemplateLine(str string, cmd string) string {
 			var err error
 			val := ""
 			current := Row{}
-			if len(TEXT_BUFFER) != 0 {
-				current = TEXT_BUFFER[CURRENT_ROW + ROW_OFFSET] } 
+			//if len(TEXT_BUFFER.Lines) != 0 {
+			if len(TEXT_BUFFER.Lines) > CURRENT_ROW + ROW_OFFSET {
+				current = TEXT_BUFFER.Lines[CURRENT_ROW + ROW_OFFSET] } 
 			switch name {
 				// this has to be handled later, when the string is 
 				// otherwise complete...
@@ -654,18 +665,20 @@ func drawLine(col, row, width int,
 //			$ ls | ./lines --title ' moo %SPAN' --border
 func drawScreen(screen tcell.Screen, theme Theme){
 	screen.Clear()
+	TEXT_BUFFER.Use.Lock()
+	defer TEXT_BUFFER.Use.Unlock()
 
 	// scrollbar...
 	var scroller_size, scroller_offset int
 	scroller_style, ok := theme["scrollbar"]
 	if ! ok {
 		scroller_style = theme["default"] }
-	if len(TEXT_BUFFER) > ROWS {
+	if len(TEXT_BUFFER.Lines) > ROWS {
 		SCROLLBAR = 1
 	} else {
 		SCROLLBAR = 0 }
 	if SCROLLBAR > 0 {
-		r := float64(ROWS) / float64(len(TEXT_BUFFER))
+		r := float64(ROWS) / float64(len(TEXT_BUFFER.Lines))
 		scroller_size = 1 + int(float64(ROWS - 1) * r)
 		scroller_offset = int(float64(ROW_OFFSET + 1) * r) }
 
@@ -681,7 +694,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 				FOCUS = string(FOCUS[1:]) }
 			// XXX might also be a good idea to match content (and other) 
 			//		then select best match...
-			for i, r := range TEXT_BUFFER {
+			for i, r := range TEXT_BUFFER.Lines {
 				if r.text == FOCUS {
 					f = i
 					break 
@@ -697,21 +710,21 @@ func drawScreen(screen tcell.Screen, theme Theme){
 						break } } } }
 		// negative values...
 		if f < 0 {
-			f = len(TEXT_BUFFER) + f }
+			f = len(TEXT_BUFFER.Lines) + f }
 		// normalize...
 		if f < 0 {
 			f = 0 }
-		if f > len(TEXT_BUFFER) {
-			f = len(TEXT_BUFFER) - 1 }
+		if f > len(TEXT_BUFFER.Lines) {
+			f = len(TEXT_BUFFER.Lines) - 1 }
 		// set...
-		if len(TEXT_BUFFER) < ROWS {
+		if len(TEXT_BUFFER.Lines) < ROWS {
 			ROW_OFFSET = 0
 			CURRENT_ROW = f
 		} else {
 			ROW_OFFSET = f - CURRENT_ROW }
 		// XXX revise -- can we overflow here???
-		if ROW_OFFSET + CURRENT_ROW >= len(TEXT_BUFFER) {
-			CURRENT_ROW = len(TEXT_BUFFER) - ROW_OFFSET }
+		if ROW_OFFSET + CURRENT_ROW >= len(TEXT_BUFFER.Lines) {
+			CURRENT_ROW = len(TEXT_BUFFER.Lines) - ROW_OFFSET }
 		FOCUS = "" }
 
 	// chrome detail themeing...
@@ -773,16 +786,16 @@ func drawScreen(screen tcell.Screen, theme Theme){
 		buf_row := i + ROW_OFFSET 
 
 		line := ""
-		if buf_row < len(TEXT_BUFFER) {
-			line = TEXT_BUFFER[buf_row].text }
+		if buf_row < len(TEXT_BUFFER.Lines) {
+			line = TEXT_BUFFER.Lines[buf_row].text }
 
 		// theme...
 		missing_style := false
 		if buf_row >= 0 && 
-				buf_row < len(TEXT_BUFFER) {
+				buf_row < len(TEXT_BUFFER.Lines) {
 			// current+selected...
 			style, missing_style = theme["default"] 
-			if TEXT_BUFFER[buf_row].selected &&
+			if TEXT_BUFFER.Lines[buf_row].selected &&
 					i == CURRENT_ROW {
 				style, missing_style = theme["current-selected"]
 				separator_style = style
@@ -791,7 +804,7 @@ func drawScreen(screen tcell.Screen, theme Theme){
 				style, missing_style = theme["current"]
 				separator_style = style
 			// mark selected...
-			} else if TEXT_BUFFER[buf_row].selected {
+			} else if TEXT_BUFFER.Lines[buf_row].selected {
 				style, missing_style = theme["selected"] } }
 		// set default style...
 		if ! missing_style {
@@ -882,13 +895,13 @@ func (this *Actions) Up() Result {
 func (this *Actions) Down() Result {
 	this.Action()
 	// within the text buffer...
-	if CURRENT_ROW + ROW_OFFSET < len(TEXT_BUFFER)-1 && 
+	if CURRENT_ROW + ROW_OFFSET < len(TEXT_BUFFER.Lines)-1 && 
 			// within screen...
 			CURRENT_ROW < ROWS-1 && 
 			// buffer smaller than screen...
-			(ROWS >= len(TEXT_BUFFER) ||
+			(ROWS >= len(TEXT_BUFFER.Lines) ||
 				// screen at end of buffer...
-				ROW_OFFSET + ROWS == len(TEXT_BUFFER) ||
+				ROW_OFFSET + ROWS == len(TEXT_BUFFER.Lines) ||
 				// at scroll threshold...
 				CURRENT_ROW < ROWS - SCROLL_THRESHOLD_BOTTOM - 1) {
 		CURRENT_ROW++ 
@@ -906,7 +919,7 @@ func (this *Actions) ScrollUp() Result {
 	return OK }
 func (this *Actions) ScrollDown() Result {
 	this.Action()
-	if ROW_OFFSET + ROWS < len(TEXT_BUFFER) {
+	if ROW_OFFSET + ROWS < len(TEXT_BUFFER.Lines) {
 		ROW_OFFSET++ } 
 	return OK }
 
@@ -921,10 +934,10 @@ func (this *Actions) PageUp() Result {
 	return OK }
 func (this *Actions) PageDown() Result {
 	this.Action()
-	if len(TEXT_BUFFER) < ROWS {
-		CURRENT_ROW = len(TEXT_BUFFER) - 1
+	if len(TEXT_BUFFER.Lines) < ROWS {
+		CURRENT_ROW = len(TEXT_BUFFER.Lines) - 1
 		return OK }
-	offset := len(TEXT_BUFFER) - ROWS
+	offset := len(TEXT_BUFFER.Lines) - ROWS
 	if ROW_OFFSET < offset {
 		ROW_OFFSET += ROWS 
 		if ROW_OFFSET > offset {
@@ -942,14 +955,14 @@ func (this *Actions) Top() Result {
 	return OK }
 func (this *Actions) Bottom() Result {
 	this.Action()
-	if len(TEXT_BUFFER) < ROWS {
-		CURRENT_ROW = len(TEXT_BUFFER) - 1
+	if len(TEXT_BUFFER.Lines) < ROWS {
+		CURRENT_ROW = len(TEXT_BUFFER.Lines) - 1
 		return OK }
-	offset := len(TEXT_BUFFER) - ROWS 
+	offset := len(TEXT_BUFFER.Lines) - ROWS 
 	if ROW_OFFSET == offset {
 		CURRENT_ROW = ROWS - 1
 	} else {
-		ROW_OFFSET = len(TEXT_BUFFER) - ROWS }
+		ROW_OFFSET = len(TEXT_BUFFER.Lines) - ROWS }
 	return OK }
 
 /*// XXX horizontal navigation...
@@ -984,7 +997,7 @@ func (this *Actions) RightEdge() Result {
 // selection...
 func GetSelection() []string {
 	selection := []string{}
-	for _, row := range TEXT_BUFFER {
+	for _, row := range TEXT_BUFFER.Lines {
 		if row.selected {
 			selection = append(selection, row.text) } }
 	return selection }
@@ -996,18 +1009,18 @@ func SetSelection(selection []string){
 	// clear old selection...
 	// NOTE: we can't avoid this loop as doing this in the main loop can 
 	//		potentially mess up already found results...
-	for _, row := range TEXT_BUFFER {
+	for _, row := range TEXT_BUFFER.Lines {
 		row.selected = false }
 	var i = 0
 	for _, line := range selection {
-		for i < len(TEXT_BUFFER) {
-			if line == TEXT_BUFFER[i].text {
-				TEXT_BUFFER[i].selected = true 
-				SELECTION = append(SELECTION, TEXT_BUFFER[i].text) } 
+		for i < len(TEXT_BUFFER.Lines) {
+			if line == TEXT_BUFFER.Lines[i].text {
+				TEXT_BUFFER.Lines[i].selected = true 
+				SELECTION = append(SELECTION, TEXT_BUFFER.Lines[i].text) } 
 			i++ }
 		// loop over TEXT_BUFFER in case we've got the selection out of 
 		// order...
-		if i >= len(TEXT_BUFFER) - 1 {
+		if i >= len(TEXT_BUFFER.Lines) - 1 {
 			i = 0 } } }
 func updateSelectionList(){
 	SELECTION = GetSelection() }
@@ -1016,7 +1029,7 @@ func (this *Actions) Select(rows ...int) Result {
 	if len(rows) == 0 {
 		rows = []int{CURRENT_ROW + ROW_OFFSET} }
 	for _, i := range rows {
-		TEXT_BUFFER[i].selected = true }
+		TEXT_BUFFER.Lines[i].selected = true }
 	updateSelectionList()
 	return OK }
 func (this *Actions) Deselect(rows ...int) Result {
@@ -1024,7 +1037,7 @@ func (this *Actions) Deselect(rows ...int) Result {
 	if len(rows) == 0 {
 		rows = []int{CURRENT_ROW + ROW_OFFSET} }
 	for _, i := range rows {
-		TEXT_BUFFER[i].selected = false }
+		TEXT_BUFFER.Lines[i].selected = false }
 	updateSelectionList()
 	return OK }
 func (this *Actions) SelectToggle(rows ...int) Result {
@@ -1032,28 +1045,28 @@ func (this *Actions) SelectToggle(rows ...int) Result {
 	if len(rows) == 0 {
 		rows = []int{CURRENT_ROW + ROW_OFFSET} }
 	for _, i := range rows {
-		if TEXT_BUFFER[i].selected {
-			TEXT_BUFFER[i].selected = false 
+		if TEXT_BUFFER.Lines[i].selected {
+			TEXT_BUFFER.Lines[i].selected = false 
 		} else {
-			TEXT_BUFFER[i].selected = true } }
+			TEXT_BUFFER.Lines[i].selected = true } }
 	updateSelectionList()
 	return OK }
 func (this *Actions) SelectAll() Result {
 	this.Action()
-	for i := 0; i < len(TEXT_BUFFER); i++ {
-		TEXT_BUFFER[i].selected = true } 
+	for i := 0; i < len(TEXT_BUFFER.Lines); i++ {
+		TEXT_BUFFER.Lines[i].selected = true } 
 	updateSelectionList()
 	return OK }
 func (this *Actions) SelectNone() Result {
 	this.Action()
-	for i := 0; i < len(TEXT_BUFFER); i++ {
-		TEXT_BUFFER[i].selected = false } 
+	for i := 0; i < len(TEXT_BUFFER.Lines); i++ {
+		TEXT_BUFFER.Lines[i].selected = false } 
 	SELECTION = []string{}
 	return OK }
 func (this *Actions) SelectInverse() Result {
 	this.Action()
 	rows := []int{}
-	for i := 0 ; i < len(TEXT_BUFFER) ; i++ {
+	for i := 0 ; i < len(TEXT_BUFFER.Lines) ; i++ {
 		rows = append(rows, i) }
 	return this.SelectToggle(rows...) }
 // can be:
@@ -1068,7 +1081,7 @@ func (this *Actions) SelectionStart() Result {
 	if this.last != "SelectionEnd" {
 		log.Println("NEW SELECTION", this.last)
 		SELECT_MOTION = "select"
-		if TEXT_BUFFER[CURRENT_ROW+ROW_OFFSET].selected {
+		if TEXT_BUFFER.Lines[CURRENT_ROW+ROW_OFFSET].selected {
 			SELECT_MOTION = "deselect" } }
 	log.Println("SELECTION", SELECT_MOTION)
 	this.Action()
@@ -1114,7 +1127,7 @@ func (this *Actions) Update() Result {
 			fmt.Println(err)
 			return Fail }
 		defer file.Close()
-		file2buffer(file) 
+		TEXT_BUFFER.WriteBuf(file) 
 	// command...
 	} else if LIST_CMD != "" {
 		res = callAction("<"+ LIST_CMD)
@@ -1128,7 +1141,7 @@ func (this *Actions) Update() Result {
 		if stat.Mode() & os.ModeNamedPipe != 0 {
 			// XXX do we need to close this??
 			//defer os.Stdin.Close()
-			file2buffer(os.Stdin) } }
+			TEXT_BUFFER.WriteBuf(os.Stdin) } }
 	SetSelection(selection)
 	return res }
 func (this *Actions) Refresh() Result {
@@ -1146,18 +1159,18 @@ var ACTIONS = Actions{}
 var ENV = map[string]string {}
 func getActiveList() []string {
 	if len(SELECTION) == 0 && 
-			len(TEXT_BUFFER) > 0 {
-		return []string{TEXT_BUFFER[ROW_OFFSET + CURRENT_ROW].text} }
+			len(TEXT_BUFFER.Lines) > 0 {
+		return []string{TEXT_BUFFER.Lines[ROW_OFFSET + CURRENT_ROW].text} }
 	return SELECTION }
 func makeEnv() map[string]string {
 	// pass data to command via env...
 	selected := ""
 	text := ""
 	// vars we need text for...
-	if len(TEXT_BUFFER) > 0 { 
-		if TEXT_BUFFER[CURRENT_ROW + ROW_OFFSET].selected {
+	if len(TEXT_BUFFER.Lines) > CURRENT_ROW + ROW_OFFSET { 
+		if TEXT_BUFFER.Lines[CURRENT_ROW + ROW_OFFSET].selected {
 			selected = "*" }
-		text = TEXT_BUFFER[CURRENT_ROW + ROW_OFFSET].text }
+		text = TEXT_BUFFER.Lines[CURRENT_ROW + ROW_OFFSET].text }
 	env := map[string]string{}
 	for k, v := range ENV {
 		if v != "" {
@@ -1175,7 +1188,7 @@ func makeEnv() map[string]string {
 		// XXX need a way to tell the command the current available width...
 		//"COLS": fmt.Sprint(CONTENT_COLS),
 		//"ROWS": fmt.Sprint(CONTENT_ROWS),
-		"LINES": fmt.Sprint(len(TEXT_BUFFER)),
+		"LINES": fmt.Sprint(len(TEXT_BUFFER.Lines)),
 		"LINE": fmt.Sprint(ROW_OFFSET + CURRENT_ROW + 1),
 		"INDEX": fmt.Sprint(ROW_OFFSET + CURRENT_ROW),
 		"TEXT": text,
@@ -1213,34 +1226,53 @@ var SPINNER = Spinner {
 
 // XXX need to rethink the external call API...
 type Command struct {
+	State string
 	Done chan bool
 	Kill chan bool
-	Stdout *bytes.Buffer 
-	Stderr *bytes.Buffer
+	Stdout *io.ReadCloser
+	Stderr *io.ReadCloser
+	Error error
 }
+// XXX should we use bytes.Buffer or cmd.StdoutPipe()/cmd.StderrPipe() ???
+// XXX should stdin be io.ReadCloser???
 func goCallCommand(code string, stdin io.Reader) Command {
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-
+	// build the command...
 	shell := strings.Fields(SHELL)
 	cmd := exec.Command(shell[0], append(shell[1:], code)...)
 	env := makeCallEnv(cmd)
+	// io...
 	cmd.Env = env
 	// XXX can we make these optional???
 	cmd.Stdin = stdin
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	// handle killing the process when needed...
+	stdout, _ := cmd.StdoutPipe()
+	// XXX for some reason we're not getting the error from the pipe...
+	//stderr, _ := cmd.StderrPipe()
+	stderr := &bytes.Buffer{}
+	cmd.Stderr = stderr
+	// output package...
 	done := make(chan bool)
 	kill := make(chan bool)
+	res := Command {
+		State: "pending",
+		Done: done,
+		Kill: kill,
+		Stdout: &stdout, 
+		//Stderr: &stderr,
+	} 
+
+	// handle killing the process when needed...
 	watchdogDone := make(chan bool)
 	go func(){
 		select {
 			case <-kill:
+				res.State = "killed"
 				if err := cmd.Process.Kill() ; err != nil {
 					log.Panic(err) } 
-			case <-watchdogDone:
+			case s := <-watchdogDone:
+				if s == true {
+					res.State = "done"
+				} else {
+					res.State = "failed" }
 				return } }()
 
 	// run...
@@ -1249,148 +1281,21 @@ func goCallCommand(code string, stdin io.Reader) Command {
 
 	// cleanup...
 	go func(){
+		done_state := true
 		if err := cmd.Wait(); err != nil {
 			log.Println("Error executing: \""+ code +"\"", err) 
-			log.Println("    ERR:", stderr.String())
-			//log.Println("    ENV:", env)
-			watchdogDone <- true
-			done <- false 
-			return }
-		watchdogDone <- true
-		done <- true }()
+			scanner := bufio.NewScanner(stderr)
+			lines := []string{}
+			for scanner.Scan() {
+				lines = append(lines, scanner.Text()) }
+			log.Println("    ERR:", strings.Join(lines, "\n"))
+			log.Println("    ENV:", env)
+			res.Error = err
+			done_state = false }
+		watchdogDone <- done_state
+		done <- done_state }()
 
-	return Command {
-		Done: done,
-		Kill: kill,
-		Stdout: &stdout, 
-		Stderr: &stderr,
-	} }
-func goCallAction(actions string) Result {
-	// XXX make split here a bit more cleaver:
-	//		- support ";"
-	//		- support quoting of separators, i.e. ".. \\\n .." and ".. \; .."
-	//		- ignore string literal content...
-	for _, action := range strings.Split(actions, "\n") {
-		//action = strings.Trim(action, " \t")
-		action = strings.TrimSpace(action)
-		if len(action) == 0 {
-			continue }
-
-		// NAME=ACTION...
-		name := ""
-		if isVarCommand.Match([]byte(action)) {
-			parts := regexp.MustCompile("=").Split(action, 2)
-			name, action = parts[0], parts[1] }
-		// empty value -> remove from env...
-		if name != "" && action == "" {
-			delete(ENV, name) 
-			continue }
-
-		// shell commands:
-		//		@ CMD	- simple/interactive command
-		//					NOTE: this uses os.Stdout...
-		//		! CMD	- stdout treated as env variables, one per line
-		//		< CMD	- stdout read into buffer
-		//		> CMD	- stdout printed to lines stdout
-		//		| CMD	- current line passed to stdin
-		//		XXX & CMD	- async command (XXX not implemented...)
-		// NOTE: commands can be combined.
-		prefixes := "@!<>|"
-		prefix := []rune{}
-		code := action
-		// split out the prefixes...
-		for strings.ContainsRune(prefixes, rune(code[0])) {
-			prefix = append(prefix, rune(code[0]))
-			code = strings.TrimSpace(string(code[1:])) }
-		if len(prefix) > 0 {
-
-			var stdin bytes.Buffer
-			if slices.Contains(prefix, '|') {
-				stdin.Write([]byte(TEXT_BUFFER[CURRENT_ROW].text)) }
-
-			// call the command...
-			var err error
-			var output string
-			var stdout bytes.Buffer
-			var done chan bool
-			if slices.Contains(prefix, '@') {
-				// XXX make this async...
-				err = callAtCommand(code, stdin)
-				done <- true
-			} else {
-				cmd := goCallCommand(code, &stdin)
-				done = cmd.Done
-				stdout = *cmd.Stdout }
-			if err != nil {
-				log.Println("Error:", err)
-				return Fail }
-
-			// strip trailing '\n'...
-			//if len(output) > 0 && output[len(output)-1] == '\n' {
-			//	output = string(output[:len(output)-1]) }
-
-			// list output...
-			// XXX stdout should be read line by line as it comes...
-			// XXX keep selection and current item and screen position 
-			//		relative to current..
-			if slices.Contains(prefix, '<') {
-				scanner := bufio.NewScanner(&stdout)
-				// XXX should this be a goroutine/async???
-				// XXX do the spinner....
-				TEXT_BUFFER = []Row{}
-				for scanner.Scan() {
-					if len(TEXT_BUFFER) == CURRENT_ROW || 
-							len(TEXT_BUFFER) == CURRENT_ROW + ROW_OFFSET {
-						SCREEN.Sync() }
-					line := scanner.Text()
-					if len(TEXT_BUFFER) == 0 {
-						output = line
-					} else {
-						output += "\n"+ line }
-					append2buffer(line) } 
-				SCREEN.Sync()
-				if len(TEXT_BUFFER) == 0 {
-					TEXT_BUFFER = append(TEXT_BUFFER, Row{}) } 
-			} else {
-				<-done
-				output = stdout.String() }
-			// output to stdout...
-			if slices.Contains(prefix, '>') {
-				STDOUT += output + "\n" }
-			// output to env...
-			if slices.Contains(prefix, '!') {
-				for _, str := range strings.Split(output, "\n") {
-					if strings.TrimSpace(str) == "" ||
-							! isVarCommand.Match([]byte(str)) {
-						continue }
-					res := strings.SplitN(str, "=", 1)
-					if len(res) != 2 {
-						continue }
-					ENV[strings.TrimSpace(res[0])] = strings.TrimSpace(res[1]) } }
-
-			// handle env...
-			if name != "" {
-				if name == "STDOUT" {
-					STDOUT += output + "\n"
-				} else {
-					ENV[name] = output } }
-
-		// ACTION...
-		} else {
-			method := reflect.ValueOf(&ACTIONS).MethodByName(action)
-			// test if action exists....
-			if ! method.IsValid() {
-				log.Println("Error: Unknown action:", action) 
-				continue }
-			res := method.Call([]reflect.Value{}) 
-			// exit if action returns false...
-			value, ok := res[0].Interface().(Result)
-			if ! ok {
-				// XXX
-			}
-			if value != OK {
-				return value } } }
-	return OK }
+	return res }
 
 
 // XXX needs revision -- feels hacky...
@@ -1454,14 +1359,13 @@ func callTransform(code string, line string) (string, error) {
 	stdout, _, err := callCommand(code, stdin)
 	return stdout.String(), err }
 var isVarCommand = regexp.MustCompile(`^\s*[a-zA-Z_]+=`)
-// XXX add support for async commands...
+//func goCallAction(actions string) Result {
 func callAction(actions string) Result {
 	// XXX make split here a bit more cleaver:
 	//		- support ";"
 	//		- support quoting of separators, i.e. ".. \\\n .." and ".. \; .."
 	//		- ignore string literal content...
 	for _, action := range strings.Split(actions, "\n") {
-		//action = strings.Trim(action, " \t")
 		action = strings.TrimSpace(action)
 		if len(action) == 0 {
 			continue }
@@ -1496,40 +1400,61 @@ func callAction(actions string) Result {
 
 			var stdin bytes.Buffer
 			if slices.Contains(prefix, '|') {
-				stdin.Write([]byte(TEXT_BUFFER[CURRENT_ROW].text)) }
+				stdin.Write([]byte(TEXT_BUFFER.Lines[CURRENT_ROW].text)) }
 
 			// call the command...
 			var err error
-			var output string
+			var stdout *io.ReadCloser//bytes.Buffer
+			//var done chan bool
+			lines := []string{}
 			if slices.Contains(prefix, '@') {
+				// XXX make this async...
 				err = callAtCommand(code, stdin)
+				//done <- true
 			} else {
-				var stdout bytes.Buffer
-				stdout, _, err = callCommand(code, stdin)
-				output = stdout.String() }
+				cmd := goCallCommand(code, &stdin)
+				err = cmd.Error
+				//done = cmd.Done
+				stdout = cmd.Stdout }
 			if err != nil {
 				log.Println("Error:", err)
 				return Fail }
 
-			// strip trailing '\n'...
-			if len(output) > 0 && output[len(output)-1] == '\n' {
-				output = string(output[:len(output)-1]) }
-
 			// list output...
-			// XXX stdout should be read line by line as it comes...
 			// XXX keep selection and current item and screen position 
 			//		relative to current..
 			if slices.Contains(prefix, '<') {
-				// ignore trailing \n's...
-				//for output[len(output)-1] == '\n' && len(output) > 0 {
-				//	output = string(output[:len(output)-1]) }
-				str2buffer(output) }
+				scanner := bufio.NewScanner(*stdout)
+				// XXX should this be a goroutine/async???
+				// XXX do the spinner....
+				//TEXT_BUFFER = LinesBuffer{}
+				TEXT_BUFFER.Use.Lock()
+				TEXT_BUFFER.Clear()
+				for scanner.Scan() {
+					/* XXX
+					// update screen as soon as we reach selection and 
+					// just after we fill the screen...
+					if len(TEXT_BUFFER.Lines) == CURRENT_ROW || 
+							len(TEXT_BUFFER.Lines) == CURRENT_ROW + ROW_OFFSET {
+						TEXT_BUFFER.Use.Unlock() }
+					//*/
+					line := scanner.Text()
+					lines = append(lines, line)
+					TEXT_BUFFER.Push(line) } 
+				if len(TEXT_BUFFER.Lines) == 0 {
+					TEXT_BUFFER.Push("") } 
+				TEXT_BUFFER.Use.Unlock()
+			// collect output data...
+			} else {
+				scanner := bufio.NewScanner(*stdout)
+				for scanner.Scan() {
+					lines = append(lines, scanner.Text()) } }
 			// output to stdout...
 			if slices.Contains(prefix, '>') {
-				STDOUT += output + "\n" }
+				STDOUT += strings.Join(lines, "\n") + "\n" }
 			// output to env...
 			if slices.Contains(prefix, '!') {
-				for _, str := range strings.Split(output, "\n") {
+				for _, str := range lines {
 					if strings.TrimSpace(str) == "" ||
 							! isVarCommand.Match([]byte(str)) {
 						continue }
@@ -1541,9 +1466,10 @@ func callAction(actions string) Result {
 			// handle env...
 			if name != "" {
 				if name == "STDOUT" {
-					STDOUT += output + "\n"
+					if ! slices.Contains(prefix, '>') {
+						STDOUT += strings.Join(lines, "\n") + "\n" }
 				} else {
-					ENV[name] = output } }
+					ENV[name] = strings.Join(lines, "\n") } }
 
 		// ACTION...
 		} else {
@@ -1649,14 +1575,14 @@ func handleScrollLimits(){
 		bottom_threshold = ROWS - top_threshold }
 	
 	// buffer smaller than screen -- keep at top...
-	if ROWS > len(TEXT_BUFFER) {
+	if ROWS > len(TEXT_BUFFER.Lines) {
 		ROW_OFFSET = 0
 		CURRENT_ROW -= ROW_OFFSET
 		return }
 
 	// keep from scrolling past the bottom of the screen...
-	if ROW_OFFSET + ROWS > len(TEXT_BUFFER) {
-		delta = ROW_OFFSET - (len(TEXT_BUFFER) - ROWS)
+	if ROW_OFFSET + ROWS > len(TEXT_BUFFER.Lines) {
+		delta = ROW_OFFSET - (len(TEXT_BUFFER.Lines) - ROWS)
 	// scroll to top threshold...
 	} else if CURRENT_ROW < top_threshold && 
 			ROW_OFFSET > 0 {
@@ -1668,8 +1594,8 @@ func handleScrollLimits(){
 			CURRENT_ROW > top_threshold {
 		delta = bottom_threshold - CURRENT_ROW
 		// saturate delta...
-		if delta < (ROW_OFFSET + ROWS) - len(TEXT_BUFFER) {
-			delta = (ROW_OFFSET + ROWS) - len(TEXT_BUFFER) } } 
+		if delta < (ROW_OFFSET + ROWS) - len(TEXT_BUFFER.Lines) {
+			delta = (ROW_OFFSET + ROWS) - len(TEXT_BUFFER.Lines) } } 
 
 	// do the update...
 	if delta != 0 {
@@ -1789,7 +1715,7 @@ func lines() Result {
 
 	if SELECTION_CMD != "" {
 		var stdin bytes.Buffer
-		stdin.Write([]byte(buffer2str()))
+		stdin.Write([]byte(TEXT_BUFFER.String()))
 		stdout, _, err := callCommand(SELECTION_CMD, stdin)
 		if err != nil {
 			log.Println("Error executing:", SELECTION_CMD) 
@@ -1874,7 +1800,7 @@ func lines() Result {
 						//log.Println("SCROLLBAR")
 						ROW_OFFSET = 
 							int((float64(row - TOP - top_offset) / float64(ROWS - 1)) * 
-							float64(len(TEXT_BUFFER) - ROWS))
+							float64(len(TEXT_BUFFER.Lines) - ROWS))
 					// second click in curent row...
 					// XXX should we have a timeout here???
 					// XXX this triggers on drag... is this a bug???
@@ -1885,8 +1811,8 @@ func lines() Result {
 						if res != OK {
 							return res }
 					// below list...
-					} else if row - TOP > len(TEXT_BUFFER) {
-						CURRENT_ROW = len(TEXT_BUFFER) - 1
+					} else if row - TOP > len(TEXT_BUFFER.Lines) {
+						CURRENT_ROW = len(TEXT_BUFFER.Lines) - 1
 					// list...
 					} else {
 						CURRENT_ROW = row - TOP - top_offset}
