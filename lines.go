@@ -7,9 +7,11 @@
 *	- live search/filtering
 *
 *
+* XXX BUG: keys are buffered and if a frame renders slowly all the 
+*		buffered keys are handled... should be dropped...
 * XXX BUG: span overflow indicator breaks for very long lines...
 *		to reproduce see:
-*			/home/f_lynx/Pictures/Instagram/
+*			scripts/fileBrowser ~/Pictures/Instagram/
 *		...the base overflow appears to be overriding span overflow...
 * XXX BUG: exiting from an interactive command kills the app...
 *		to reproduce:
@@ -535,7 +537,15 @@ func drawLine(col, row, width int,
 		str string, 
 		span_mode string, span_filler rune, span_separator rune, 
 		base_style tcell.Style, separator_style tcell.Style){
-	line := []rune(str)
+
+	// XXX HACK -- would dealing with parts be simpler???
+	parts := strings.SplitN(str, SPAN_MARKER, 2)
+	for i, part := range parts {
+		if len([]rune(part)) >= width-2 {
+			parts[i] = string([]rune(part)[:width-2]) } }
+	line := []rune(strings.Join(parts, SPAN_MARKER))
+
+	//line := []rune(str)
 
 	col_offset := 0
 	buf_offset := 0
@@ -1418,16 +1428,13 @@ func callAction(actions string) Result {
 			// call the command...
 			var err error
 			var stdout *io.ReadCloser//bytes.Buffer
-			//var done chan bool
 			lines := []string{}
 			if slices.Contains(prefix, '@') {
 				// XXX make this async...
 				err = callAtCommand(code, stdin)
-				//done <- true
 			} else {
 				cmd := goCallCommand(code, &stdin)
 				err = cmd.Error
-				//done = cmd.Done
 				stdout = cmd.Stdout }
 			if err != nil {
 				log.Println("Error:", err)
@@ -1458,7 +1465,7 @@ func callAction(actions string) Result {
 					TEXT_BUFFER.Push("") } 
 				TEXT_BUFFER.Use.Unlock()
 			// collect output data...
-			} else {
+			} else if(stdout != nil) {
 				scanner := bufio.NewScanner(*stdout)
 				for scanner.Scan() {
 					lines = append(lines, scanner.Text()) } }
