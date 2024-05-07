@@ -4,18 +4,24 @@ DIR=${1:-`pwd`}
 #PAGER="bat --paging=always"
 PAGER="bat --paging=always"
 
-# -t 'xargs -i bash -c "[ -d \"${DIR}/{}\" ] && printf \"{}/%%SPAN%8s\" \"<dir> \" || echo \"{}%SPAN\" "' \
-# -t 'xargs -i bash -c "[ -d \"${DIR}/{}\" ] && printf \"{}/%%SPAN%8s\" \"<dir> \" || echo \"{}%SPAN\""' \
-# -p 'sed -e "s/%SPAN$/%SPAN SIZE/"' \
 # NOTE: the ls's -l and -F options are extremely expensive -- more than 10x slower...
 # 	...this is relevant for very large numbers of files in a dir...
 DIR="$DIR" \
 PAGER="$PAGER" \
 	go run lines \
 		-l debug.log \
-		-c 'echo ".."; ls --group-directories-first --dereference-command-line-symlink-to-dir "$DIR" ' \
-		-p 'xargs -i bash -c "[ -d \"${DIR}/{}\" ] && printf \"{}/%%SPAN%8s\" \"<dir> \" || printf \"{}%%SPAN%8s\" \"\$( ls -lh \"${DIR}/{}\" | cut -d\" \" -f5 | sed -e \"s/\\([0-9]$\\)/\\1 /\" ) \""' \
-		-k F3:'@ [ -d "${LEFT_TEXT%[*/=>@|]}" ] || ${PAGER} "$DIR/${TEXT_LEFT%[*/=>@|]}"' \
+		-c 'echo ".." ; ls --group-directories-first --dereference-command-line-symlink-to-dir "$DIR" ' \
+		-t 'sed -e "s/$/%SPAN/"' \
+		-p 'sed -e "s/%SPAN$//" \
+			| xargs -i bash -c "\
+				[ -d \"${DIR}/{}\" ] \
+					&& printf -- \"{}/%%SPAN%8s\" \"<dir> \" \
+					|| printf -- \"{}%%SPAN%8s\" \"\$(\
+						ls -lh \"${DIR}/{}\" \
+							| cut -d\" \" -f5 \
+							| sed -e \"s/\\([0-9]$\\)/\\1 /\" \
+					) \""' \
+		-k F3:'@ [ -d "${LEFT_TEXT%[*/=>@|]}" ] || ${PAGER} "$DIR/${TEXT_LEFT%[*/=>@|]}"; true' \
 		-k Backspace2:'DIR=> realpath -s "$DIR/.." \n Update' \
 		-s 'DIR=> [ -d "${DIR}/${TEXT_LEFT%[*/=>@|]}" ] && realpath -s "$DIR/${TEXT_LEFT%[*/=>@|]}" || realpath -s "$DIR" \n Update' \
 		--span="-8" \
