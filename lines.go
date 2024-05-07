@@ -801,6 +801,8 @@ func drawScreen(screen tcell.Screen, theme Theme){
 	if STATUS_LINE {
 		rows-- }
 	// buffer...
+	var populating sync.WaitGroup
+	didPopulate := false
 	for i := 0 ; i < rows ; i++ {
 		separator_style := separator_style
 		buf_row := i + ROW_OFFSET 
@@ -845,17 +847,18 @@ func drawScreen(screen tcell.Screen, theme Theme){
 				line.text = str } 
 			if TRANSFORM_POPULATE_CMD != "" &&
 					! line.populated {
+				didPopulate = true
 				line.populated = true 
+				populating.Add(1)
 				cmd := goCallTransform(TRANSFORM_POPULATE_CMD, line.text)
 				// XXX need to cancel this if the TEXT_BUFFER changed...
 				go func(){
+					defer populating.Done()
 					scanner := bufio.NewScanner(*cmd.Stdout)
 					lines := []string{}
 					for scanner.Scan() {
 						lines = append(lines, scanner.Text()) }
-					line.text = strings.Join(lines, "\n") 
-					// XXX need to trigger screen update...
-				}() } }
+					line.text = strings.Join(lines, "\n") }() } }
 		drawLine(LEFT + BORDER, row, cols - left_offset - right_offset, 
 			line.text, 
 			SPAN_MODE, SPAN_FILLER, SPAN_SEPARATOR, 
@@ -872,6 +875,12 @@ func drawScreen(screen tcell.Screen, theme Theme){
 				c = SCROLLBAR_FG }
 			screen.SetContent(LEFT + cols - 1, row, c, nil, scroller_style) }
 		row++ }
+	// async update populated lines...
+	if didPopulate {
+		go func(){
+			populating.Wait()
+			drawScreen(screen, theme) 
+			screen.Sync() }() }
 
 	// status...
 	EXTEND_SEPARATOR_COL = -1
