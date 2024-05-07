@@ -186,6 +186,7 @@ func New() Lines {
 
 var LIST_CMD string
 var TRANSFORM_CMD string
+var TRANSFORM_POPULATE_CMD string
 var SELECTION_CMD string
 var INPUT_FILE string
 // XXX should this be a buffer???
@@ -268,6 +269,7 @@ var CURRENT_ROW = 0
 type Row struct {
 	selected bool
 	transformed bool
+	populated bool
 	text string
 }
 //type LinesBuffer []Row
@@ -833,14 +835,27 @@ func drawScreen(screen tcell.Screen, theme Theme){
 			screen.SetContent(LEFT, row, BORDER_LEFT, nil, border_style) }
 
 		// line...
-		if TRANSFORM_CMD != "" && 
-				line.text != "" &&
-				! line.transformed {
-			str, err := callTransform(TRANSFORM_CMD, line.text)
-			if err != nil {
-				str = line.text }
-			line.text = str
-			line.transformed = true }
+		if line.text != "" {
+			if TRANSFORM_CMD != "" && 
+					! line.transformed {
+				line.transformed = true 
+				str, err := callTransform(TRANSFORM_CMD, line.text)
+				if err != nil {
+					str = line.text }
+				line.text = str } 
+			if TRANSFORM_POPULATE_CMD != "" &&
+					! line.populated {
+				line.populated = true 
+				cmd := goCallTransform(TRANSFORM_POPULATE_CMD, line.text)
+				// XXX need to cancel this if the TEXT_BUFFER changed...
+				go func(){
+					scanner := bufio.NewScanner(*cmd.Stdout)
+					lines := []string{}
+					for scanner.Scan() {
+						lines = append(lines, scanner.Text()) }
+					line.text = strings.Join(lines, "\n") 
+					// XXX need to trigger screen update...
+				}() } }
 		drawLine(LEFT + BORDER, row, cols - left_offset - right_offset, 
 			line.text, 
 			SPAN_MODE, SPAN_FILLER, SPAN_SEPARATOR, 
@@ -1169,9 +1184,11 @@ func (this *Actions) Update() Result {
 			//defer os.Stdin.Close()
 			TEXT_BUFFER.WriteBuf(os.Stdin) } }
 	SetSelection(selection)
+	//this.Refresh()
 	return res }
 func (this *Actions) Refresh() Result {
-	SCREEN.Sync()
+	//SCREEN.Sync()
+	drawScreen(SCREEN, THEME)
 	return OK }
 
 func (this *Actions) Fail() Result {
@@ -1322,6 +1339,10 @@ func goCallCommand(code string, stdin io.Reader) Command {
 		done <- done_state }()
 
 	return res }
+func goCallTransform(code string, line string) Command {
+	var stdin bytes.Buffer
+	stdin.Write([]byte(line))
+	return goCallCommand(code, &stdin) }
 
 
 // XXX needs revision -- feels hacky...
@@ -1875,6 +1896,7 @@ var options struct {
 	// NOTE: this is not the same as filtering the input as it will be 
 	//		done lazily when the line reaches view.
 	TransformCommand string `short:"t" long:"transform" value-name:"CMD" env:"TRANSFORM" description:"Row transform command"`
+	TransformPopulateCommand string `short:"p" long:"transform-populate" value-name:"CMD" env:"TRANSFORM" description:"Row transform command"`
 
 	SelectionCommand string `short:"e" long:"selection" value-name:"ACTION" env:"REJECT" description:"Command to filter selection from input"`
 
@@ -1994,6 +2016,7 @@ func startup() Result {
 	INPUT_FILE = options.Pos.FILE
 	LIST_CMD = options.ListCommand
 	TRANSFORM_CMD = options.TransformCommand
+	TRANSFORM_POPULATE_CMD = options.TransformPopulateCommand
 	SELECTION_CMD = options.SelectionCommand
 
 	// focus/positioning...
