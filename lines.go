@@ -7,13 +7,6 @@
 *	- live search/filtering
 *
 *
-* XXX BUG: this works:
-*			$ scripts/fileBrowser "~/archive/img/"
-*		while opening: 
-*			$ scripts/fileBrowser "~/archive/"
-*		then navigating to the same dir fails...
-*		XXX this seems to be due to CURRENT_ROW + ROW_OFFSET being out 
-*			of range...
 * XXX BUG: partially failed command breaks the execution chain...
 *		...e.g. for 'echo 123 ; ls moo' if ls fails the stdout will be 
 *		smaller than expected and will break things...
@@ -24,12 +17,19 @@
 *		...can't reproduce...
 *
 *
+* XXX ASAP split evt2keys(..) into two functions:
+*		1) evt2keys(..) -- get data out of the key event...
+*		2) key2keys(mods []string, key) -- build list of combinations...
+* XXX ASAP FOCUS_CMD...
+* XXX ASAP call tranform action in custom env where TEXT* vars refer to 
+*		line being processed and not the focus line...
 * XXX ASAP need a way to set cursor position from command/action...
 *		...e.g. in scripts/fileBrowser when going up one dir we need to
 *		focus the old directory...
 * XXX ASAP handle/test mouse button actions -- e.g. shift+LClick, etc...
 * XXX ASAP handle paste (and copy) -- actions...
-* XXX option to click empty space upder the list not to select last line...
+* XXX make aliases uniform -- usable anywhere an action can be used...
+* XXX spinner...
 * XXX would be nice to set width/height to fit content...
 * XXX can we handle focus -- i.e. ignore first click if not focused...
 * XXX move globals to struct and make the thing reusable (refactoring)...
@@ -238,6 +238,8 @@ var STATUS_CMD string
 var STATUS_LINE = false
 var STATUS_LINE_FMT = ""
 
+var EMPTY_SPACE = "passive"
+
 // XXX should this be '|' ???
 var SPAN_MARKER = "%SPAN"
 var SPAN_MODE = "fit-right"
@@ -253,6 +255,7 @@ var SPAN_SEPARATOR = ' '
 var OVERFLOW_INDICATOR = '}'
 
 var FOCUS string
+var FOCUS_CMD string
 
 // current row relative to viewport...
 var CURRENT_ROW = 0
@@ -277,6 +280,8 @@ type LinesBuffer struct {
 	Width int
 }
 func (this *LinesBuffer) Clear() *LinesBuffer {
+	CURRENT_ROW = 0
+	ROW_OFFSET = 0
 	this.Lines = []Row{}
 	this.Width = 0
 	return this }
@@ -451,6 +456,37 @@ var BORDER_THEME = BorderTheme {
 	"shaded": "│┌─┐┃└━┛",
 	"shaded-double": "│┌─┐║└═╝",
 	"ascii": "|+-+|+-+",
+}
+
+
+// Spinner...
+type Spinner struct {
+	Frames string
+	State int
+}
+/* XXX
+func (this *Spinner) Spin() string {
+	ticker := time.NewTicker(100 * time.Millisecond)
+	for {
+		select {
+			case <-ticker.C:
+				// XXX
+		}
+	}
+	return this }
+func (this *Spinner) Stop() string {
+	return this }
+//*/
+func (this *Spinner) Step() string {
+	this.State++
+	if this.State >= len(this.Frames) {
+		this.State = 0 }
+	return string(this.Frames[this.State]) }
+func (this *Spinner) Done() {
+	this.State = -1 }
+var SPINNER = Spinner {
+	Frames: "-\\|/",
+	State: -1,
 }
 
 
@@ -1191,6 +1227,9 @@ func (this *Actions) Update() Result {
 			//defer os.Stdin.Close()
 			TEXT_BUFFER.WriteBuf(os.Stdin) } }
 	SetSelection(selection)
+	if FOCUS_CMD != "" {
+		// XXX generate FOCUS
+	}
 	//this.Refresh()
 	return res }
 func (this *Actions) Refresh() Result {
@@ -1254,24 +1293,6 @@ func makeCallEnv(cmd *exec.Cmd) []string {
 	for k, v := range makeEnv() {
 		env = append(env, k +"="+ v) }
 	return append(cmd.Environ(), env...) }
-
-
-// Spinner...
-type Spinner struct {
-	Frames string
-	State int
-}
-func (this *Spinner) Spin() string {
-	this.State++
-	if this.State >= len(this.Frames) {
-		this.State = 0 }
-	return string(this.Frames[this.State]) }
-func (this *Spinner) Done() {
-	this.State = -1 }
-var SPINNER = Spinner {
-	Frames: "-\\|/",
-	State: -1,
-}
 
 
 // XXX need to rethink the external call API...
@@ -1491,6 +1512,9 @@ func callAction(actions string) Result {
 				if len(TEXT_BUFFER.Lines) == 0 {
 					TEXT_BUFFER.Push("") } 
 				TEXT_BUFFER.Use.Unlock()
+				if FOCUS_CMD != "" {
+					// XXX set focus...
+				}
 			// collect output data...
 			} else if(stdout != nil) {
 				scanner := bufio.NewScanner(*stdout)
@@ -1607,6 +1631,12 @@ func evt2keys(evt tcell.EventKey) []string {
 	if shifted {
 		key_seq = append(key_seq, Key) }
 	key_seq = append(key_seq, key)
+
+	// special cases...
+	if key == Backspace1 || key == Backspace2 {
+		// XXX generate the same sequence but with "Backspace" as key...
+		// XXX
+	}
 
 	//log.Println("KEYS:", key, mods, key_seq)
 
@@ -1757,7 +1787,13 @@ func lines() Result {
 			panic(maybePanic) } }
 	defer quit()
 
-	// XXX should this be done in the event loop???
+	// show empty screen...
+	// XXX should also show spinner...
+	updateGeometry(screen)
+	drawScreen(screen, THEME)
+	screen.Show()
+
+	// load initial state...
 	ACTIONS.Update()
 
 	if SELECTION_CMD != "" {
@@ -1771,19 +1807,7 @@ func lines() Result {
 
 	for {
 		updateGeometry(screen)
-
-		/* XXX these are not used...
-		CONTENT_COLS, CONTENT_ROWS = COLS, ROWS
-		if SCROLLBAR > 0 {
-			CONTENT_COLS-- }
-		if TITLE_LINE {
-			CONTENT_ROWS-- }
-		if STATUS_LINE {
-			CONTENT_ROWS-- }
-		//*/
-
 		drawScreen(screen, THEME)
-
 		screen.Show()
 
 		evt := screen.PollEvent()
@@ -1812,7 +1836,8 @@ func lines() Result {
 				buttons := evt.Buttons()
 				// XXX handle double click...
 				// XXX handle modifiers...
-				if buttons & tcell.Button1 != 0 || buttons & tcell.Button2 != 0 {
+				if buttons & tcell.Button1 != 0 || 
+						buttons & tcell.Button2 != 0 {
 					col, row := evt.Position()
 					//HOVER_COL, HOVER_ROW = col, row
 					// ignore clicks outside the list...
@@ -1860,12 +1885,22 @@ func lines() Result {
 							return res }
 					// below list...
 					} else if row - TOP > len(TEXT_BUFFER.Lines) {
-						CURRENT_ROW = len(TEXT_BUFFER.Lines) - 1
+						if EMPTY_SPACE != "passive" {
+							CURRENT_ROW = len(TEXT_BUFFER.Lines) - 1 }
 					// list...
 					} else {
 						CURRENT_ROW = row - TOP - top_offset}
 					handleScrollLimits()
 
+					/* XXX MOUSE_KEY_HANDLERS...
+					button := "MouseRight"
+					if buttons & tcell.Button1 != 0 {
+						button = "MouseLeft" }
+					// XXX get modifiers...
+					// XXX
+					// XXX call callHandler(..)
+					// XXX
+					//*/
 
 				} else if buttons & tcell.WheelUp != 0 {
 					res := callHandler("WheelUp")
@@ -1909,8 +1944,8 @@ var options struct {
 
 	// XXX doc: to match a number explicitly escape it with '\\'...
 	Focus string `short:"f" long:"focus" value-name:"[N|STR]" env:"FOCUS" description:"Line number to focus"`
-	//FocusStr int `long:"focus-str" value-nmae:"STR" env:"FOCUS" description:"Line to focus"`
 	FocusRow int `long:"focus-row" value-name:"N" env:"FOCUS_ROW" description:"Screen line number of focused line"`
+	FocusCmd string `long:"focus-cmd" value-name:"CMD" env:"FOCUS_CMD" description:"Focus command"`
 
 	/* XXX
 	RowOffset int `long:"row-offset" value-name:"N" env:"ROW_OFFSET" description:"Row offset of visible lines"`
@@ -1960,6 +1995,8 @@ var options struct {
 		SpanFiller string `long:"span-filler" value-name:"CHR" env:"SPAN_FILLER" default:" " description:"Span fill character"`
 		SpanFillerTitle string `long:"span-filler-title" value-name:"CHR" env:"SPAN_FILLER_TITLE" default:" " description:"Title span fill character"`
 		SpanFillerStatus string `long:"span-filler-status" value-name:"CHR" env:"SPAN_FILLER_STATUS" default:" " description:"Status span fill character"`
+		// XXX not sure what should be the default...
+		EmptySpace string `long:"empty-space" choice:"passive" choice:"select-last" env:"EMPTY_SPACE" default:"passive" description:"Click in empty space below list action"`
 	} `group:"Chrome"`
 
 	Config struct {
@@ -2029,6 +2066,7 @@ func startup() Result {
 	// focus/positioning...
 	FOCUS = options.Focus
 	CURRENT_ROW = options.FocusRow
+	FOCUS_CMD = options.FocusCmd
 
 	if options.Chrome.Border ||  
 			! parser.FindOptionByLongName("border-chars").IsSetDefault() {
@@ -2080,6 +2118,7 @@ func startup() Result {
 	if ! parser.FindOptionByLongName("span-separator").IsSetDefault() {
 		SPAN_SEPARATOR = []rune(fmt.Sprintf("%1v", options.Chrome.SpanSeparator))[0] }
 	OVERFLOW_INDICATOR = []rune(options.Chrome.OverflowIndicator)[0]
+	EMPTY_SPACE = options.Chrome.EmptySpace
 	// defaults to .ScrollThreshold...
 	SCROLL_THRESHOLD_TOP = options.Config.ScrollThreshold
 	if ! parser.FindOptionByLongName("scroll-threshold-top").IsSetDefault() {
