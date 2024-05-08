@@ -1633,7 +1633,7 @@ func evt2keys(evt tcell.EventKey) []string {
 	key_seq = append(key_seq, key)
 
 	// special cases...
-	if key == Backspace1 || key == Backspace2 {
+	if key == "Backspace1" || key == "Backspace2" {
 		// XXX generate the same sequence but with "Backspace" as key...
 		// XXX
 	}
