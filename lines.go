@@ -17,6 +17,8 @@
 *		...can't reproduce...
 *
 *
+* XXX might be good to add a hisotry mechanism letting the user store/access 
+*		its state...
 * XXX ASAP split evt2keys(..) into two functions:
 *		1) evt2keys(..) -- get data out of the key event...
 *		2) key2keys(mods []string, key) -- build list of combinations...
@@ -1470,7 +1472,8 @@ func callAction(actions string) Result {
 		for strings.ContainsRune(prefixes, rune(code[0])) {
 			prefix = append(prefix, rune(code[0]))
 			code = strings.TrimSpace(string(code[1:])) }
-		if len(prefix) > 0 {
+		if name != "" || 
+				len(prefix) > 0 {
 
 			var stdin bytes.Buffer
 			if slices.Contains(prefix, '|') {
