@@ -17,22 +17,16 @@
 *		...can't reproduce...
 *
 *
-* XXX might be good to add a hisotry mechanism letting the user store/access 
-*		its state...
-* XXX ASAP split evt2keys(..) into two functions:
-*		1) evt2keys(..) -- get data out of the key event...
-*		2) key2keys(mods []string, key) -- build list of combinations...
-* XXX ASAP add key alternatives (a-la keyboard.js):
-*		Backspace1 | Backspace2 -> also check Backspace
-*		...
-* XXX ASAP FOCUS_CMD...
 * XXX ASAP call tranform action in custom env where TEXT* vars refer to 
 *		line being processed and not the focus line...
-* XXX ASAP need a way to set cursor position from command/action...
+* XXX ASAP MOUSE_KEY_HANDLERS handle/test mouse button actions -- e.g. 
+*		shift+LClick, etc...
+* XXX ASAP FOCUS_CMD need a way to set cursor position from command/action...
 *		...e.g. in scripts/fileBrowser when going up one dir we need to
 *		focus the old directory...
-* XXX ASAP handle/test mouse button actions -- e.g. shift+LClick, etc...
 * XXX ASAP handle paste (and copy) -- actions...
+* XXX might be good to add a hisotry mechanism letting the user store/access 
+*		its state...
 * XXX make aliases uniform -- usable anywhere an action can be used...
 * XXX spinner...
 * XXX would be nice to set width/height to fit content...
@@ -329,11 +323,30 @@ func (this *LinesBuffer) WriteBuf(buf io.Reader) *LinesBuffer {
 
 var TEXT_BUFFER LinesBuffer
 
-
 var SELECTION = []string{}
 
+type KeyAliases = map[string][]string
+var KEY_ALIASES = KeyAliases {
+	"Backspace1": []string{ 
+		"Backspace", 
+		"Bkspace",
+	},
+	"Backspace2": []string{ 
+		"Backspace",
+		"Bkspace",
+	},
+	"PgUp": []string{ 
+		"PageUp", 
+	},
+	"PgDn": []string{ 
+		"PageDown",
+		"PgDown",
+	},
+	"Space": []string{ 
+		" ",
+	},
+}
 // XXX load this from config...
-// XXX how do we represent other keys???
 type Keybindings map[string]string
 var KEYBINDINGS = Keybindings {
 	// aliases...
@@ -384,7 +397,7 @@ var KEYBINDINGS = Keybindings {
 		SelectionStart
 		PageUp
 		SelectEndCurrent`,
-	"shift+PgDn": `
+	"shift+PageDn": `
 		SelectionStart
 		PageDown
 		SelectEndCurrent`,
@@ -1465,7 +1478,7 @@ func callAction(actions string) Result {
 		if isVarCommand.Match([]byte(action)) {
 			parts := regexp.MustCompile("=").Split(action, 2)
 			name, action = parts[0], parts[1] 
-			// empty value -> remove from env...
+			// <NAME>= -> remove from env...
 			action = strings.TrimSpace(action)
 			if name != "" && 
 					(action == "" ||
@@ -1579,11 +1592,36 @@ func callHandler(key string) Result {
 			if _action, exists = KEYBINDINGS[_action] ; exists {
 				action = _action } }
 		return callAction(action) }
+	// call key alias...
+	parts := strings.Split(key, "+")
+	if aliases, exists := KEY_ALIASES[parts[len(parts)-1]] ; exists {
+		for _, key := range aliases {
+			res := callHandler(
+				strings.Join(append(parts[:len(parts)-1], key), "+"))
+			if res != Missing {
+				return res } } }
 	return Missing }
 
-
-func evt2keys(evt tcell.EventKey) []string {
+func key2keys(mods []string, key string, rest ...string) []string {
 	key_seq := []string{}
+	Key := ""
+	if len(rest) > 0 {
+		Key = rest[0] }
+
+	// XXX STUB -- still need 3 and 4 mod combinations for completeness...
+	//		...generate combinations + sort by length...
+	for i := 0; i < len(mods); i++ {
+		for j := i+1; j < len(mods); j++ {
+			key_seq = append(key_seq, mods[i] +"+"+ mods[j] +"+"+ key) } }
+	for _, m := range mods {
+		key_seq = append(key_seq, m +"+"+ key) }
+	// uppercase letter...
+	if Key != "" {
+		key_seq = append(key_seq, Key) }
+	key_seq = append(key_seq, key)
+
+	return key_seq }
+func evt2keys(evt tcell.EventKey) []string {
 	mods := []string{}
 	shifted := false
 
@@ -1632,27 +1670,7 @@ func evt2keys(evt tcell.EventKey) []string {
 	if !shifted && mod & tcell.ModShift != 0 {
 		mods = append(mods, "shift") }
 
-	// XXX STUB -- still need 3 and 4 mod combinations for completeness...
-	//		...generate combinations + sort by length...
-	for i := 0; i < len(mods); i++ {
-		for j := i+1; j < len(mods); j++ {
-			key_seq = append(key_seq, mods[i] +"+"+ mods[j] +"+"+ key) } }
-	for _, m := range mods {
-		key_seq = append(key_seq, m +"+"+ key) }
-	// uppercase letter...
-	if shifted {
-		key_seq = append(key_seq, Key) }
-	key_seq = append(key_seq, key)
-
-	// special cases...
-	if key == "Backspace1" || key == "Backspace2" {
-		// XXX generate the same sequence but with "Backspace" as key...
-		// XXX
-	}
-
-	//log.Println("KEYS:", key, mods, key_seq)
-
-	return key_seq }
+	return key2keys(mods, key, Key) }
 
 func handleScrollLimits(){
 	delta := 0

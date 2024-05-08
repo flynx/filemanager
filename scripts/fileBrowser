@@ -25,7 +25,7 @@ PAGER="$PAGER" \
 		-k DownDir:'DIR= [ -d "${DIR}/${TEXT_LEFT%[*/=>@|]}" ] && realpath -s "$DIR/${TEXT_LEFT%[*/=>@|]}" || realpath -s "$DIR" \n Update' \
 		-k View:'@ [ -d "${LEFT_TEXT%[*/=>@|]}" ] || ${PAGER} "$DIR/${TEXT_LEFT%[*/=>@|]}"; true' \
 		-k F3:'View' \
-		-k Backspace2:'UpDir' \
+		-k Backspace:'UpDir' \
 		-k Left:'UpDir' \
 		-k Right:'DownDir' \
 		-s 'DownDir' \
