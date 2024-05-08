@@ -1446,35 +1446,41 @@ func callAction(actions string) Result {
 		if len(action) == 0 {
 			continue }
 
-		// NAME=ACTION...
-		name := ""
-		if isVarCommand.Match([]byte(action)) {
-			parts := regexp.MustCompile("=").Split(action, 2)
-			name, action = parts[0], parts[1] }
-		// empty value -> remove from env...
-		if name != "" && action == "" {
-			delete(ENV, name) 
-			continue }
-
 		// shell commands:
-		//		@ CMD	- simple/interactive command
-		//					NOTE: this uses os.Stdout...
-		//		! CMD	- stdout treated as env variables, one per line
-		//		< CMD	- stdout read into buffer
-		//		> CMD	- stdout printed to lines stdout
-		//		| CMD	- current line passed to stdin
-		//		XXX & CMD	- async command (XXX not implemented...)
+		//		<NAME>=<CMD>	- command stdout read into env variable
+		//		@ <CMD>			- simple/interactive command
+		//		   					NOTE: this uses os.Stdout...
+		//		! <CMD>			- stdout treated as env variables, one per line
+		//		< <CMD>			- stdout read into buffer
+		//		> <CMD>			- stdout printed to lines stdout
+		//		| <CMD>			- current line passed to stdin
+		//		XXX & <CMD>		- async command (XXX not implemented...)
 		// NOTE: commands can be combined.
+		// NOTE: if prefix combined with <NAME>=<CMD> it must come after "="
 		prefixes := "@!<>|"
 		prefix := []rune{}
 		code := action
-		// split out the prefixes...
+		name := ""
+		// <NAME>=<CMD>...
+		if isVarCommand.Match([]byte(action)) {
+			parts := regexp.MustCompile("=").Split(action, 2)
+			name, action = parts[0], parts[1] 
+			// empty value -> remove from env...
+			action = strings.TrimSpace(action)
+			if name != "" && 
+					(action == "" ||
+						// prevent "<NAME>=<PREFIX>" with empty command 
+						// from messing going through the whole call dance...
+						(len(action) == 1 &&
+							strings.ContainsRune(prefixes, rune(action[0])))){
+				delete(ENV, name) 
+				continue } }
+		// <PREFIX><CMD>...
 		for strings.ContainsRune(prefixes, rune(code[0])) {
 			prefix = append(prefix, rune(code[0]))
 			code = strings.TrimSpace(string(code[1:])) }
 		if name != "" || 
 				len(prefix) > 0 {
-
 			var stdin bytes.Buffer
 			if slices.Contains(prefix, '|') {
 				stdin.Write([]byte(TEXT_BUFFER.Lines[CURRENT_ROW].text)) }
