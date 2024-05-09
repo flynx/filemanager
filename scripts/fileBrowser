@@ -6,12 +6,15 @@ PAGER="bat --paging=always"
 
 # NOTE: the ls's -l and -F options are extremely expensive -- more than 10x slower...
 # 	...this is relevant for very large numbers of files in a dir...
+# NOTE: we are double quiting '\n' in -k View:... and -k DownDir:... as the 
+# 	last '\' will be removed by lines and bash still needs an escaped '\n'
 # XXX need to sanatize file names -- quotes will break things...
 DIR="$DIR" \
 PAGER="$PAGER" \
 	go run lines \
 		-l debug.log \
-		-c 'echo ".." ; ls --group-directories-first --dereference-command-line-symlink-to-dir "$DIR" ' \
+		-c 'echo ".." \
+			ls --group-directories-first --dereference-command-line-symlink-to-dir "$DIR" ' \
 		-t 'sed -e "s/$/%SPAN/"' \
 		-p 'sed -e "s/%SPAN$//" \
 			| xargs -i bash -c "\
@@ -26,9 +29,13 @@ PAGER="$PAGER" \
 			DIR= realpath -s "$DIR/.."
 			Update' \
 		-k DownDir:'
-			DIR= [ -d "${DIR}/${TEXT_LEFT%[*/=>@|]}" ] && realpath -s "$DIR/${TEXT_LEFT%[*/=>@|]}" || realpath -s "$DIR"
+			DIR= [ -d "${DIR}/${TEXT_LEFT%[*/=>@|]}" ] \\
+				&& realpath -s "$DIR/${TEXT_LEFT%[*/=>@|]}" \\
+				|| realpath -s "$DIR"
 			Update' \
-		-k View:'@ [ -d "${LEFT_TEXT%[*/=>@|]}" ] || ${PAGER} "$DIR/${TEXT_LEFT%[*/=>@|]}"; true' \
+		-k View:'@ [ -d "${LEFT_TEXT%[*/=>@|]}" ] \\
+				|| ${PAGER} "$DIR/${TEXT_LEFT%[*/=>@|]}"; \\
+			true' \
 		-k F3:'View' \
 		-k Backspace:'UpDir' \
 		-k ctrl+Backspace:'

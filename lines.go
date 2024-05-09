@@ -1507,9 +1507,20 @@ var isVarCommand = regexp.MustCompile(`^\s*[a-zA-Z_]+=`)
 func callAction(actions string) Result {
 	// XXX make split here a bit more cleaver:
 	//		- support ";"
-	//		- support quoting of separators, i.e. ".. \\\n .." and ".. \; .."
+	//		- support quoting of separators, i.e. ".. \\\n .." and ".. \; .." -- DONE
 	//		- ignore string literal content...
-	for _, action := range strings.Split(actions, "\n") {
+	parts := strings.Split(actions, "\n") 
+	// merge back escaped "\n"'s...
+	for i := 0 ; i < len(parts) ; i++ {
+		part := parts[i]
+		trimmed_part := strings.TrimSpace(part)
+		if trimmed_part != "" && 
+				trimmed_part[len(trimmed_part)-1] == '\\' {
+			parts[i] = string(part[:len(part)-1]) +"\n"+ parts[i+1]
+			if i < len(parts) + 1 {
+				parts = append(parts[:i+1], parts[i+2:]...) } 
+			i-- } }
+	for _, action := range parts {
 		action = strings.TrimSpace(action)
 		if len(action) == 0 {
 			continue }
