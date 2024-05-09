@@ -7,12 +7,14 @@
 *	- live search/filtering
 *
 *
+* XXX BUG? for some reason shift+Click does not get handled at all...
 * XXX BUG: partially failed command breaks the execution chain...
 *		...e.g. for 'echo 123 ; ls moo' if ls fails the stdout will be 
 *		smaller than expected and will break things...
 *		...make the code tolerant to unexpected input...
 * XXX BUG: keys are buffered and if a frame renders slowly all the 
 *		buffered keys are handled... should be dropped...
+*		...need a slow updating example/test...
 * XXX BUG: scrollbar sometimes is off by 1 cell when scrolling down (small overflow)...
 *		...can't reproduce...
 *
@@ -207,6 +209,9 @@ var ROWS, COLS int
 //var CONTENT_ROWS, CONTENT_COLS int
 //var HOVER_COL, HOVER_ROW int
 
+var MOUSE_COL int
+var MOUSE_ROW int
+
 var COL_OFFSET = 0
 var ROW_OFFSET = 0
 
@@ -345,6 +350,18 @@ var KEY_ALIASES = KeyAliases {
 	"Space": []string{ 
 		" ",
 	},
+	"MouseLeft": []string{ 
+		"Click",
+		"LClick",
+		"LeftClick",
+	},
+	"MouseRight": []string{ 
+		"RClick",
+		"RightClick",
+	},
+	"MouseMiddle": []string{ 
+		"MClick",
+	},
 }
 // XXX load this from config...
 type Keybindings map[string]string
@@ -377,36 +394,46 @@ var KEYBINDINGS = Keybindings {
 	//"a": "A=! A=${A:-1} echo $(( A + 1 ))",
 	//"w": "! echo $A >> sum.log",
 
+	// Mouse...
+	"Click": "Focus",
+
 	// Selection...
-	// XXX should these be the same as shift-down or pure toggle (now)???
+	"ctrl+Click": `
+		Focus
+		SelectToggle`,
 	"Insert": `
 		SelectToggle
 		Down`,
 	"Space": `
 		SelectToggle
 		Down`,
+	// XXX for some reason shift+click is not even handled...
+	"shift+Click": `
+		SelectStart
+		Focus
+		SelectEndCurrent`,
 	"shift+Up": `
-		SelectionStart
+		SelectStart
 		Up
-		SelectionEnd`,
+		SelectEnd`,
 	"shift+Down": `
-		SelectionStart
+		SelectStart
 		Down
-		SelectionEnd`,
+		SelectEnd`,
 	"shift+PgUp": `
-		SelectionStart
+		SelectStart
 		PageUp
 		SelectEndCurrent`,
 	"shift+PageDn": `
-		SelectionStart
+		SelectStart
 		PageDown
 		SelectEndCurrent`,
 	"shift+Home": `
-		SelectionStart
+		SelectStart
 		Top
 		SelectEndCurrent`,
 	"shift+End": `
-		SelectionStart
+		SelectStart
 		Bottom
 		SelectEndCurrent`,
 	"ctrl+a": "SelectAll",
@@ -982,6 +1009,23 @@ func (this *Actions) Action() Result {
 		this.last = path[len(path)-1] }
 	return OK }
 
+// Debug helper...
+func (this *Actions) LOG() Result {
+	log.Println("ACTION: LOG")
+	return OK }
+
+func (this *Actions) Focus() Result {
+	// second click on same row...
+	if MOUSE_ROW == CURRENT_ROW {
+		res := callHandler("ClickSelected") 
+		if res == Missing {
+			res = OK }
+		if res != OK {
+			return res } }
+	// select row...
+	CURRENT_ROW = MOUSE_ROW 
+	return OK }
+
 // vertical navigation...
 func (this *Actions) Up() Result {
 	this.Action()
@@ -1179,8 +1223,8 @@ var SELECT_MOTION = ""
 var SELECT_MOTION_START int
 // XXX should these be usable standalone???
 // XXX not sure how/if to set toggle mode....
-func (this *Actions) SelectionStart() Result {
-	if this.last != "SelectionEnd" {
+func (this *Actions) SelectStart() Result {
+	if this.last != "SelectEnd" {
 		log.Println("NEW SELECTION", this.last)
 		SELECT_MOTION = "select"
 		if TEXT_BUFFER.Lines[CURRENT_ROW+ROW_OFFSET].selected {
@@ -1189,7 +1233,7 @@ func (this *Actions) SelectionStart() Result {
 	this.Action()
 	SELECT_MOTION_START = CURRENT_ROW + ROW_OFFSET
 	return OK }
-func (this *Actions) SelectionEnd(rows ...int) Result {
+func (this *Actions) SelectEnd(rows ...int) Result {
 	this.Action()
 	var start, end int
 	if len(rows) >= 2 {
@@ -1215,7 +1259,7 @@ func (this *Actions) SelectionEnd(rows ...int) Result {
 	this.Action()
 	return OK }
 func (this *Actions) SelectEndCurrent() Result {
-	return this.SelectionEnd(CURRENT_ROW + ROW_OFFSET) }
+	return this.SelectEnd(CURRENT_ROW + ROW_OFFSET) }
 
 // utility...
 // XXX revise behaviour of reupdates on pipe...
@@ -1598,8 +1642,12 @@ func callHandler(key string) Result {
 		for _, key := range aliases {
 			res := callHandler(
 				strings.Join(append(parts[:len(parts)-1], key), "+"))
-			if res != Missing {
-				return res } } }
+			if res == Missing {
+				log.Println("Key Unhandled:", key)
+				continue }
+			if res != OK {
+				return res } 
+			break } }
 	return Missing }
 
 func key2keys(mods []string, key string, rest ...string) []string {
@@ -1864,12 +1912,23 @@ func lines() Result {
 
 			case *tcell.EventMouse:
 				buttons := evt.Buttons()
+				// get modifiers...
+				// XXX this is almost the same as in evt2keys(..) can we generalize???
+				mod := evt.Modifiers()
+				mods := []string{}
+				if mod & tcell.ModCtrl != 0 {
+					mods = append(mods, "ctrl") }
+				if mod & tcell.ModAlt != 0 {
+					mods = append(mods, "alt") }
+				if mod & tcell.ModMeta != 0 {
+					mods = append(mods, "meta") }
+				if mod & tcell.ModShift != 0 {
+					mods = append(mods, "shift") }
 				// XXX handle double click...
 				// XXX handle modifiers...
 				if buttons & tcell.Button1 != 0 || 
 						buttons & tcell.Button2 != 0 {
 					col, row := evt.Position()
-					//HOVER_COL, HOVER_ROW = col, row
 					// ignore clicks outside the list...
 					if col < LEFT || col >= LEFT + WIDTH || 
 							row < TOP || row >= TOP + HEIGHT {
@@ -1904,35 +1963,38 @@ func lines() Result {
 						ROW_OFFSET = 
 							int((float64(row - TOP - top_offset) / float64(ROWS - 1)) * 
 							float64(len(TEXT_BUFFER.Lines) - ROWS))
-					// second click in curent row...
-					// XXX should we have a timeout here???
-					// XXX this triggers on drag... is this a bug???
-					} else if row - top_offset - TOP == CURRENT_ROW {
-						res := callHandler("ClickSelected") 
-						if res == Missing {
-							res = OK }
-						if res != OK {
-							return res }
-					// below list...
-					} else if row - TOP > len(TEXT_BUFFER.Lines) {
-						if EMPTY_SPACE != "passive" {
-							CURRENT_ROW = len(TEXT_BUFFER.Lines) - 1 }
-					// list...
+					// call click handler...
 					} else {
-						CURRENT_ROW = row - TOP - top_offset}
+						MOUSE_COL = col - LEFT - BORDER
+						MOUSE_ROW = row - TOP
+						if TITLE_LINE {
+							MOUSE_ROW-- }
+
+						// empty space below rows...
+						if MOUSE_ROW >= len(TEXT_BUFFER.Lines) {
+							if EMPTY_SPACE != "passive" {
+								CURRENT_ROW = len(TEXT_BUFFER.Lines) - 1 }
+							continue }
+
+						button := ""
+						// normalize buttons...
+						if buttons & tcell.Button1 != 0 {
+							button = "MouseLeft" }
+						if buttons & tcell.Button2 != 0 {
+							button = "MouseRight" }
+						if buttons & tcell.Button3 != 0 {
+							button = "MouseMiddle" }
+						for _, key := range key2keys(mods, button) {
+							res := callHandler(key) 
+							if res == Missing {
+								continue }
+							if res != OK {
+								return res } 
+							break } }
 					handleScrollLimits()
 
-					/* XXX MOUSE_KEY_HANDLERS...
-					button := "MouseRight"
-					if buttons & tcell.Button1 != 0 {
-						button = "MouseLeft" }
-					// XXX get modifiers...
-					// XXX
-					// XXX call callHandler(..)
-					// XXX
-					//*/
-
 				} else if buttons & tcell.WheelUp != 0 {
+					// XXX add mods...
 					res := callHandler("WheelUp")
 					if res == Missing {
 						res = OK }
@@ -1940,6 +2002,7 @@ func lines() Result {
 						return res }
 
 				} else if buttons & tcell.WheelDown != 0 {
+					// XXX add mods...
 					res := callHandler("WheelDown")
 					if res == Missing {
 						res = OK }

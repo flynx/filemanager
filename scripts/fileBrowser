@@ -6,6 +6,7 @@ PAGER="bat --paging=always"
 
 # NOTE: the ls's -l and -F options are extremely expensive -- more than 10x slower...
 # 	...this is relevant for very large numbers of files in a dir...
+# XXX need to sanatize file names -- quotes will break things...
 DIR="$DIR" \
 PAGER="$PAGER" \
 	go run lines \
@@ -32,6 +33,5 @@ PAGER="$PAGER" \
 		--span="-8" \
 		--span-separator="│" \
 		--title ' $DIR %SPAN' \
-		-b \
-		#> /dev/null
+		-b
 
