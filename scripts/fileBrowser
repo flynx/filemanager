@@ -4,15 +4,21 @@ DIR=${1:-`pwd`}
 #PAGER="less"
 PAGER="bat --paging=always"
 
-# NOTE: the ls's -l and -F options are extremely expensive -- more than 10x slower...
+# NOTE: the ls's -l and -F options are extremely expensive -- more than 
+# 	10x slower...
 # 	...this is relevant for very large numbers of files in a dir...
+# XXX the Backspace is triggered on ctrl-Backspace, not sure if this is 
+# 	correct...
 # XXX need to sanatize file names -- quotes will break things...
 DIR="$DIR" \
 PAGER="$PAGER" \
 	go run lines \
 		-l debug.log \
 		-c 'echo ".." ; \
-			ls --group-directories-first --dereference-command-line-symlink-to-dir "$DIR" ' \
+			ls \
+				--group-directories-first \
+				--dereference-command-line-symlink-to-dir \
+				"$DIR" ' \
 		-t 'sed -e "s/$/%SPAN/"' \
 		-p 'sed -e "s/%SPAN$//" \
 			| xargs -i bash -c "\
