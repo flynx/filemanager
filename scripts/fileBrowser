@@ -37,8 +37,8 @@ PAGER="$PAGER" \
 				|| ${PAGER} "$DIR/${TEXT_LEFT%[*/=>@|]}"; \\
 			true' \
 		-k F3:'View' \
-		-k Backspace:'UpDir' \
-		-k ctrl+Backspace:'
+		-k Backspace2:'UpDir' \
+		-k Backspace:'
 			DIR= echo "/"
 			Update' \
 		-k Left:'UpDir' \

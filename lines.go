@@ -343,6 +343,8 @@ var SELECTION = []string{}
 
 type KeyAliases = map[string][]string
 var KEY_ALIASES = KeyAliases {
+	/* XXX is this correct??
+	//		...for some reason ctrl+Backspace2 is triggered as Backspace...
 	"Backspace1": []string{ 
 		"Backspace", 
 		"Bkspace",
@@ -351,6 +353,7 @@ var KEY_ALIASES = KeyAliases {
 		"Backspace",
 		"Bkspace",
 	},
+	//*/
 	"PgUp": []string{ 
 		"PageUp", 
 	},
