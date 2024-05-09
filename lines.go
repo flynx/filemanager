@@ -7,7 +7,9 @@
 *	- live search/filtering
 *
 *
+* XXX BUG? ctrl+Backspace for some reason is not triggered correctly...
 * XXX BUG? for some reason shift+Click does not get handled at all...
+*		...seems to be a problem in terminal/tty...
 * XXX BUG: partially failed command breaks the execution chain...
 *		...e.g. for 'echo 123 ; ls moo' if ls fails the stdout will be 
 *		smaller than expected and will break things...
@@ -54,6 +56,16 @@
 * XXX span overflow vs. line overflow is fixed in a hackish way -- revise...
 *		would splitting at SPAN_MARKER and handling chunks be simpler??
 *		see notes in: drawLine(..)
+* XXX flags: can we set default values from variables???
+*		...doing ` ... `+ VAR +` ... ` breaks things...
+* XXX flags: formatting the config string breaks things...
+*		e.g.:
+*			ListCommand string `
+*				short:"c" 
+*				long:"cmd" 
+*				value-name:"CMD" 
+*				env:"CMD" 
+*				description:"List command"`
 *
 */
 
@@ -2011,16 +2023,6 @@ func lines() Result {
 
 
 // command line args...
-// XXX flags: can we set default values from variables???
-//		...doing ` ... `+ VAR +` ... ` breaks things...
-// XXX flags: formatting the config string breaks things...
-//		e.g.:
-//			ListCommand string `
-//				short:"c" 
-//				long:"cmd" 
-//				value-name:"CMD" 
-//				env:"CMD" 
-//				description:"List command"`
 var options struct {
 	Pos struct {
 		FILE string
