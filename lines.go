@@ -1669,11 +1669,10 @@ func callHandler(key string) Result {
 			res := callHandler(
 				strings.Join(append(parts[:len(parts)-1], key), "+"))
 			if res == Missing {
-				log.Println("Key Unhandled:", key)
+				log.Println("Key Unhandled:",
+					strings.Join(append(parts[:len(parts)-1], key), "+"))
 				continue }
-			if res != OK {
-				return res } 
-			break } }
+			return res } }
 	return Missing }
 
 func key2keys(mods []string, key string, rest ...string) []string {
