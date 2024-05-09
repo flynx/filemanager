@@ -1519,7 +1519,7 @@ func callAction(actions string) Result {
 		trimmed_part := strings.TrimSpace(part)
 		if trimmed_part != "" && 
 				trimmed_part[len(trimmed_part)-1] == '\\' {
-			parts[i] = string(part[:len(part)-1]) +"\n"+ parts[i+1]
+			parts[i] += "\n"+ parts[i+1]
 			if i < len(parts) + 1 {
 				parts = append(parts[:i+1], parts[i+2:]...) } 
 			i-- } }
