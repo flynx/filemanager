@@ -15,9 +15,7 @@ PAGER="$PAGER" \
 		-l debug.log \
 		-c "find "$DIR" "$FIND_ARGS" \
 			| sed -e 's/^${DIR//\//\\/}\///'" \
-		-t 'sed \
-			-e "s/^'${DIR//\//\\/}'\///" \
-			-e "s/$/%SPAN/"' \
+		-t 'sed -e "s/^'${DIR//\//\\/}'\/\(.*\)$/\1%SPAN/"' \
 		-p 'sed -e "s/%SPAN$//" \
 			| xargs -i bash -c "\
 				[ -d \"${DIR}/{}\" ] \
