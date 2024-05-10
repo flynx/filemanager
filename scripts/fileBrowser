@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 
 DIR=${1:-`pwd`}
-#PAGER="less"
-PAGER="bat --paging=always"
+
+#PAGER=${PAGER:-"less"}
+PAGER=${PAGER:-"bat --paging=always"}
 
 # NOTE: the ls's -l and -F options are extremely expensive -- more than 
 # 	10x slower...

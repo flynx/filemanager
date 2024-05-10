@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+
+DIR=${1:-`pwd`}
+shift 1
+# XXX need to keep these from expanding when we pass them to find below...
+# 	...ex: scripts/findBrowser . -name '*.go'
+FIND_ARGS=$@
+
+#PAGER=${PAGER:-"less"}
+PAGER=${PAGER:-"bat --paging=always"}
+
+DIR="$DIR" \
+PAGER="$PAGER" \
+	go run lines \
+		-l debug.log \
+		-c "find "$DIR" "$FIND_ARGS" \
+			| sed -e 's/^${DIR//\//\\/}\///'" \
+		-t 'sed \
+			-e "s/^'${DIR//\//\\/}'\///" \
+			-e "s/$/%SPAN/"' \
+		-p 'sed -e "s/%SPAN$//" \
+			| xargs -i bash -c "\
+				[ -d \"${DIR}/{}\" ] \
+					&& printf -- \"{}/%%SPAN%8s\" \"<dir> \" \
+					|| printf -- \"{}%%SPAN%8s\" \"\$(\
+						ls -lh \"${DIR}/{}\" \
+							| cut -d\" \" -f5 \
+							| sed -e \"s/\\([0-9]$\\)/\\1 /\" \
+					) \""' \
+		-k ShowInDir:'' \
+		-k Open:'' \
+		-k View:'
+			@ [ -d "${LEFT_TEXT%[*/=>@|]}" ] \
+				|| ${PAGER} "$DIR/${TEXT_LEFT%[*/=>@|]}"; \
+			true' \
+		-k F3:'View' \
+		--span="-8" \
+		--span-separator="│" \
+		--title ' $DIR %SPAN' \
+		-b
+
