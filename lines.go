@@ -535,6 +535,7 @@ func (this *Spinner) String() string {
 		return "" } 
 	return string([]rune(this.Frames)[this.State]) }
 func (this *Spinner) Start() {
+	// keep only one timer instance...
 	if this.running > 0 {
 		this.running++ 
 		return }
@@ -542,6 +543,7 @@ func (this *Spinner) Start() {
 	if this.State < 0 {
 		this.Step() }
 	ticker := time.NewTicker(200 * time.Millisecond)
+	defer ticker.Stop()
 	for {
 		// XXX should we do a separate stop channel??
 		//		...i.e. should we decouple state and auto-advance...
@@ -1980,7 +1982,7 @@ func lines() Result {
 			SetSelection(strings.Split(stdout.String(), "\n")) } }
 
 	// XXX TESTING...
-	//go SPINNER.Start()
+	go SPINNER.Start()
 
 	for {
 		updateGeometry(screen)
