@@ -527,6 +527,7 @@ type Spinner struct {
 	Frames string
 	State int
 
+	running int
 	stop chan bool
 }
 func (this *Spinner) String() string {
@@ -534,6 +535,10 @@ func (this *Spinner) String() string {
 		return "" } 
 	return string([]rune(this.Frames)[this.State]) }
 func (this *Spinner) Start() {
+	if running > 0 {
+		this.running++ 
+		return }
+	this.running++ 
 	if this.State < 0 {
 		this.Step() }
 	ticker := time.NewTicker(200 * time.Millisecond)
@@ -548,7 +553,15 @@ func (this *Spinner) Start() {
 					break }
 				this.Step() } } }
 func (this *Spinner) Stop() *Spinner {
-	this.stop <- true 
+	if this.running == 1 {
+		return this.StopAll() }
+	if this.running > 0 {
+		this.running-- }
+	return this }
+func (this *Spinner) StopAll() *Spinner {
+	if this.running > 0 {
+		this.running = 0
+		this.stop <- true }
 	return this }
 // XXX should this draw the whole screen???
 //		...might be nice to be able to only update the chrome (title/status)
