@@ -34,6 +34,6 @@ PAGER="$PAGER" \
 		-k F3:'View' \
 		--span="-8" \
 		--span-separator="│" \
-		--title ' $DIR %SPAN' \
+		--title ' $DIR %SPAN%SPINNER' \
 		-b
 

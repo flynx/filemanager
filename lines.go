@@ -79,6 +79,7 @@ import "os"
 import "os/exec"
 import "io"
 import "sync"
+import "time"
 //import "path"
 import "fmt"
 import "log"
@@ -525,29 +526,68 @@ var BORDER_THEME = BorderTheme {
 type Spinner struct {
 	Frames string
 	State int
+
+	stop chan bool
 }
-/* XXX
-func (this *Spinner) Spin() string {
-	ticker := time.NewTicker(100 * time.Millisecond)
+func (this *Spinner) String() string {
+	if this.State < 0 {
+		return "" } 
+	return string([]rune(this.Frames)[this.State]) }
+func (this *Spinner) Start() {
+	if this.State < 0 {
+		this.Step() }
+	ticker := time.NewTicker(200 * time.Millisecond)
 	for {
+		// XXX should we do a separate stop channel??
+		//		...i.e. should we decouple state and auto-advance...
 		select {
+			case <-this.stop:
+				break
 			case <-ticker.C:
-				// XXX
-		}
-	}
+				if this.State < 0 {
+					break }
+				this.Step() } } }
+func (this *Spinner) Stop() *Spinner {
+	this.stop <- true 
 	return this }
-func (this *Spinner) Stop() string {
-	return this }
-//*/
+// XXX should this draw the whole screen???
+//		...might be nice to be able to only update the chrome (title/status)
 func (this *Spinner) Step() string {
 	this.State++
-	if this.State >= len(this.Frames) {
+	if this.State >= len([]rune(this.Frames)) {
 		this.State = 0 }
-	return string(this.Frames[this.State]) }
-func (this *Spinner) Done() {
-	this.State = -1 }
+	// XXX should this draw the whole screen???
+	ACTIONS.Refresh()
+	return this.String() }
+func (this *Spinner) Done() *Spinner {
+	this.Stop()
+	this.State = -1 
+	return this }
+
+var SPINNER_STYLES = []string{
+	"┤┘┴└├┌┬┐",
+	"⠁⠂⠄⡀⢀⠠⠐⠈",
+	"⡀⡁⡂⡃⡄⡅⡆⡇⡈⡉⡊⡋⡌⡍⡎⡏⡐⡑⡒⡓⡔⡕⡖⡗⡘⡙⡚⡛⡜⡝⡞⡟⡠⡡⡢⡣⡤⡥⡦⡧⡨⡩⡪⡫⡬⡭⡮⡯⡰⡱⡲⡳⡴⡵⡶⡷⡸⡹⡺⡻⡼⡽⡾⡿⢀⢁⢂⢃⢄⢅⢆⢇⢈⢉⢊⢋⢌⢍⢎⢏⢐⢑⢒⢓⢔⢕⢖⢗⢘⢙⢚⢛⢜⢝⢞⢟⢠⢡⢢⢣⢤⢥⢦⢧⢨⢩⢪⢫⢬⢭⢮⢯⢰⢱⢲⢳⢴⢵⢶⢷⢸⢹⢺⢻⢼⢽⢾⢿⣀⣁⣂⣃⣄⣅⣆⣇⣈⣉⣊⣋⣌⣍⣎⣏⣐⣑⣒⣓⣔⣕⣖⣗⣘⣙⣚⣛⣜⣝⣞⣟⣠⣡⣢⣣⣤⣥⣦⣧⣨⣩⣪⣫⣬⣭⣮⣯⣰⣱⣲⣳⣴⣵⣶⣷⣸⣹⣺⣻⣼⣽⣾⣿",
+	"⣾⣽⣻⢿⡿⣟⣯⣷",
+	"⠋⠙⠚⠒⠂⠂⠒⠲⠴⠦⠖⠒⠐⠐⠒⠓⠋",
+	"⢄⢂⢁⡁⡈⡐⡠",
+	"⠁⠂⠄⡀⢀⠠⠐⠈",
+	"⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏", // *
+	"☱☲☴☲",
+	"◰◳◲◱",
+	"◇◈◆",
+	"◐◓◑◒", // *
+	"◴◷◶◵", // *
+	"■□▪▫", // *
+	"▌▀▐▄",
+	"▖▘▝▗",
+	"│┌─┒┃┕━┛",
+	"-\\|/",
+	"v<^>",
+}
+// XXX add spinner styles...
 var SPINNER = Spinner {
-	Frames: "-\\|/",
+	Frames: "■□▪▫", // *
 	State: -1,
 }
 
@@ -612,6 +652,8 @@ func populateTemplateLine(str string, cmd string) string {
 				// otherwise complete...
 				case string(SPAN_MARKER[1:]):
 					val = SPAN_MARKER
+				case "SPINNER":
+					val = SPINNER.String()
 				case "CMD":
 					if cmd != "" {
 						val, err = callTransform(cmd, str)
@@ -774,6 +816,14 @@ func drawLine(col, row, width int,
 
 		// draw the rune...
 		SCREEN.SetContent(screen_col, row, c, nil, style) } }
+
+
+// populate the lines...
+// XXX skip populated lines...
+// XXX exit when text changes...
+// XXX see population code below...
+func populateLines(){
+}
 
 // XXX how do we handle borders when title/status does not contain %SPAN
 //			$ ls | ./lines --title ' moo ' --border
@@ -944,16 +994,21 @@ func drawScreen(screen tcell.Screen, theme Theme){
 			if TRANSFORM_POPULATE_CMD != "" &&
 					! line.populated {
 				didPopulate = true
-				line.populated = true 
 				populating.Add(1)
 				cmd := goCallTransform(TRANSFORM_POPULATE_CMD, line.text)
-				// XXX need to cancel this if the TEXT_BUFFER changed...
 				go func(){
+					// skip if already populated or...
+					if line.populated == true || 
+							// TEXT_BUFFER changed...
+							buf_row >= len(TEXT_BUFFER.Lines) ||
+							line != &TEXT_BUFFER.Lines[buf_row] {
+						return }
 					defer populating.Done()
 					scanner := bufio.NewScanner(*cmd.Stdout)
 					lines := []string{}
 					for scanner.Scan() {
 						lines = append(lines, scanner.Text()) }
+					line.populated = true 
 					line.text = strings.Join(lines, "\n") }() } }
 		drawLine(LEFT + BORDER, row, cols - left_offset - right_offset, 
 			line.text, 
@@ -1314,6 +1369,7 @@ func (this *Actions) Update() Result {
 func (this *Actions) Refresh() Result {
 	//SCREEN.Sync()
 	drawScreen(SCREEN, THEME)
+	SCREEN.Show()
 	return OK }
 
 func (this *Actions) Fail() Result {
@@ -1910,6 +1966,9 @@ func lines() Result {
 		} else {
 			SetSelection(strings.Split(stdout.String(), "\n")) } }
 
+	// XXX TESTING...
+	//go SPINNER.Start()
+
 	for {
 		updateGeometry(screen)
 		drawScreen(screen, THEME)
@@ -2082,7 +2141,7 @@ var options struct {
 	} `group:"Keyboard"`
 
 	Chrome struct {
-		Title string `long:"title" value-name:"STR" env:"TITLE" default:"%CMD%SPAN" description:"Title format"`
+		Title string `long:"title" value-name:"STR" env:"TITLE" default:"%CMD%SPAN%SPINNER" description:"Title format"`
 		TitleCommand string `long:"title-cmd" value-name:"CMD" env:"TITLE_CMD" description:"Title command"`
 		Status string `long:"status" value-name:"STR" env:"STATUS" default:"%CMD%SPAN $LINE/$LINES " description:"Status format"`
 		StatusCommand string `long:"status-cmd" value-name:"CMD" env:"STATUS_CMD" description:"Status command"`
@@ -2092,8 +2151,7 @@ var options struct {
 		Border bool `short:"b" long:"border" env:"BORDER" description:"Toggle border on"`
 		//BorderChars string `long:"border-chars" env:"BORDER_CHARS" default:"│┌─┐│└─┘" description:"Border characters"`
 		BorderChars string `long:"border-chars" env:"BORDER_CHARS" default:"single" description:"Border theme name or border characters"`
-		// XXX
-		//SpinnerChars string `long:"spinner-chars" env:"SPINNER_CHARS" default:"\|/-" description:"Spinner characters"`
+		SpinnerChars string `long:"spinner-chars" env:"SPINNER_CHARS" default:"10" description:"Spinner theme number or spinner characters"`
 		Span string `long:"span" value-name:"[MODE|SIZE]" env:"SPAN" default:"fit-right" description:"Line spanning mode/size"`
 		// XXX at this point this depends on leading '%'...
 		//SpanMarker string `long:"span-marker" value-name:"STR" env:"SPAN_MARKER" default:"%SPAN" description:"Marker to use to span a line"`
@@ -2124,6 +2182,7 @@ var options struct {
 		ListActions bool `long:"list-actions" description:"List available actions"`
 		ListThemeable bool `long:"list-themeable" description:"List available themable element names"`
 		ListBorderThemes bool `long:"list-border-themes" description:"List border theme names"`
+		ListSpinners bool `long:"list-spinners" description:"List spinner styles"`
 		ListColors bool `long:"list-colors" description:"List usable color names"`
 	} `group:"Introspection"`
 }
@@ -2160,6 +2219,10 @@ func startup() Result {
 		slices.Sort(names)
 		for _, name := range names {
 			fmt.Printf("    %-"+ fmt.Sprint(l) +"v \"%v\"\n", name, BORDER_THEME[name]) }
+		return OK }
+	if options.Introspection.ListSpinners {
+		for i, style := range SPINNER_STYLES {
+			fmt.Printf("    %3v \"%v\"\n", i, style) }
 		return OK }
 	if options.Introspection.ListColors {
 		for name, _ := range tcell.ColorNames {
@@ -2203,6 +2266,11 @@ func startup() Result {
 			"ll": border_chars[5],	
 			"lr": border_chars[7],	
 		} }
+
+	if i, err := strconv.Atoi(options.Chrome.SpinnerChars); err != nil {
+		SPINNER.Frames = options.Chrome.SpinnerChars
+	} else {
+		SPINNER.Frames = SPINNER_STYLES[i] }
 
 	TITLE_LINE_FMT = options.Chrome.Title
 	TITLE_LINE = TITLE_LINE_FMT != ""

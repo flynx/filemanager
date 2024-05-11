@@ -52,6 +52,6 @@ PAGER="$PAGER" \
 		-s 'DownDir' \
 		--span="-8" \
 		--span-separator="│" \
-		--title ' $DIR %SPAN' \
+		--title ' $DIR %SPAN%SPINNER' \
 		-b
 
