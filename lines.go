@@ -535,7 +535,7 @@ func (this *Spinner) String() string {
 		return "" } 
 	return string([]rune(this.Frames)[this.State]) }
 func (this *Spinner) Start() {
-	if running > 0 {
+	if this.running > 0 {
 		this.running++ 
 		return }
 	this.running++ 
