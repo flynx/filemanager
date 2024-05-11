@@ -535,23 +535,23 @@ func (this *Spinner) String() string {
 		return "" } 
 	return string([]rune(this.Frames)[this.State]) }
 func (this *Spinner) Start() {
-	this.starting.Lock()
-	defer this.starting.Unlock()
-	// keep only one timer instance...
-	if this.running > 0 {
-		this.running++ 
-		return }
-	this.running++ 
-	if this.State < 0 {
-		this.Step() }
 	go func(){
-		ticker := time.NewTicker(200 * time.Millisecond)
-		defer ticker.Stop()
-		for {
-			<-ticker.C
-			if this.running <= 0 {
-				return }
-			this.Step() } }() }
+		//this.starting.Lock()
+		//defer this.starting.Unlock()
+		if this.running > 0 {
+			this.running++ 
+			return }
+		this.running++ 
+		if this.State < 0 {
+			this.Step() }
+		go func(){
+			ticker := time.NewTicker(200 * time.Millisecond)
+			defer ticker.Stop()
+			for {
+				<-ticker.C
+				if this.running <= 0 {
+					return }
+				this.Step() } }() }() }
 func (this *Spinner) Stop() *Spinner {
 	if this.running == 1 {
 		return this.StopAll() }
@@ -1475,12 +1475,12 @@ func goCallCommand(code string, stdin io.Reader) Command {
 		Stdout: &stdout, 
 		//Stderr: &stderr,
 	} 
-	SPINNER.Start()
+	//SPINNER.Start()
 
 	// handle killing the process when needed...
 	watchdogDone := make(chan bool)
 	go func(){
-		defer SPINNER.Stop()
+		//defer SPINNER.Stop()
 		select {
 			case <-kill:
 				res.State = "killed"
