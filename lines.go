@@ -528,13 +528,15 @@ type Spinner struct {
 	State int
 
 	running int
-	stop chan bool
+	starting sync.Mutex
 }
 func (this *Spinner) String() string {
-	if this.State < 0 {
+	if this.running <= 0 {
 		return "" } 
 	return string([]rune(this.Frames)[this.State]) }
 func (this *Spinner) Start() {
+	this.starting.Lock()
+	defer this.starting.Unlock()
 	// keep only one timer instance...
 	if this.running > 0 {
 		this.running++ 
@@ -542,18 +544,14 @@ func (this *Spinner) Start() {
 	this.running++ 
 	if this.State < 0 {
 		this.Step() }
-	ticker := time.NewTicker(200 * time.Millisecond)
-	defer ticker.Stop()
-	for {
-		// XXX should we do a separate stop channel??
-		//		...i.e. should we decouple state and auto-advance...
-		select {
-			case <-this.stop:
-				break
-			case <-ticker.C:
-				if this.State < 0 {
-					break }
-				this.Step() } } }
+	go func(){
+		ticker := time.NewTicker(200 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			<-ticker.C
+			if this.running <= 0 {
+				return }
+			this.Step() } }() }
 func (this *Spinner) Stop() *Spinner {
 	if this.running == 1 {
 		return this.StopAll() }
@@ -563,7 +561,7 @@ func (this *Spinner) Stop() *Spinner {
 func (this *Spinner) StopAll() *Spinner {
 	if this.running > 0 {
 		this.running = 0
-		this.stop <- true }
+		ACTIONS.Refresh() }
 	return this }
 // XXX should this draw the whole screen???
 //		...might be nice to be able to only update the chrome (title/status)
@@ -575,8 +573,7 @@ func (this *Spinner) Step() string {
 	ACTIONS.Refresh()
 	return this.String() }
 func (this *Spinner) Done() *Spinner {
-	this.Stop()
-	this.State = -1 
+	this.StopAll()
 	return this }
 
 var SPINNER_STYLES = []string{
@@ -587,23 +584,21 @@ var SPINNER_STYLES = []string{
 	"⠋⠙⠚⠒⠂⠂⠒⠲⠴⠦⠖⠒⠐⠐⠒⠓⠋",
 	"⢄⢂⢁⡁⡈⡐⡠",
 	"⠁⠂⠄⡀⢀⠠⠐⠈",
-	"⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏", // *
+	"⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏",
 	"☱☲☴☲",
 	"◰◳◲◱",
 	"◇◈◆",
-	"◐◓◑◒", // *
-	"◴◷◶◵", // *
-	"■□▪▫", // *
+	"◐◓◑◒",
+	"◴◷◶◵",
+	"■□▪▫",
 	"▌▀▐▄",
 	"▖▘▝▗",
 	"│┌─┒┃┕━┛",
 	"-\\|/",
 	"v<^>",
 }
-// XXX add spinner styles...
 var SPINNER = Spinner {
-	Frames: "■□▪▫", // *
-	State: -1,
+	Frames: "■□▪▫",
 }
 
 
@@ -1480,10 +1475,12 @@ func goCallCommand(code string, stdin io.Reader) Command {
 		Stdout: &stdout, 
 		//Stderr: &stderr,
 	} 
+	SPINNER.Start()
 
 	// handle killing the process when needed...
 	watchdogDone := make(chan bool)
 	go func(){
+		defer SPINNER.Stop()
 		select {
 			case <-kill:
 				res.State = "killed"
@@ -1556,6 +1553,10 @@ func callCommand(code string, stdin bytes.Buffer) (bytes.Buffer, bytes.Buffer, e
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
+	// XXX this hangs the app...
+	//SPINNER.Start()
+	//defer SPINNER.Stop()
+
 	shell := strings.Fields(SHELL)
 	cmd := exec.Command(shell[0], append(shell[1:], code)...)
 	env := makeCallEnv(cmd)
@@ -1572,6 +1573,7 @@ func callCommand(code string, stdin bytes.Buffer) (bytes.Buffer, bytes.Buffer, e
 		log.Println("Error executing: \""+ code +"\":", err) 
 		log.Println("    ERR:", stderr.String())
 		log.Println("    ENV:", env) }
+
 
 	return stdout, stderr, err }
 func callTransform(code string, line string) (string, error) {
@@ -1980,9 +1982,6 @@ func lines() Result {
 			log.Println("Error executing:", SELECTION_CMD) 
 		} else {
 			SetSelection(strings.Split(stdout.String(), "\n")) } }
-
-	// XXX TESTING...
-	go SPINNER.Start()
 
 	for {
 		updateGeometry(screen)
