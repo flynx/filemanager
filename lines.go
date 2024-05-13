@@ -17,6 +17,9 @@
 *		...can't reproduce...
 *
 *
+* XXX might be a good idea to stream the a single command for 
+*		populating/transforming lines instead of running a command per 
+*		line... (option)
 * XXX might be a good idea to populate (-p) lines in the background rather 
 *		than just on line access...
 * XXX ASAP call tranform action in custom env where TEXT* vars refer to 
@@ -1553,8 +1556,8 @@ func callCommand(code string, stdin bytes.Buffer) (bytes.Buffer, bytes.Buffer, e
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
-	// XXX this hangs the app...
 	//SPINNER.Start()
+	// XXX this hangs the app...
 	//defer SPINNER.Stop()
 
 	shell := strings.Fields(SHELL)
@@ -1573,7 +1576,6 @@ func callCommand(code string, stdin bytes.Buffer) (bytes.Buffer, bytes.Buffer, e
 		log.Println("Error executing: \""+ code +"\":", err) 
 		log.Println("    ERR:", stderr.String())
 		log.Println("    ENV:", env) }
-
 
 	return stdout, stderr, err }
 func callTransform(code string, line string) (string, error) {
