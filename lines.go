@@ -101,9 +101,15 @@ import "github.com/jessevdk/go-flags"
 import "github.com/gdamore/tcell/v2"
 
 
+type Liner interface {
+	drawCell() *Liner
+}
 
 
+// XXX define an interface...
 type Lines struct {
+	Top int
+	Left int
 	Width int
 	Height int
 	Border int
@@ -119,8 +125,42 @@ type Lines struct {
 	Text []string
 
 }
-func (this *Lines) drawLine(col int, row int, width int, str string, style tcell.Style) *Lines {
+// XXX do we need to abstract this out???
+//		...esentially this is an adaapter to plug different terminal libs...
+func (this *Lines) drawCell(col int, row int, r rune, style tcell.Style) *Lines {
+	col += this.Left
+	row += this.Top
 	// XXX
+	return this }
+func (this *Lines) drawLine(col int, row int, width int, str string, style tcell.Style) *Lines {
+	runes := []rune(str)
+	offset := 0
+	// NOTE: to draw N blanks:
+	//		- either
+	//			- call drawBlanks(N)
+	//			- continue
+	//		- or:
+	//			- set blanks to N
+	//			- decrement i -- will draw a blank on curent position... 
+	//			- continue
+	//		- or:
+	//			- set blanks to N
+	//			- skip to this.drawCell(..)
+	blanks := 0
+	func drawBlanks(n int){
+		blanks += n
+		this.drawCell(col+i, row, ' ', style) }
+	for i := 0; i < width; i++ {
+		r := ' '
+		if blanks > 0 {
+			blanks--
+			offset--
+		} else {
+			if i + offset < len(runes) {
+				r = runes[i + offset] }
+			// XXX
+		}
+		this.drawCell(col+i, row, r, style) }
 	return this }
 func (this *Lines) expandTemplate(tpl string) string {
 	// XXX
@@ -187,6 +227,7 @@ func (this *Lines) Draw() *Lines {
 			line, 
 			style) }
 	return this }
+
 
 
 
