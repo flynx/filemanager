@@ -98,103 +98,68 @@ import "github.com/jessevdk/go-flags"
 import "github.com/gdamore/tcell/v2"
 
 
-/*/ XXX refactoring -- not sure about this yet...
+
+
 type Lines struct {
-	TabSize uint
-	Shell string
+	Width int
+	Height int
+	Border int
 
 	Theme Theme
 
-	Keybindings Keybindings
+	Title string
+	Status string
 
-	// width, height
-	Size []string
-	// left, top
-	Align []string
+	TextOffsetV int
+	TextOffsetH int
 
-	ListCMD string
-	TransformCMD string
-	InputFile string
-	// XXX should this be bytes.Buffer???
-	Output string
+	Text []string
 
-	Left int
-	Top int
-	Width int
-	Height int
-
-	Cols uint
-	Rows uint
-
-	// text buffer...
-	Text []Row
-
-	TextWidth uint
-
-	CurrentRow uint
-
-	// screen offset within the .Text
-	RowOffset uint
-	ColOffset uint
-
-	Scrollbar bool
-	ScrollbarFG rune
-	ScrollbarBG rune
-	ScrollThreshold uint
-
-	Actions Actions
-
-	TitleLine bool
-	TitleCmd string
-	TitleLineFmt string
-
-	StatusLine bool
-	StatusCmd string
-	StatusLineFmt string
-
-	SpanMarker string
-	SpanMode string
-	SpanLeftMinWidth int
-	SpanRightMinWidth int
-	SpanSeparator rune
-	OverflowIndicator rune
 }
-// XXX this part I do not like about Go -- no clean way to define the 
-//		structure and te defaults in one place...
-var LinesDefaults = Lines{
-	TabSize: 8,
-	Shell: "bash -c",
-	Size: []string{"auto", "auto"},
-	Align: []string{"center", "center"},
-	ScrollbarFG: tcell.RuneCkBoard,
-	ScrollbarBG: tcell.RuneBoard,
-	ScrollThreshold: 3,
-
-	TitleCmd: "",
-	TitleLineFmt: "",
-
-	StatusCmd: "",
-	StatusLineFmt: "",
-
-	SpanMarker: "%SPAN",
-	SpanMode: "fit-right",
-	SpanLeftMinWidth: 8,
-	SpanRightMinWidth: 8,
-	//SpanSeparator: tcell.RuneVLine,
-	SpanSeparator: ' ',
-	OverflowIndicator: '}',
-
-	Theme: THEME,
-	Keybindings: KEYBINDINGS,
-	Actions: ACTIONS,
-}
-
-
-func New() Lines {
-	copy := Lines(LinesDefaults)
+func (this *Lines) drawLine(col int, row int, width int, str string, style tcell.Style) *Lines {
 	// XXX
-	return copy }
-//*/
+	return this }
+func (this *Lines) expandTemplate(tpl string) string {
+	// XXX
+	return tpl }
+// XXX generalise title/status...
+//		...not a fan of how complex this can be with static typing...
+func (this *Lines) drawChromeline() *Lines {
+	// XXX populate %CMD
+	// XXX handle borders...
+	return this.drawLine(0, 0, this.Width,
+		this.expandTemplate(this.Title), 
+		this.Theme["title-style"]) }
+func (this *Lines) drawTitle() *Lines {
+	// XXX populate %CMD
+	// XXX handle borders...
+	return this.drawLine(0, 0, this.Width,
+		this.expandTemplate(this.Title), 
+		this.Theme["title-style"]) }
+func (this *Lines) drawStatus() *Lines {
+	// XXX populate %CMD
+	// XXX handle borders...
+	return this.drawLine(0, -1, this.Width,
+		this.expandTemplate(this.Status), 
+		this.Theme["status-style"]) }
+func (this *Lines) Draw() *Lines {
+	start, end := 0, 0
+	if this.Title != "" {
+		this.drawTitle() 
+		start++ }
+	if this.Status != "" {
+		end-- }
+	for i := start; i < this.Height+end; i++ {
+		// XXX handle borders...
+		// XXX
+		style := this.Theme["default"]
+		this.drawLine(this.Border, i, this.Width - this.Border*2, 
+			string([]rune(this.Text[this.TextOffsetV+i])[this.TextOffsetH:]), 
+			style) }
+	if end != 0 {
+		this.drawStatus() }
+	return this }
+
 
 
 
@@ -658,6 +623,8 @@ func populateTemplateLine(str string, cmd string) string {
 			if len(TEXT_BUFFER.Lines) > CURRENT_ROW + ROW_OFFSET {
 				current = TEXT_BUFFER.Lines[CURRENT_ROW + ROW_OFFSET] } 
 			switch name {
+				case "%":
+					val = "%"
 				// this has to be handled later, when the string is 
 				// otherwise complete...
 				case string(SPAN_MARKER[1:]):
