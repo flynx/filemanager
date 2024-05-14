@@ -143,21 +143,46 @@ func (this *Lines) drawStatus() *Lines {
 		this.expandTemplate(this.Status), 
 		this.Theme["status-style"]) }
 func (this *Lines) Draw() *Lines {
+	// setup chrome...
 	start, end := 0, 0
-	if this.Title != "" {
+	if this.Border > 0 ||
+			this.Title != "" {
 		this.drawTitle() 
 		start++ }
-	if this.Status != "" {
+	if this.Border > 0 || 
+			this.Status != "" {
+		defer this.drawStatus() 
 		end-- }
+	// setup scrollbar...
+	scrollbar := false
+	if len(this.Text) > this.Height - start + end {
+		// XXX precalc sizes...
+		scrollbar = true }
+	// draw lines...
 	for i := start; i < this.Height+end; i++ {
-		// XXX handle borders...
-		// XXX
+		if this.Border > 0 {
+			// XXX draw borde...
+			if ! scrollbar {
+				// XXX
+			}
+		}
+		if scrollbar {
+			// XXX draw scrollbar...
+		}
+		// XXX line styles...
 		style := this.Theme["default"]
+		// get line...
+		line := ""
+		if len(this.Text) > this.TextOffsetV + i {
+			line = string(
+				[]rune(
+					// vertical scroll...
+					this.Text[this.TextOffsetV+i], 
+				// horizontal scroll...
+				)[this.TextOffsetH:] ) }
 		this.drawLine(this.Border, i, this.Width - this.Border*2, 
-			string([]rune(this.Text[this.TextOffsetV+i])[this.TextOffsetH:]), 
+			line, 
 			style) }
-	if end != 0 {
-		this.drawStatus() }
 	return this }
 
 
