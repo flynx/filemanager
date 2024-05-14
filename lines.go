@@ -136,20 +136,13 @@ func (this *Lines) drawLine(col int, row int, width int, str string, style tcell
 	runes := []rune(str)
 	offset := 0
 	// NOTE: to draw N blanks:
+	//		- set blanks to N
 	//		- either
-	//			- call drawBlanks(N)
-	//			- continue
-	//		- or:
-	//			- set blanks to N
 	//			- decrement i -- will draw a blank on curent position... 
 	//			- continue
 	//		- or:
-	//			- set blanks to N
 	//			- skip to this.drawCell(..)
 	blanks := 0
-	func drawBlanks(n int){
-		blanks += n
-		this.drawCell(col+i, row, ' ', style) }
 	for i := 0; i < width; i++ {
 		r := ' '
 		if blanks > 0 {
