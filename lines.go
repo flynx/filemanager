@@ -101,12 +101,12 @@ import "github.com/jessevdk/go-flags"
 import "github.com/gdamore/tcell/v2"
 
 
+// XXX do not like the name...
+// XXX define all the generic methods on this interface...
 type Liner interface {
 	drawCell() *Liner
 }
 
-
-// XXX define an interface...
 type Lines struct {
 	Top int
 	Left int
