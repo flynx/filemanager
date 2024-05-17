@@ -101,7 +101,7 @@ import "github.com/jessevdk/go-flags"
 import "github.com/gdamore/tcell/v2"
 
 
-// XXX do not like the name...
+// XXX do not like the name -- LinesInterface, Lineser?? =)
 // XXX define all the generic methods on this interface...
 type Liner interface {
 	drawCell() *Liner
