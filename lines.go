@@ -134,7 +134,9 @@ func (this *Lines) drawCell(col int, row int, r rune, style tcell.Style) *Lines 
 	return this }
 func (this *Lines) drawLine(col int, row int, width int, str string, style tcell.Style) *Lines {
 	runes := []rune(str)
+	// offset from i to printed rune index in runes...
 	offset := 0
+	// number of blanks to print from current position...
 	// NOTE: to draw N blanks:
 	//		- set blanks to N
 	//		- either
