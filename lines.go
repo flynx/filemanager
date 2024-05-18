@@ -19,7 +19,7 @@
 *
 * XXX might be a good idea to stream the a single command for 
 *		populating/transforming lines instead of running a command per 
-*		line... (option)
+*		line... (option/default?)
 * XXX might be a good idea to populate (-p) lines in the background rather 
 *		than just on line access...
 * XXX ASAP call tranform action in custom env where TEXT* vars refer to 
