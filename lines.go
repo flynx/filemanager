@@ -102,7 +102,7 @@ import "github.com/gdamore/tcell/v2"
 
 
 // XXX do not like the name -- LinesInterface, Lineser?? =)
-// XXX define all the generic methods on this interface...
+// XXX not sure how to define an easily overloadable/extendable "object"... 
 type Liner interface {
 	drawCell() *Liner
 }
