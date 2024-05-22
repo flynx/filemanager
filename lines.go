@@ -105,10 +105,12 @@ import "github.com/gdamore/tcell/v2"
 // XXX not sure how to define an easily overloadable/extendable "object"... 
 //		...don't tell me that a Go-y solution is passing function pointers))))
 type Liner interface {
-	drawCell() *Liner
+	drawCell(col, row int, r rune, style any) *Liner
 }
 
 type Lines struct {
+	Liner
+
 	Top int
 	Left int
 	Width int
@@ -126,6 +128,7 @@ type Lines struct {
 	Text []string
 
 }
+// XXX move this to a separate implementation...
 // XXX do we need to abstract this out???
 //		...esentially this is an adaapter to plug different terminal libs...
 func (this *Lines) drawCell(col int, row int, r rune, style tcell.Style) *Lines {
