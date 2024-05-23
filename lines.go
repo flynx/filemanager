@@ -134,7 +134,9 @@ type Lines struct {
 func (this *Lines) drawCell(col int, row int, r rune, style tcell.Style) *Lines {
 	col += this.Left
 	row += this.Top
-	// XXX
+	// call the implementation, if available...
+	if this.Liner != nil {
+		this.Liner.drawCell(col, row, r, style) }
 	return this }
 func (this *Lines) drawLine(col int, row int, width int, str string, style tcell.Style) *Lines {
 	runes := []rune(str)
