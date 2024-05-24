@@ -127,7 +127,10 @@ type Lines struct {
 	TextOffsetV int
 	TextOffsetH int
 
+	// XXX make this a LinesBuffer...
 	Text []string
+	// XXX ...is this a good idea???
+	*LinesBuffer
 
 }
 // proxy to .Liner.drawCell(..)
