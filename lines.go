@@ -239,6 +239,17 @@ func (this *Lines) Draw() *Lines {
 
 
 
+type TcellLines struct {
+	Screen tcell.Screen
+}
+func (this *TcellLines) drawCell(col int, row int, r rune, style tcell.Style) *TcellLines {
+	// XXX
+	return this }
+
+
+
+
+
 var LIST_CMD string
 var TRANSFORM_CMD string
 var TRANSFORM_POPULATE_CMD string
