@@ -101,10 +101,12 @@ import "github.com/jessevdk/go-flags"
 import "github.com/gdamore/tcell/v2"
 
 
+// XXX should this be a proxy to a specific widget or a generic API proxy???
 // XXX do not like the name -- LinesInterface, Lineser?? =)
 // XXX not sure how to define an easily overloadable/extendable "object"... 
 //		...don't tell me that a Go-y solution is passing function pointers))))
 type Liner interface {
+	// XXX need to cast style to an apporpriate type in the implementation...
 	drawCell(col, row int, r rune, style any) *Liner
 }
 
@@ -128,7 +130,7 @@ type Lines struct {
 	Text []string
 
 }
-// XXX need to cast style to an apporpriate type...
+// proxy to .Liner.drawCell(..)
 func (this *Lines) drawCell(col int, row int, r rune, style any) *Lines {
 	col += this.Left
 	row += this.Top
