@@ -110,6 +110,7 @@ type Liner interface {
 	drawCell(col, row int, r rune, style any) *Liner
 }
 
+// XXX should this be Reader/Writer???
 type Lines struct {
 	Liner
 
