@@ -101,6 +101,57 @@ import "github.com/jessevdk/go-flags"
 import "github.com/gdamore/tcell/v2"
 
 
+type Row struct {
+	selected bool
+	transformed bool
+	populated bool
+	text string
+}
+
+type LinesBuffer struct {
+	sync.Mutex
+	Lines []Row
+	Width int
+}
+func (this *LinesBuffer) Clear() *LinesBuffer {
+	CURRENT_ROW = 0
+	ROW_OFFSET = 0
+	this.Lines = []Row{}
+	this.Width = 0
+	return this }
+func (this *LinesBuffer) String() string {
+	lines := []string{}
+	for _, line := range this.Lines {
+		lines = append(lines, line.text) }
+	return strings.Join(lines, "\n") }
+func (this *LinesBuffer) Push(line string) *LinesBuffer {
+	this.Lines = append(this.Lines, Row{ text: line })
+	l := len([]rune(line))
+	if this.Width < l {
+		this.Width = l }
+	return this }
+func (this *LinesBuffer) Append(in any) *LinesBuffer {
+	switch in.(type) {
+		// XXX this is covered by default, do we need this case???
+		//case string:
+		//	for _, str := range strings.Split(in.(string), "\n") {
+		//		this.Push(str) }
+		case io.Reader:
+			scanner := bufio.NewScanner(in.(io.Reader))
+			for scanner.Scan(){
+				this.Push(scanner.Text()) } 
+		default:
+			for _, str := range strings.Split(fmt.Sprint(in), "\n") {
+				this.Push(str) } }
+	return this }
+func (this *LinesBuffer) Write(in any) *LinesBuffer {
+	this.Lock()
+	defer this.Unlock()
+	return this.
+		Clear().
+		Append(in) }
+
+
 // XXX not sure how to define an easily overloadable/extendable "object"... 
 //		...don't tell me that a Go-y solution is passing function pointers))))
 // XXX revise name... 
@@ -112,6 +163,9 @@ type Liner interface {
 // XXX should this be Reader/Writer???
 type Lines struct {
 	Liner
+
+	// XXX is this a good idea???
+	*LinesBuffer
 
 	Top int
 	Left int
@@ -126,11 +180,6 @@ type Lines struct {
 
 	TextOffsetV int
 	TextOffsetH int
-
-	// XXX make this a LinesBuffer...
-	Text []string
-	// XXX ...is this a good idea???
-	*LinesBuffer
 
 }
 // proxy to .Liner.drawCell(..)
@@ -202,7 +251,7 @@ func (this *Lines) Draw() *Lines {
 		end-- }
 	// setup scrollbar...
 	scrollbar := false
-	if len(this.Text) > this.Height - start + end {
+	if len(this.Lines) > this.Height - start + end {
 		// XXX precalc sizes...
 		scrollbar = true }
 	// draw lines...
@@ -223,11 +272,11 @@ func (this *Lines) Draw() *Lines {
 		style := this.Theme["default"]
 		// get line...
 		line := ""
-		if len(this.Text) > this.TextOffsetV + i {
+		if len(this.Lines) > this.TextOffsetV + i {
 			line = string(
 				[]rune(
 					// vertical scroll...
-					this.Text[this.TextOffsetV+i], 
+					this.Lines[this.TextOffsetV+i].text, 
 				// horizontal scroll...
 				)[this.TextOffsetH:] ) }
 		this.drawLine(this.Border, i, this.Width - this.Border*2, 
@@ -337,61 +386,6 @@ var CURRENT_ROW = 0
 //		- page
 //		- pattern
 
-
-type Row struct {
-	selected bool
-	transformed bool
-	populated bool
-	text string
-}
-//type LinesBuffer []Row
-type LinesBuffer struct {
-	Use sync.Mutex
-	Lines []Row
-	Width int
-}
-func (this *LinesBuffer) Clear() *LinesBuffer {
-	CURRENT_ROW = 0
-	ROW_OFFSET = 0
-	this.Lines = []Row{}
-	this.Width = 0
-	return this }
-func (this *LinesBuffer) String() string {
-	lines := []string{}
-	for _, line := range this.Lines {
-		lines = append(lines, line.text) }
-	return strings.Join(lines, "\n") }
-func (this *LinesBuffer) Push(line string) *LinesBuffer {
-	this.Lines = append(this.Lines, Row{ text: line })
-	l := len([]rune(line))
-	if this.Width < l {
-		this.Width = l }
-	return this }
-func (this *LinesBuffer) Append(str string) *LinesBuffer {
-	for _, str := range strings.Split(str, "\n") {
-		this.Push(str) } 
-	return this }
-func (this *LinesBuffer) AppendBuf(buf io.Reader) *LinesBuffer {
-	scanner := bufio.NewScanner(buf)
-	for scanner.Scan(){
-		this.Push(scanner.Text()) }
-	return this }
-	// XXX should we unlock in the end or at current position/screen...
-func (this *LinesBuffer) Write(str string) *LinesBuffer {
-	this.Use.Lock()
-	defer this.Use.Unlock()
-	this.
-		Clear().
-		Append(str)
-	return this }
-	// XXX should we unlock in the end or at current position/screen...
-func (this *LinesBuffer) WriteBuf(buf io.Reader) *LinesBuffer {
-	this.Use.Lock()
-	defer this.Use.Unlock()
-	this.
-		Clear().
-		AppendBuf(buf)
-	return this }
 
 var TEXT_BUFFER LinesBuffer
 
@@ -895,8 +889,8 @@ func populateLines(){
 //			$ ls | ./lines --title ' moo %SPAN' --border
 func drawScreen(screen tcell.Screen, theme Theme){
 	screen.Clear()
-	TEXT_BUFFER.Use.Lock()
-	defer TEXT_BUFFER.Use.Unlock()
+	TEXT_BUFFER.Lock()
+	defer TEXT_BUFFER.Unlock()
 
 	// scrollbar...
 	var scroller_size, scroller_offset int
@@ -1409,7 +1403,7 @@ func (this *Actions) Update() Result {
 			fmt.Println(err)
 			return Fail }
 		defer file.Close()
-		TEXT_BUFFER.WriteBuf(file) 
+		TEXT_BUFFER.Write(file) 
 	// command...
 	} else if LIST_CMD != "" {
 		res = callAction("<"+ LIST_CMD)
@@ -1423,7 +1417,7 @@ func (this *Actions) Update() Result {
 		if stat.Mode() & os.ModeNamedPipe != 0 {
 			// XXX do we need to close this??
 			//defer os.Stdin.Close()
-			TEXT_BUFFER.WriteBuf(os.Stdin) } }
+			TEXT_BUFFER.Write(os.Stdin) } }
 	SetSelection(selection)
 	if FOCUS_CMD != "" {
 		// XXX generate FOCUS
@@ -1719,7 +1713,7 @@ func callAction(actions string) Result {
 				// XXX should this be a goroutine/async???
 				// XXX do the spinner....
 				//TEXT_BUFFER = LinesBuffer{}
-				TEXT_BUFFER.Use.Lock()
+				TEXT_BUFFER.Lock()
 				TEXT_BUFFER.Clear()
 				for scanner.Scan() {
 					/* XXX
@@ -1727,14 +1721,14 @@ func callAction(actions string) Result {
 					// just after we fill the screen...
 					if len(TEXT_BUFFER.Lines) == CURRENT_ROW || 
 							len(TEXT_BUFFER.Lines) == CURRENT_ROW + ROW_OFFSET {
-						TEXT_BUFFER.Use.Unlock() }
+						TEXT_BUFFER.Unlock() }
 					//*/
 					line := scanner.Text()
 					lines = append(lines, line)
 					TEXT_BUFFER.Push(line) } 
 				if len(TEXT_BUFFER.Lines) == 0 {
 					TEXT_BUFFER.Push("") } 
-				TEXT_BUFFER.Use.Unlock()
+				TEXT_BUFFER.Unlock()
 				if FOCUS_CMD != "" {
 					// XXX set focus...
 				}
