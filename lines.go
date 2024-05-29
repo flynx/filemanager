@@ -101,6 +101,8 @@ import "github.com/jessevdk/go-flags"
 import "github.com/gdamore/tcell/v2"
 
 
+// Row
+//
 type Row struct {
 	selected bool
 	transformed bool
@@ -108,6 +110,8 @@ type Row struct {
 	text string
 }
 
+// LinesBuffer
+//
 type LinesBuffer struct {
 	sync.Mutex
 	Lines []Row
@@ -151,7 +155,8 @@ func (this *LinesBuffer) Write(in any) *LinesBuffer {
 		Clear().
 		Append(in) }
 
-
+// Liner
+//
 // XXX not sure how to define an easily overloadable/extendable "object"... 
 //		...don't tell me that a Go-y solution is passing function pointers))))
 // XXX revise name... 
@@ -160,6 +165,12 @@ type Liner interface {
 	drawCell(col, row int, r rune, style any) *Liner
 }
 
+var TAB_SIZE = 8
+
+var OVERFLOW_INDICATOR = '}'
+
+// Lines
+//
 // XXX should this be Reader/Writer???
 type Lines struct {
 	Liner
@@ -181,8 +192,91 @@ type Lines struct {
 	TextOffsetV int
 	TextOffsetH int
 
+	TabSize int
+	OverflowIndicator rune
+
 }
+// XXX can we use fmt.Sprintf(..) instead most of this???
+func (this *Lines) makeLine(str string, width int) string {
+	// defaults...
+	tab := this.TabSize
+	if tab == 0 {
+		tab = TAB_SIZE }
+	overflow := this.OverflowIndicator
+	if overflow == 0 {
+		overflow = OVERFLOW_INDICATOR }
+	fill := ' '
+
+	runes := []rune(str)
+	// offset from i to printed rune index in runes...
+	offset := 0
+	// number of blanks to print from current position...
+	// NOTE: to draw N blanks:
+	//		- set blanks to N
+	//		- either
+	//			- decrement i -- will draw a blank on curent position... 
+	//			- continue
+	//		- or:
+	//			- skip to this.drawCell(..)
+	blanks := 0
+	// NOTE: this can legally get longer than width if it contains escape 
+	//		sequeces...
+	output := make([]rune, fill, width)
+	for i := 0; i < width; i++ {
+		r := fill
+		if blanks > 0 {
+			blanks--
+			offset--
+		} else {
+			if i + offset < len(runes) {
+				r = runes[i + offset] }
+
+			// XXX escape sequences...
+			if c == '%' {
+				// XXX
+			}
+
+			// XXX %SPAN
+			if r == '%' {
+				// XXX
+			}
+
+			// tab -- offset output to next tabstop... 
+			if r == '\t' { 
+				// NOTE: the -1 here is to compensate fot the removed '\t'...
+				blanks = tab - (i % tab) - 1
+				i--
+				continue } }
+
+		// set the rune...
+		if len(output) > i {
+			output[i] = r
+		// width overflow...
+		// NOTE: this can happen due to non-pritable stuff like escape 
+		//		sequences...
+		} else {
+			output = append(output, r) 
+			width++ } 
+
+		// overflow indicator...
+		// XXX should this draw over the border if borders are set 
+		//		and no scrollbar is visible???
+		if i == width-1 && 
+				len(runes) + offset > width {
+			output[i] = this.OverflowIndicator } }
+	return string(output) }
+// XXX
+func (this *Lines) expandTemplate(tpl string) string {
+	// XXX
+	return tpl }
+// XXX handle borders -- in the caller...
+func (this *Lines) makeChromeLine(tpl string) string {
+	// XXX populate %CMD
+	return this.makeLine(this.expandTemplate(tpl), this.Width) }
+
+
 // proxy to .Liner.drawCell(..)
+// XXX replace these with basic string generation and an API to push it to screen...
 func (this *Lines) drawCell(col int, row int, r rune, style any) *Lines {
 	col += this.Left
 	row += this.Top
@@ -191,6 +285,14 @@ func (this *Lines) drawCell(col int, row int, r rune, style any) *Lines {
 		this.Liner.drawCell(col, row, r, style) }
 	return this }
 func (this *Lines) drawLine(col int, row int, width int, str string, style tcell.Style) *Lines {
+	// defaults...
+	tab := this.TabSize
+	if tab == 0 {
+		tab = TAB_SIZE }
+	overflow := this.OverflowIndicator
+	if overflow == 0 {
+		overflow = OVERFLOW_INDICATOR }
+
 	runes := []rune(str)
 	// offset from i to printed rune index in runes...
 	offset := 0
@@ -211,13 +313,57 @@ func (this *Lines) drawLine(col int, row int, width int, str string, style tcell
 		} else {
 			if i + offset < len(runes) {
 				r = runes[i + offset] }
-			// XXX
-		}
+
+			/* XXX
+			// escape sequences...
+			// see: 
+			//	https://gist.github.com/fnky/458719343aabd01cfb17a3a4f7296797 
+			if r == '\x1B' {
+				// handle multiple adjacent sequences...
+				for r == '\x1B' {
+					j := buf_col + 1
+					if line[j] == '[' {
+						ansi_commands := "HfABCDEFGnsuJKmhlp"
+						for j < len(line) && 
+								! strings.ContainsRune(ansi_commands, line[j]) {
+							j++ }
+						// XXX handle color...
+						//if line[j] == 'm' {
+						//	style = ansi2style(string(line[buf_col:j+1]), style) }
+					} else {
+						ansi_direct_commands := "M78"
+						for j < len(line) && 
+								! strings.ContainsRune(ansi_direct_commands, line[j]) {
+							j++ } } 
+					buf_offset += (j + 1) - buf_col
+					buf_col = j + 1
+					if buf_col >= len(line) {
+						r = ' ' 
+					} else {
+						r = line[buf_col] } }
+				i--
+				continue }
+			//*/
+
+			// XXX %SPAN
+			if r == '%' {
+			}
+			//*/
+
+			// tab -- offset output to next tabstop... 
+			if r == '\t' { 
+				// NOTE: the -1 here is to compensate fot the removed '\t'...
+				blanks = tab - ((col + offset) % tab) - 1
+				i--
+				continue } }
+		// overflow indicator...
+		// XXX should this draw over the border if borders are set 
+		//		and no scrollbar is visible???
+		if i+1 == width && 
+				len(runes) + offset > width {
+			r = this.OverflowIndicator }
 		this.drawCell(col+i, row, r, style) }
 	return this }
-func (this *Lines) expandTemplate(tpl string) string {
-	// XXX
-	return tpl }
 // XXX generalise title/status...
 //		...not a fan of how complex this can be with static typing...
 func (this *Lines) drawChromeline() *Lines {
@@ -311,7 +457,6 @@ var STDOUT string
 // XXX need to account 
 var SHELL = "bash -c"
 
-var TAB_SIZE = 8
 
 // width, height
 var SIZE = []string{"auto", "auto"}
@@ -371,8 +516,6 @@ var SPAN_FILLER_TITLE = SPAN_FILLER
 var SPAN_FILLER_STATUS = SPAN_FILLER
 //var SPAN_SEPARATOR = tcell.RuneVLine
 var SPAN_SEPARATOR = ' '
-
-var OVERFLOW_INDICATOR = '}'
 
 var FOCUS string
 var FOCUS_CMD string
