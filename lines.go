@@ -232,7 +232,7 @@ func (this *Lines) makeLine(str string, width int) string {
 				r = runes[i + offset] }
 
 			// XXX escape sequences...
-			if c == '%' {
+			if r == '\x1B' {
 				// XXX
 			}
 
