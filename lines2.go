@@ -2,8 +2,10 @@
 package main
 
 import "fmt"
+import "log"
 import "io"
 import "strings"
+import "strconv"
 import "bufio"
 import "sync"
 
@@ -108,6 +110,10 @@ type Lines struct {
 	SpanSeparator rune
 
 }
+var LinesDefaults = Lines {
+	Title: "",
+	Status: "%CMD%SPAN $LINE/$LINES ",
+}
 func (this *Lines) makeSection(str string, width int) (string, bool) {
 	// defaults...
 	tab := this.TabSize
@@ -116,11 +122,11 @@ func (this *Lines) makeSection(str string, width int) (string, bool) {
 	fill := ' '
 
 	runes := []rune(str)
-	expand := true
+	//expand := true
 	if width == 0 {
-		expand = false
+		//expand = false
 		width = len(runes) }
-	keep_non_printable := false
+	//keep_non_printable := false
 
 	// offset from i to printed rune index in runes...
 	offset := 0
@@ -173,6 +179,46 @@ func (this *Lines) makeSection(str string, width int) (string, bool) {
 	return string(output), 
 		// overflow...
 		len(runes) - offset > width }
+// XXX handle min widths...
+func (this *Lines) parseSizes(str string, width int) []int {
+	sizes := []int{}
+	stars := []int{}
+	rest := width
+	// XXX can we pre-parse this once???
+	for i, size := range strings.Split(str, ",") {
+		size = strings.TrimSpace(size)
+		cols := 0
+		if size == "*" || 
+				size == "" {
+			stars = append(stars, i)
+		} else if size[len(size)-1] == '%' {
+			p, err := strconv.ParseFloat(string(size[:len(size)-1]), 64)
+			if err != nil {
+				log.Println("Error parsing:", size, "in:", str) 
+				stars = append(stars, i)
+				continue }
+			cols = int(float64(width) * (p / 100))
+		} else {
+			var err error
+			cols, err = strconv.Atoi(size) 
+			if err != nil {
+				log.Println("Error parsing:", size, "in:", str) 
+				stars = append(stars, i)
+				continue } }
+		rest -= cols
+		sizes = append(sizes, cols) }
+	// fill "*"'s
+	if len(stars) > 0 {
+		r := int(float64(rest) / float64(len(stars)))
+		rest = rest % len(stars)
+		i := 0
+		for _, i = range stars {
+			sizes[i] = r }
+		sizes[i] += rest
+	// add the rest of the cols to one last column...
+	} else {
+		sizes = append(sizes, rest) }
+	return sizes }
 func (this *Lines) makeSections(str string, width int) []string {
 	marker := this.SpanMarker
 	if marker == "" {
@@ -194,23 +240,26 @@ func (this *Lines) makeSections(str string, width int) []string {
 
 
 	// single section...
+	res := []string{}
 	if len(sections) == 1 {
 		return doSection(sections[0], width)
 
 	} else {
-		l := []string{}
-		for _, section := range sections {
-			l = append(l, doSection(section, 0)...) }
 		// automatic...
 		if this.SpanMode == "" || this.SpanMode == "fit-right" {
-			
+			for _, section := range sections {
+				res = append(res, doSection(section, 0)...) }
+			// XXX
 
 		// manual...
 		} else {
-		}
-	}
+			sizes := this.parseSizes(this.SpanMode, width)
+			// build the sections...
+			for i, section := range sections[:len(sizes)] {
+				size := sizes[i]
+				res = append(res, doSection(section, size)...) } } }
 
-	return sections }
+	return res }
 // XXX
 func (this *Lines) expandTemplate(tpl string) string {
 	// XXX
@@ -221,6 +270,18 @@ func (this *Lines) expandTemplate(tpl string) string {
 
 func main(){
 	lines := Lines{}
+
+
+	testSizes := func(s string, w int){
+		fmt.Println("SIZE PARSING: w:", w, "s: \""+ s +"\" ->", lines.parseSizes(s, w)) }
+
+	testSizes("50%", 100)
+	testSizes("50%", 101)
+	testSizes("50%,", 101)
+	testSizes("10,50%,10", 101)
+	testSizes("10,*,10", 101)
+	testSizes("10,*,*,10", 101)
+
 
 	withOverflow := func(s string, w int) string {
 		s, o := lines.makeSection(s, w)
