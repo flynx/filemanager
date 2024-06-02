@@ -77,6 +77,8 @@ var TAB_SIZE = 8
 var OVERFLOW_INDICATOR = '}'
 
 var SPAN_MARKER = "%SPAN"
+// XXX this would require us to support escaping...
+//var SPAN_MARKER = "|"
 var SPAN_MIN_WIDTH = 5
 
 // Lines
@@ -116,6 +118,7 @@ var LinesDefaults = Lines {
 	Title: "",
 	Status: "%CMD%SPAN $LINE/$LINES ",
 }
+// XXX add support for escape sequences...
 func (this *Lines) makeSection(str string, width int) (string, bool) {
 	// defaults...
 	tab := this.TabSize
@@ -294,7 +297,16 @@ func (this *Lines) makeSections(str string, width int, sep_size int) []string {
 		} else if sizes[i] > 0 {
 			res = append(res, doSection(getSection(i), sizes[i], 0)...) } }
 	return res }
-func (this *Lines) makeLine(str string, width int) (string, bool) {
+// NOTE: we are not joining the list here so as to enable further 
+//		processing (e.g. styling) down the line...
+// XXX shoud we be able to distinguish between last cell overflow and 
+//		and section overflow???
+//		...currently it is not possible to do so...
+// XXX this only merges overflow indicator into sections, do we really 
+//		need this or should we berge this into .makeSections(..)???
+// XXX make sure to handle lines ending in escape sequences correctly 
+//		when embedding overflow indicator...
+func (this *Lines) makeNormSections(str string, width int) []string {
 	separator := this.SpanSeparator
 	sections := this.makeSections(str, width, len(separator))
 	// NOTE: we are skipping the last section...
@@ -309,8 +321,7 @@ func (this *Lines) makeLine(str string, width int) (string, bool) {
 			} else {
 				sep = overflow } }
 		sections[i], sections[i+1] = str, sep }
-	return strings.Join(sections[:len(sections)-1], ""), 
-		sections[len(sections)-1] != "" }
+	return sections }
 
 // XXX
 func (this *Lines) expandTemplate(tpl string) string {
@@ -337,7 +348,7 @@ func main(){
 	testSizes("*,*,*", 20)
 
 
-	withOverflow := func(s string, w int) string {
+	makeSection := func(s string, w int) string {
 		s, o := lines.makeSection(s, w)
 		if o {
 			r := []rune(s)
@@ -346,18 +357,19 @@ func main(){
 		return s }
 
 	fmt.Println("")
-	fmt.Println(">"+ withOverflow("no overflow", 0) +"<")
-	fmt.Println(">"+ withOverflow("no overflow no overflow no overflow no overflow", 0) +"<")
-	fmt.Println(">"+ withOverflow("a b c", 20) +"<")
-	fmt.Println(">"+ withOverflow("tab     b       c", 20) +"<")
-	fmt.Println(">"+ withOverflow("tab\tb\tc", 20) +"<")
-	fmt.Println(">"+ withOverflow("overflow overflow overflow overflow overflow", 20) +"<")
-	fmt.Println(">"+ withOverflow("tab overflow\t\t\t\tmoo", 20) +"<")
+	fmt.Println(">"+ makeSection("no overflow", 0) +"<")
+	fmt.Println(">"+ makeSection("no overflow no overflow no overflow no overflow", 0) +"<")
+	fmt.Println(">"+ makeSection("a b c", 20) +"<")
+	fmt.Println(">"+ makeSection("tab     b       c", 20) +"<")
+	fmt.Println(">"+ makeSection("tab\tb\tc", 20) +"<")
+	fmt.Println(">"+ makeSection("overflow overflow overflow overflow overflow", 20) +"<")
+	fmt.Println(">"+ makeSection("tab overflow\t\t\t\tmoo", 20) +"<")
 
 
 	makeLine := func(s string, w int) string {
-		s, o := lines.makeLine(s, w)
-		if o {
+		l := lines.makeNormSections(s, w)
+		s = strings.Join(l[:len(l)-1], "")
+		if l[len(l)-1] == "}" {
 			r := []rune(s)
 			r[len(r)-1] = '}' 
 			s = string(r) }
@@ -390,8 +402,6 @@ func main(){
 	lines.SpanMode = "*,*,*,*,*,*,*,*,*,*"
 	fmt.Println(">"+
 		makeLine("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 20) + "<")
-	fmt.Println(">"+
-		makeLine("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 25) + "<")
 	
 }
 
