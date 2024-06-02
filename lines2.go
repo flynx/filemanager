@@ -213,8 +213,13 @@ func (this *Lines) parseSizes(str string, width int) []int {
 		rest = rest % len(stars)
 		i := 0
 		for _, i = range stars {
-			sizes[i] = r }
-		sizes[i] += rest
+			c := 0
+			// spread the overflow between cells...
+			if rest > 0 {
+				rest--
+				c = 1 }
+			sizes[i] = r + c }
+		//sizes[i] += rest
 	// add the rest of the cols to one last column...
 	} else {
 		sizes = append(sizes, rest) }
@@ -257,12 +262,15 @@ func (this *Lines) makeSections(str string, width int, sep_size int) []string {
 			sizes = this.parseSizes(this.SpanMode, width) }
 		// build the sections...
 		var i int
-		var section string
-		for i, section = range sections[:len(sizes)-1] {
-			size := sizes[i]
-			res = append(res, doSection(section, size, sep_size)...) } 
+		getSection := func(i int) string {
+			section := ""
+			if i < len(sections) {
+				section = sections[i] }
+			return section }
+		for i=0; i < len(sizes)-1; i++ {
+			res = append(res, doSection(getSection(i), sizes[i], sep_size)...) } 
 		// last section...
-		res = append(res, doSection(sections[i+1], sizes[i+1], 0)...) }
+		res = append(res, doSection(getSection(i), sizes[i], 0)...) }
 	return res }
 func (this *Lines) makeLine(str string, width int) string {
 	separator := this.SpanSeparator
@@ -279,6 +287,7 @@ func (this *Lines) makeLine(str string, width int) string {
 				sep = overflow } }
 		sections[i], sections[i+1] = str, sep }
 	return strings.Join(sections[:len(sections)-1], "") }
+
 // XXX
 func (this *Lines) expandTemplate(tpl string) string {
 	// XXX
@@ -300,6 +309,8 @@ func main(){
 	testSizes("10,50%,10", 101)
 	testSizes("10,*,10", 101)
 	testSizes("10,*,*,10", 101)
+	testSizes("*,*,*", 100)
+	testSizes("*,*,*", 20)
 
 
 	withOverflow := func(s string, w int) string {
@@ -326,6 +337,21 @@ func main(){
 		lines.makeLine("moo%SPANfoo", 20) + "<")
 	fmt.Println(">"+
 		lines.makeLine("overflow overflow overflow overflow%SPANfoo", 20) + "<")
+	lines.SpanMode = "50%"
+	fmt.Println(">"+
+		lines.makeLine("moo%SPANfoo", 20) + "<")
+	fmt.Println(">"+
+		lines.makeLine("overflow overflow overflow overflow%SPANfoo", 20) + "<")
+	lines.SpanMode = "*,*,*"
+	fmt.Println(">"+
+		lines.makeLine("moo%SPANfoo%SPANboo", 20) + "<")
+	fmt.Println(">"+
+		lines.makeLine("over%SPANflow%SPANover%SPANflow", 20) + "<")
+	fmt.Println(">"+
+		lines.makeLine("0123456789%SPAN0123456789%SPAN0123456789", 20) + "<")
+	fmt.Println(">"+
+		lines.makeLine("under%SPANflow", 20) + "<")
+	
 }
 
 
