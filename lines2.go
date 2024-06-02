@@ -107,7 +107,7 @@ type Lines struct {
 
 	SpanMode string
 	SpanMarker string
-	SpanSeparator rune
+	SpanSeparator string
 
 }
 var LinesDefaults = Lines {
@@ -219,47 +219,66 @@ func (this *Lines) parseSizes(str string, width int) []int {
 	} else {
 		sizes = append(sizes, rest) }
 	return sizes }
-func (this *Lines) makeSections(str string, width int) []string {
+func (this *Lines) makeSections(str string, width int, sep_size int) []string {
 	marker := this.SpanMarker
 	if marker == "" {
 		marker = SPAN_MARKER }
-	//sep := this.SpanSeparator
-	overflow := this.OverflowIndicator
+	overflow := string(OVERFLOW_INDICATOR)
+	if this.OverflowIndicator != 0 {
+		overflow = string(this.OverflowIndicator) }
 
 	sections := strings.Split(str, marker)
 
-	doSection := func(str string, width int) []string {
-		str, o := this.makeSection(sections[0], width)
+	doSection := func(str string, width int, sep_size int) []string {
+		str, o := this.makeSection(str, width - sep_size)
 		sep := ""
 		if o {
-			sep = string(overflow) }
+			sep = overflow }
 		return []string{ 
 			str, 
 			sep, 
 		} }
 
-
 	// single section...
 	res := []string{}
 	if len(sections) == 1 {
-		return doSection(sections[0], width)
+		return doSection(sections[0], width, 0)
 
 	} else {
-		// automatic...
+		// sizing: automatic...
+		sizes := []int{}
 		if this.SpanMode == "" || this.SpanMode == "fit-right" {
-			for _, section := range sections {
-				res = append(res, doSection(section, 0)...) }
-			// XXX
-
-		// manual...
+			// XXX avoid reprocessing this section below (???)
+			section := doSection(sections[len(sections)-1], 0, 0)
+			l := len(section[0])
+			sizes = this.parseSizes(fmt.Sprint("*,", l), width)
+		// sizing: manual...
 		} else {
-			sizes := this.parseSizes(this.SpanMode, width)
-			// build the sections...
-			for i, section := range sections[:len(sizes)] {
-				size := sizes[i]
-				res = append(res, doSection(section, size)...) } } }
-
+			sizes = this.parseSizes(this.SpanMode, width) }
+		// build the sections...
+		var i int
+		var section string
+		for i, section = range sections[:len(sizes)-1] {
+			size := sizes[i]
+			res = append(res, doSection(section, size, sep_size)...) } 
+		// last section...
+		res = append(res, doSection(sections[i+1], sizes[i+1], 0)...) }
 	return res }
+func (this *Lines) makeLine(str string, width int) string {
+	separator := this.SpanSeparator
+	sections := this.makeSections(str, width, len(separator))
+	for i := 0; i < len(sections); i += 2 {
+		str, overflow := sections[i], sections[i+1]
+		sep := separator
+		if len(overflow) > 0 {
+			if len(sep) == 0 {
+				r := []rune(str)
+				r[len(r)-1] = []rune(overflow)[0]
+				str = string(r) 
+			} else {
+				sep = overflow } }
+		sections[i], sections[i+1] = str, sep }
+	return strings.Join(sections[:len(sections)-1], "") }
 // XXX
 func (this *Lines) expandTemplate(tpl string) string {
 	// XXX
@@ -298,6 +317,15 @@ func main(){
 	fmt.Println(">"+ withOverflow("tab\tb\tc", 20) +"<")
 	fmt.Println(">"+ withOverflow("overflow overflow overflow overflow overflow", 20) +"<")
 	fmt.Println(">"+ withOverflow("tab overflow\t\t\t\tmoo", 20) +"<")
+
+
+	fmt.Println(">"+
+		lines.makeLine("moo%SPANfoo", 20) + "<")
+	lines.SpanSeparator = "|"
+	fmt.Println(">"+
+		lines.makeLine("moo%SPANfoo", 20) + "<")
+	fmt.Println(">"+
+		lines.makeLine("overflow overflow overflow overflow%SPANfoo", 20) + "<")
 }
 
 
