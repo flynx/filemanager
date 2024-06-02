@@ -77,6 +77,7 @@ var TAB_SIZE = 8
 var OVERFLOW_INDICATOR = '}'
 
 var SPAN_MARKER = "%SPAN"
+var SPAN_MIN_WIDTH = 5
 
 // Lines
 //
@@ -108,6 +109,7 @@ type Lines struct {
 	SpanMode string
 	SpanMarker string
 	SpanSeparator string
+	SpanMinSize int
 
 }
 var LinesDefaults = Lines {
@@ -179,8 +181,10 @@ func (this *Lines) makeSection(str string, width int) (string, bool) {
 	return string(output), 
 		// overflow...
 		len(runes) - offset > width }
-// XXX handle min widths...
 func (this *Lines) parseSizes(str string, width int) []int {
+	min_size := this.SpanMinSize
+	if min_size == 0 {
+		min_size = SPAN_MIN_WIDTH }
 	sizes := []int{}
 	stars := []int{}
 	rest := width
@@ -205,11 +209,17 @@ func (this *Lines) parseSizes(str string, width int) []int {
 				log.Println("Error parsing:", size, "in:", str) 
 				stars = append(stars, i)
 				continue } }
+		if cols != 0 && 
+				cols < min_size {
+			cols = min_size }
 		rest -= cols
 		sizes = append(sizes, cols) }
 	// fill "*"'s
 	if len(stars) > 0 {
 		r := int(float64(rest) / float64(len(stars)))
+		if r != 0 && 
+				r < min_size {
+			r = min_size }
 		rest = rest % len(stars)
 		i := 0
 		for _, i = range stars {
@@ -234,10 +244,12 @@ func (this *Lines) makeSections(str string, width int, sep_size int) []string {
 
 	sections := strings.Split(str, marker)
 
+	skip := false
 	doSection := func(str string, width int, sep_size int) []string {
 		str, o := this.makeSection(str, width - sep_size)
 		sep := ""
-		if o {
+		// mark overflow if skipping sections too...
+		if o || skip {
 			sep = overflow }
 		return []string{ 
 			str, 
@@ -267,15 +279,26 @@ func (this *Lines) makeSections(str string, width int, sep_size int) []string {
 			if i < len(sections) {
 				section = sections[i] }
 			return section }
+		rest := width
 		for i=0; i < len(sizes)-1; i++ {
+			// do not process stuff that will get off screen...
+			if rest <= 0 {
+				skip = true
+				sizes[i] += rest - sep_size
+				break }
+			rest -= sizes[i] + sep_size
 			res = append(res, doSection(getSection(i), sizes[i], sep_size)...) } 
 		// last section...
-		res = append(res, doSection(getSection(i), sizes[i], 0)...) }
+		if sizes[i] == 0 {
+			res = append(res, "", overflow)
+		} else if sizes[i] > 0 {
+			res = append(res, doSection(getSection(i), sizes[i], 0)...) } }
 	return res }
-func (this *Lines) makeLine(str string, width int) string {
+func (this *Lines) makeLine(str string, width int) (string, bool) {
 	separator := this.SpanSeparator
 	sections := this.makeSections(str, width, len(separator))
-	for i := 0; i < len(sections); i += 2 {
+	// NOTE: we are skipping the last section...
+	for i := 0; i < len(sections)-2; i += 2 {
 		str, overflow := sections[i], sections[i+1]
 		sep := separator
 		if len(overflow) > 0 {
@@ -286,7 +309,8 @@ func (this *Lines) makeLine(str string, width int) string {
 			} else {
 				sep = overflow } }
 		sections[i], sections[i+1] = str, sep }
-	return strings.Join(sections[:len(sections)-1], "") }
+	return strings.Join(sections[:len(sections)-1], ""), 
+		sections[len(sections)-1] != "" }
 
 // XXX
 func (this *Lines) expandTemplate(tpl string) string {
@@ -321,6 +345,7 @@ func main(){
 			s = string(r) }
 		return s }
 
+	fmt.Println("")
 	fmt.Println(">"+ withOverflow("no overflow", 0) +"<")
 	fmt.Println(">"+ withOverflow("no overflow no overflow no overflow no overflow", 0) +"<")
 	fmt.Println(">"+ withOverflow("a b c", 20) +"<")
@@ -330,27 +355,43 @@ func main(){
 	fmt.Println(">"+ withOverflow("tab overflow\t\t\t\tmoo", 20) +"<")
 
 
+	makeLine := func(s string, w int) string {
+		s, o := lines.makeLine(s, w)
+		if o {
+			r := []rune(s)
+			r[len(r)-1] = '}' 
+			s = string(r) }
+		return s }
+
+	fmt.Println("")
 	fmt.Println(">"+
-		lines.makeLine("moo%SPANfoo", 20) + "<")
+		makeLine("moo%SPANfoo", 20) + "<")
+	fmt.Println(">"+
+		makeLine("overflow overflow overflow overflow overflow overflow", 20) + "<")
 	lines.SpanSeparator = "|"
 	fmt.Println(">"+
-		lines.makeLine("moo%SPANfoo", 20) + "<")
+		makeLine("moo%SPANfoo", 20) + "<")
 	fmt.Println(">"+
-		lines.makeLine("overflow overflow overflow overflow%SPANfoo", 20) + "<")
+		makeLine("overflow overflow overflow overflow%SPANfoo", 20) + "<")
 	lines.SpanMode = "50%"
 	fmt.Println(">"+
-		lines.makeLine("moo%SPANfoo", 20) + "<")
+		makeLine("moo%SPANfoo", 20) + "<")
 	fmt.Println(">"+
-		lines.makeLine("overflow overflow overflow overflow%SPANfoo", 20) + "<")
+		makeLine("overflow overflow overflow overflow%SPANfoo", 20) + "<")
 	lines.SpanMode = "*,*,*"
 	fmt.Println(">"+
-		lines.makeLine("moo%SPANfoo%SPANboo", 20) + "<")
+		makeLine("moo%SPANfoo%SPANboo", 20) + "<")
 	fmt.Println(">"+
-		lines.makeLine("over%SPANflow%SPANover%SPANflow", 20) + "<")
+		makeLine("over%SPANflow%SPANover%SPANflow", 20) + "<")
 	fmt.Println(">"+
-		lines.makeLine("0123456789%SPAN0123456789%SPAN0123456789", 20) + "<")
+		makeLine("0123456789%SPAN0123456789%SPAN0123456789", 20) + "<")
 	fmt.Println(">"+
-		lines.makeLine("under%SPANflow", 20) + "<")
+		makeLine("under%SPANflow", 20) + "<")
+	lines.SpanMode = "*,*,*,*,*,*,*,*,*,*"
+	fmt.Println(">"+
+		makeLine("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 20) + "<")
+	fmt.Println(">"+
+		makeLine("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 25) + "<")
 	
 }
 
