@@ -331,7 +331,8 @@ func (this *Lines) makeNormSections(str string, width int) []string {
 		width -= 2 }
 	separator := this.SpanSeparator
 	sections := this.makeSections(str, width, len(separator))
-	// NOTE: we are skipping the last section...
+	// NOTE: we are skipping the last section as it already places the
+	//		overflow symbol in the right spot...
 	for i := 0; i < len(sections)-2; i += 2 {
 		str, overflow := sections[i], sections[i+1]
 		sep := separator
