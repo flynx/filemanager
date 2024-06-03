@@ -94,7 +94,6 @@ type Lines struct {
 	Left int
 	Width int
 	Height int
-	Border int
 
 	//Theme Theme
 
@@ -113,6 +112,7 @@ type Lines struct {
 	SpanSeparator string
 	SpanMinSize int
 
+	Border string
 }
 var LinesDefaults = Lines {
 	Title: "",
@@ -297,13 +297,22 @@ func (this *Lines) makeSections(str string, width int, sep_size int) []string {
 		} else if sizes[i] > 0 {
 			res = append(res, doSection(getSection(i), sizes[i], 0)...) } }
 	return res }
+//
+// Format:
+//		<sections> ::= 
+//			<empty>
+//			| <section>
+//			| <section> [ <res> ]
+//		<section> ::= 
+//			<text> <sep>
+//
 // NOTE: we are not joining the list here so as to enable further 
 //		processing (e.g. styling) down the line...
 // XXX shoud we be able to distinguish between last cell overflow and 
 //		and section overflow???
 //		...currently it is not possible to do so...
 // XXX this only merges overflow indicator into sections, do we really 
-//		need this or should we berge this into .makeSections(..)???
+//		need this or should we merge this into .makeSections(..)???
 // XXX make sure to handle lines ending in escape sequences correctly 
 //		when embedding overflow indicator...
 func (this *Lines) makeNormSections(str string, width int) []string {
@@ -322,6 +331,43 @@ func (this *Lines) makeNormSections(str string, width int) []string {
 				sep = overflow } }
 		sections[i], sections[i+1] = str, sep }
 	return sections }
+
+//func (this *Lines) makeTitleLine(str string, width int) []string {
+//}
+// 
+// Format:
+//		<line> ::=
+//			<lborder> <term>
+//			| <lborder> <sections> <text> <term>
+//		<sections> ::= 
+//			<empty>
+//			| <section>
+//			| <section> [ <res> ]
+//		<section> ::= 
+//			<text> <sep>
+//		<term> ::=
+//			<rborder>
+//			| <overflow>
+// 
+func (this *Lines) makeContentLine(str string, width int) []string {
+	l := ""
+	r := ""
+	if this.Border != "" {
+		l = string([]rune(this.Border)[0])
+		r = string([]rune(this.Border)[4])
+		width -= 2 }
+	sections := this.makeNormSections(str, width)
+	if sections[len(sections)-1] == "" {
+		sections[len(sections)-1] = r 
+	// overflow + no borders -> place last overflow on last char...
+	} else if this.Border == "" {
+		s := []rune(sections[len(sections)-2])
+		// XXX handle escape sequences correctly...
+		sections[len(sections)-2] = string(s[:len(s)-1]) }
+	return append([]string{ l }, sections...) }
+//func (this *Lines) makeStatusLine(str string, width int) []string {
+//}
+
 
 // XXX
 func (this *Lines) expandTemplate(tpl string) string {
@@ -366,7 +412,7 @@ func main(){
 	fmt.Println(">"+ makeSection("tab overflow\t\t\t\tmoo", 20) +"<")
 
 
-	makeLine := func(s string, w int) string {
+	makeNormSections := func(s string, w int) string {
 		l := lines.makeNormSections(s, w)
 		s = strings.Join(l[:len(l)-1], "")
 		if l[len(l)-1] == "}" {
@@ -377,32 +423,56 @@ func main(){
 
 	fmt.Println("")
 	fmt.Println(">"+
-		makeLine("moo%SPANfoo", 20) + "<")
+		makeNormSections("moo%SPANfoo", 20) + "<")
 	fmt.Println(">"+
-		makeLine("overflow overflow overflow overflow overflow overflow", 20) + "<")
+		makeNormSections("overflow overflow overflow overflow overflow overflow", 20) + "<")
 	lines.SpanSeparator = "|"
 	fmt.Println(">"+
-		makeLine("moo%SPANfoo", 20) + "<")
+		makeNormSections("moo%SPANfoo", 20) + "<")
 	fmt.Println(">"+
-		makeLine("overflow overflow overflow overflow%SPANfoo", 20) + "<")
+		makeNormSections("overflow overflow overflow overflow%SPANfoo", 20) + "<")
 	lines.SpanMode = "50%"
 	fmt.Println(">"+
-		makeLine("moo%SPANfoo", 20) + "<")
+		makeNormSections("moo%SPANfoo", 20) + "<")
 	fmt.Println(">"+
-		makeLine("overflow overflow overflow overflow%SPANfoo", 20) + "<")
+		makeNormSections("overflow overflow overflow overflow%SPANfoo", 20) + "<")
 	lines.SpanMode = "*,*,*"
 	fmt.Println(">"+
-		makeLine("moo%SPANfoo%SPANboo", 20) + "<")
+		makeNormSections("moo%SPANfoo%SPANboo", 20) + "<")
 	fmt.Println(">"+
-		makeLine("over%SPANflow%SPANover%SPANflow", 20) + "<")
+		makeNormSections("over%SPANflow%SPANover%SPANflow", 20) + "<")
 	fmt.Println(">"+
-		makeLine("0123456789%SPAN0123456789%SPAN0123456789", 20) + "<")
+		makeNormSections("0123456789%SPAN0123456789%SPAN0123456789", 20) + "<")
 	fmt.Println(">"+
-		makeLine("under%SPANflow", 20) + "<")
+		makeNormSections("under%SPANflow", 20) + "<")
 	lines.SpanMode = "*,*,*,*,*,*,*,*,*,*"
 	fmt.Println(">"+
-		makeLine("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 20) + "<")
+		makeNormSections("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 20) + "<")
+	// XXX BUG this still is 20 wide...
+	fmt.Println(">"+
+		makeNormSections("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 18) + "<")
+	// XXX BUG this still is more than 20 wide...
+	fmt.Println(">"+
+		makeNormSections("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 19) + "<")
 	
+
+	makeContentLine := func(s string, w int) string {
+		return strings.Join(lines.makeContentLine(s, w), "") }
+
+	fmt.Println("")
+	lines.SpanMode = ""
+	fmt.Println(">"+
+		makeContentLine("moo%SPANfoo", 20) +"<")
+	fmt.Println(">"+
+		makeContentLine("overflow overflow overflow overflow overflow overflow", 20) +"<")
+	lines.Border = "│┌─┐│└─┘"
+	fmt.Println(
+		makeContentLine("moo%SPANfoo", 20))
+	fmt.Println(
+		makeContentLine("overflow overflow overflow overflow overflow overflow", 20))
+	lines.SpanMode = "*,*,*,*,*,*,*,*,*,*"
+	fmt.Println(
+		makeContentLine("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 20))
 }
 
 
