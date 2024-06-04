@@ -128,6 +128,8 @@ func (this *Lines) makeSection(str string, width int) (string, bool) {
 
 	runes := []rune(str)
 	//expand := true
+	//if width < 0 {
+	//	return "", true }
 	if width == 0 {
 		//expand = false
 		width = len(runes) }
@@ -184,58 +186,90 @@ func (this *Lines) makeSection(str string, width int) (string, bool) {
 	return string(output), 
 		// overflow...
 		len(runes) - offset > width }
-func (this *Lines) parseSizes(str string, width int) []int {
+// XXX should this account for separators???
+// XXX should this trim sizes???
+// XXX can we pre-parse this once???
+func (this *Lines) parseSizes(str string, width int, sep int) []int {
+	str = strings.TrimSpace(str)
 	min_size := this.SpanMinSize
 	if min_size == 0 {
 		min_size = SPAN_MIN_WIDTH }
-	sizes := []int{}
-	stars := []int{}
+	spec := []string{}
+	// special case...
+	if str == "100%" {
+		spec = []string{str}
+	} else {
+		spec = strings.Split(str, ",") 
+		// only one col specified -> append "*"...
+		if len(spec) < 2 {
+			spec = append(spec, "*") } }
 	rest := width
-	// XXX can we pre-parse this once???
-	for i, size := range strings.Split(str, ",") {
+	sizes := []int{}
+	stars := 0
+	// build list of sizes...
+	star_seps := 0
+	for i, size := range spec {
 		size = strings.TrimSpace(size)
-		cols := 0
+		cols := -1
 		if size == "*" || 
 				size == "" {
-			stars = append(stars, i)
+			stars++
+			if i < len(spec)-1 {
+				star_seps += sep }
 		} else if size[len(size)-1] == '%' {
 			p, err := strconv.ParseFloat(string(size[:len(size)-1]), 64)
 			if err != nil {
 				log.Println("Error parsing:", size, "in:", str) 
-				stars = append(stars, i)
+				stars++
+				sizes = append(sizes, cols)
 				continue }
 			cols = int(float64(width) * (p / 100))
+			// accout for separators...
+			if i < len(spec)-1 {
+				cols -= sep }
 		} else {
 			var err error
 			cols, err = strconv.Atoi(size) 
 			if err != nil {
 				log.Println("Error parsing:", size, "in:", str) 
-				stars = append(stars, i)
+				stars++
+				sizes = append(sizes, cols)
 				continue } }
-		if cols != 0 && 
+		if cols > 0 && 
 				cols < min_size {
 			cols = min_size }
 		rest -= cols
 		sizes = append(sizes, cols) }
-	// fill "*"'s
-	if len(stars) > 0 {
-		r := int(float64(rest) / float64(len(stars)))
-		if r != 0 && 
-				r < min_size {
-			r = min_size }
-		rest = rest % len(stars)
-		i := 0
-		for _, i = range stars {
-			c := 0
-			// spread the overflow between cells...
-			if rest > 0 {
-				rest--
-				c = 1 }
-			sizes[i] = r + c }
-		//sizes[i] += rest
-	// add the rest of the cols to one last column...
-	} else {
-		sizes = append(sizes, rest) }
+	// fill *'s and trim overflow...
+	star_size := 0
+	if stars > 0 {
+		star_size = int(float64(rest) / float64(stars))
+		if star_size != 0 && 
+				star_size < min_size {
+			star_size = min_size } }
+	total := 0
+	for i := 0; i < len(sizes); i++ {
+		if total == width {
+			sizes[i] = -1
+			continue }
+		size := sizes[i]
+		// star...
+		if size < 0 {
+			size = star_size
+			if i < len(sizes)-1 {
+				size -= sep } }
+		total += size 
+		if i < len(sizes)-1 {
+			total += sep }
+		// overflow -- trim the cell(s)...
+		if total > width {
+			size -= total - width
+			total = width }
+		// underflow -- add excess to last cell...
+		if i == len(sizes)-1 && 
+				total < width {
+			size += width - total }
+		sizes[i] = size }
 	return sizes }
 func (this *Lines) makeSections(str string, width int, sep_size int) []string {
 	marker := this.SpanMarker
@@ -248,8 +282,8 @@ func (this *Lines) makeSections(str string, width int, sep_size int) []string {
 	sections := strings.Split(str, marker)
 
 	skip := false
-	doSection := func(str string, width int, sep_size int) []string {
-		str, o := this.makeSection(str, width - sep_size)
+	doSection := func(str string, width int) []string {
+		str, o := this.makeSection(str, width)
 		sep := ""
 		// mark overflow if skipping sections too...
 		if o || skip {
@@ -262,19 +296,19 @@ func (this *Lines) makeSections(str string, width int, sep_size int) []string {
 	// single section...
 	res := []string{}
 	if len(sections) == 1 {
-		return doSection(sections[0], width, 0)
+		return doSection(sections[0], width)
 
 	} else {
 		// sizing: automatic...
 		sizes := []int{}
 		if this.SpanMode == "" || this.SpanMode == "fit-right" {
 			// XXX avoid reprocessing this section below (???)
-			section := doSection(sections[len(sections)-1], 0, 0)
+			section := doSection(sections[len(sections)-1], 0)
 			l := len(section[0])
-			sizes = this.parseSizes(fmt.Sprint("*,", l), width)
+			sizes = this.parseSizes(fmt.Sprint("*,", l), width, sep_size)
 		// sizing: manual...
 		} else {
-			sizes = this.parseSizes(this.SpanMode, width) }
+			sizes = this.parseSizes(this.SpanMode, width, sep_size) }
 		// build the sections...
 		var i int
 		getSection := func(i int) string {
@@ -282,21 +316,35 @@ func (this *Lines) makeSections(str string, width int, sep_size int) []string {
 			if i < len(sections) {
 				section = sections[i] }
 			return section }
-		rest := width
+		//rest := width
 		for i=0; i < len(sizes)-1; i++ {
+			if sizes[i] < 0 {
+				//* XXX
+				break }
+				/*/
+				res = append(res, "", "")
+				continue }
+				//*/
+			//if sizes[0] < 0 {
+			//	res = append(res, "", "") }
+			/*
 			// do not process stuff that will get off screen...
 			if rest <= 0 {
 				skip = true
 				sizes[i] += rest - sep_size
 				break }
 			rest -= sizes[i] + sep_size
-			res = append(res, doSection(getSection(i), sizes[i], sep_size)...) } 
+			//*/
+			res = append(res, doSection(getSection(i), sizes[i])...) }
 		// last section...
 		if sizes[i] == 0 {
 			res = append(res, "", overflow)
 		} else if sizes[i] > 0 {
-			res = append(res, doSection(getSection(i), sizes[i], 0)...) } }
+			res = append(res, doSection(getSection(i), sizes[i])...) } }
 	return res }
+//
+//	.makeSectionChrome(<str>, <width>[, <left_border>[, <right_border>]])
+//		-> <line>
 //
 // Format:
 //		<line> ::=
@@ -322,10 +370,14 @@ func (this *Lines) makeSections(str string, width int, sep_size int) []string {
 //		.makeSections(..)???
 // XXX make sure to handle lines ending in escape sequences correctly 
 //		when embedding overflow indicator...
-func (this *Lines) makeNormSections(str string, width int) []string {
+func (this *Lines) makeSectionChrome(str string, width int, rest ...string) []string {
 	l := ""
 	r := ""
-	if this.Border != "" {
+	if len(rest) >= 2 {
+		l = rest[0] 
+		r = rest[1] 
+		width -= len(rest[0]) + len(rest[1])
+	} else if this.Border != "" {
 		l = string([]rune(this.Border)[0])
 		r = string([]rune(this.Border)[4])
 		width -= 2 }
@@ -363,11 +415,13 @@ func (this *Lines) makeNormSections(str string, width int) []string {
 
 //func (this *Lines) makeTitleLine(str string, width int) []string {
 //}
-// 
-// 
 //func (this *Lines) makeStatusLine(str string, width int) []string {
 //}
 
+func (this *Lines) drawCell(r rune) *Lines {
+	return this }
+func (this *Lines) Draw(str string) *Lines {
+	return this }
 
 // XXX
 func (this *Lines) expandTemplate(tpl string) string {
@@ -381,17 +435,24 @@ func main(){
 	lines := Lines{}
 
 
-	testSizes := func(s string, w int){
-		fmt.Println("SIZE PARSING: w:", w, "s: \""+ s +"\" ->", lines.parseSizes(s, w)) }
+	testSizes := func(s string, w int, p int){
+		fmt.Println("SIZE PARSING: w:", w, "sep:", p, "s: \""+ s +"\" ->", 
+			lines.parseSizes(s, w, p)) }
 
-	testSizes("50%", 100)
-	testSizes("50%", 101)
-	testSizes("50%,", 101)
-	testSizes("10,50%,10", 101)
-	testSizes("10,*,10", 101)
-	testSizes("10,*,*,10", 101)
-	testSizes("*,*,*", 100)
-	testSizes("*,*,*", 20)
+	testSizes("50%", 100, 0)
+	testSizes("50%", 101, 0)
+	// XXX this yields an odd split of 49/51 -- can we make this more natural???
+	testSizes("50%", 101, 1)
+	testSizes("50%,", 101, 0)
+	testSizes("10,50%,10", 101, 0)
+	testSizes("10,*,10", 101, 0)
+	testSizes("10,*,*,10", 101, 0)
+	testSizes("*,*,*", 100, 0)
+	testSizes("*,*,*", 20, 0)
+	testSizes("*,*,*", 20, 1)
+	testSizes("*,*,*,*", 20, 0)
+	testSizes("*,*,*,*,*,*", 20, 0)
+	testSizes("*,*,*,*,*,*", 22, 0)
 
 
 	makeSection := func(s string, w int) string {
@@ -412,61 +473,79 @@ func main(){
 	fmt.Println(">"+ makeSection("tab overflow\t\t\t\tmoo", 20) +"<")
 
 
-	makeNormSections := func(s string, w int) string {
-		return strings.Join(lines.makeNormSections(s, w), "") }
-
+	makeSectionChrome := func(s string, w int, r ...string) string {
+		return strings.Join(lines.makeSectionChrome(s, w, r...), "") }
 
 	fmt.Println("")
 	fmt.Println(">"+
-		makeNormSections("moo%SPANfoo", 20) + "<")
+		makeSectionChrome("moo%SPANfoo", 20) + "<")
 	fmt.Println(">"+
-		makeNormSections("overflow overflow overflow overflow overflow overflow", 20) + "<")
+		makeSectionChrome("overflow overflow overflow overflow overflow overflow", 20) + "<")
+	fmt.Println(">"+
+		makeSectionChrome("moo%SPANfoo", 20, "[[", "]]") + "<")
+	fmt.Println(">"+
+		makeSectionChrome("moo%SPANfoo", 20) + "<")
 	lines.SpanSeparator = "|"
 	fmt.Println(">"+
-		makeNormSections("moo%SPANfoo", 20) + "<")
+		makeSectionChrome("moo%SPANfoo", 20) + "<")
 	fmt.Println(">"+
-		makeNormSections("overflow overflow overflow overflow%SPANfoo", 20) + "<")
+		makeSectionChrome("overflow overflow overflow overflow%SPANfoo", 20) + "<")
 	lines.SpanMode = "50%"
 	fmt.Println(">"+
-		makeNormSections("moo%SPANfoo", 20) + "<")
+		makeSectionChrome("moo%SPANfoo", 20) + "<")
 	fmt.Println(">"+
-		makeNormSections("overflow overflow overflow overflow%SPANfoo", 20) + "<")
+		makeSectionChrome("overflow overflow overflow overflow%SPANfoo", 20) + "<")
 	lines.SpanMode = "*,*,*"
 	fmt.Println(">"+
-		makeNormSections("moo%SPANfoo%SPANboo", 20) + "<")
+		makeSectionChrome("moo%SPANfoo%SPANboo", 20) + "<")
 	fmt.Println(">"+
-		makeNormSections("over%SPANflow%SPANover%SPANflow", 20) + "<")
+		makeSectionChrome("over%SPANflow%SPANover%SPANflow", 20) + "<")
 	fmt.Println(">"+
-		makeNormSections("0123456789%SPAN0123456789%SPAN0123456789", 20) + "<")
+		makeSectionChrome("0123456789%SPAN0123456789%SPAN0123456789", 20) + "<")
 	fmt.Println(">"+
-		makeNormSections("under%SPANflow", 20) + "<")
+		makeSectionChrome("under%SPANflow", 20) + "<")
 	lines.SpanMode = "*,*,*,*,*,*,*,*,*,*"
 	fmt.Println(">"+
-		makeNormSections("", 20) + "<")
+		makeSectionChrome("", 20) + "<")
 	fmt.Println(">"+
-		makeNormSections("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 20) + "<")
-	// XXX BUG this still is 20 wide...
-	fmt.Println(">"+
-		makeNormSections("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 18) + "<")
-	// XXX BUG this still is more than 20 wide...
-	fmt.Println(">"+
-		makeNormSections("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 19) + "<")
+		makeSectionChrome("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 20) + "<")
+
+
+	testLineSizes := func(str string, r ...string){
+		err := false
+		for i := 4; i < 40; i++ {
+			s := makeSectionChrome(str, i, r...)
+			if len(s) != i {
+				err = true
+				fmt.Println(">"+ s + "<") 
+				fmt.Printf("^%"+ fmt.Sprint(i) +"v^ should be: %v got: %v\n", "", i, len(s)) } } 
+		if ! err {
+			fmt.Println(str, "-> OK") } }
+
+	fmt.Println("")
+	lines.SpanMode = ""
+	testLineSizes("moo")
+	// XXX BUG: this breaks for sizes < 10...
+	testLineSizes("moo%SPANfoo")
+	// XXX BUG: this does not calculate the sizes correctly a lot of the time...
+	lines.SpanMode = "*,*,*,*,*,*,*,*,*,*"
+	testLineSizes("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw")
 	
 
 	fmt.Println("")
 	lines.SpanMode = ""
 	fmt.Println(">"+
-		makeNormSections("moo%SPANfoo", 20) +"<")
+		makeSectionChrome("moo%SPANfoo", 20) +"<")
 	fmt.Println(">"+
-		makeNormSections("overflow overflow overflow overflow overflow overflow", 20) +"<")
+		makeSectionChrome("overflow overflow overflow overflow overflow overflow", 20) +"<")
 	lines.Border = "│┌─┐│└─┘"
 	fmt.Println(
-		makeNormSections("moo%SPANfoo", 20))
+		makeSectionChrome("moo%SPANfoo", 20))
 	fmt.Println(
-		makeNormSections("overflow overflow overflow overflow overflow overflow", 20))
+		makeSectionChrome("overflow overflow overflow overflow overflow overflow", 20))
 	lines.SpanMode = "*,*,*,*,*,*,*,*,*,*"
 	fmt.Println(
-		makeNormSections("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 20))
+		makeSectionChrome("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 20))
 }
 
 
