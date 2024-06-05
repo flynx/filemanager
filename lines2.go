@@ -319,25 +319,10 @@ func (this *Lines) makeSections(str string, width int, sep_size int) []string {
 		//rest := width
 		for i=0; i < len(sizes)-1; i++ {
 			if sizes[i] < 0 {
-				//* XXX
 				break }
-				/*/
-				res = append(res, "", "")
-				continue }
-				//*/
-			//if sizes[0] < 0 {
-			//	res = append(res, "", "") }
-			/*
-			// do not process stuff that will get off screen...
-			if rest <= 0 {
-				skip = true
-				sizes[i] += rest - sep_size
-				break }
-			rest -= sizes[i] + sep_size
-			//*/
 			res = append(res, doSection(getSection(i), sizes[i])...) }
 		// last section...
-		if sizes[i] == 0 {
+		if sizes[i] < 0 {
 			res = append(res, "", overflow)
 		} else if sizes[i] > 0 {
 			res = append(res, doSection(getSection(i), sizes[i])...) } }
@@ -406,11 +391,12 @@ func (this *Lines) makeSectionChrome(str string, width int, rest ...string) []st
 		// XXX is this correct -- we could remove a space from both the 
 		//		section as well as from a separator...
 		s := []rune(sections[i])
-		for len(s) == 0 {
+		for i > 0 && len(s) == 0 {
 			i--
 			s = []rune(sections[i]) }
 		// XXX handle escape sequences correctly...
-		sections[i] = string(s[:len(s)-1]) }
+		if len(s) > 0 {
+			sections[i] = string(s[:len(s)-1]) } } 
 	return append([]string{ l }, sections...) }
 
 //func (this *Lines) makeTitleLine(str string, width int) []string {
@@ -453,6 +439,9 @@ func main(){
 	testSizes("*,*,*,*", 20, 0)
 	testSizes("*,*,*,*,*,*", 20, 0)
 	testSizes("*,*,*,*,*,*", 22, 0)
+	testSizes("*,*,*,*,*,*", 24, 0)
+	testSizes("*,*,*,*,*,*", 25, 0)
+	testSizes("*,*,*,*,*,*", 26, 0)
 
 
 	makeSection := func(s string, w int) string {
@@ -477,6 +466,8 @@ func main(){
 		return strings.Join(lines.makeSectionChrome(s, w, r...), "") }
 
 	fmt.Println("")
+	fmt.Println(">"+
+		makeSectionChrome("1234567890", 10) + "<")
 	fmt.Println(">"+
 		makeSectionChrome("moo%SPANfoo", 20) + "<")
 	fmt.Println(">"+
@@ -513,14 +504,18 @@ func main(){
 
 	testLineSizes := func(str string, r ...string){
 		err := false
+		printed := false
 		for i := 4; i < 40; i++ {
 			s := makeSectionChrome(str, i, r...)
 			if len(s) != i {
 				err = true
+				if ! printed {
+					printed = true
+					fmt.Println("ERR: \""+ str +"\"") }
 				fmt.Println(">"+ s + "<") 
 				fmt.Printf("^%"+ fmt.Sprint(i) +"v^ should be: %v got: %v\n", "", i, len(s)) } } 
 		if ! err {
-			fmt.Println(str, "-> OK") } }
+			fmt.Println("OK:", str) } }
 
 	fmt.Println("")
 	lines.SpanMode = ""
@@ -540,12 +535,17 @@ func main(){
 		makeSectionChrome("overflow overflow overflow overflow overflow overflow", 20) +"<")
 	lines.Border = "│┌─┐│└─┘"
 	fmt.Println(
-		makeSectionChrome("moo%SPANfoo", 20))
+		makeSectionChrome("moo%SPANfoo", 22))
 	fmt.Println(
-		makeSectionChrome("overflow overflow overflow overflow overflow overflow", 20))
+		makeSectionChrome("overflow overflow overflow overflow overflow overflow", 22))
 	lines.SpanMode = "*,*,*,*,*,*,*,*,*,*"
 	fmt.Println(
-		makeSectionChrome("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 20))
+		makeSectionChrome("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 22))
+	// XXX BUG: shows the bug from section above...
+	testSizes("*,*,*,*,*,*,*,*,*,*", 21, 0)
+	fmt.Println(
+		makeSectionChrome("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 23))
+
 }
 
 
