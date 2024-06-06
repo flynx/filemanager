@@ -109,8 +109,10 @@ type Lines struct {
 
 	SpanMode string
 	// cache...
-	_SpanMode string
-	_SpanMode_cache []int
+	__SpanMode struct {
+		text string
+		value []int
+	}
 	SpanMarker string
 	SpanSeparator string
 	SpanMinSize int
@@ -325,13 +327,13 @@ func (this *Lines) makeSections(str string, width int, sep_size int) []string {
 		// sizing: manual (cached)...
 		} else {
 			// cached result -- the same for each line, no need to recalculate...
-			if this.SpanMode == this._SpanMode {
-				sizes = this._SpanMode_cache 
+			if this.SpanMode == this.__SpanMode.text {
+				sizes = this.__SpanMode.value
 			// generate/cache...
 			} else {
 				sizes = this.parseSizes(this.SpanMode, width, sep_size)
-				this._SpanMode = this._SpanMode
-				this._SpanMode_cache = sizes } }
+				this.__SpanMode.text = this.SpanMode
+				this.__SpanMode.value = sizes } }
 		// build the sections...
 		var i int
 		getSection := func(i int) string {
@@ -379,9 +381,6 @@ func (this *Lines) makeSections(str string, width int, sep_size int) []string {
 // XXX shoud we be able to distinguish between last cell overflow and 
 //		and section overflow???
 //		...currently it is not possible to do so...
-// XXX this only merges overflow indicator and span separator into 
-//		sections, do we really need this or should we merge this into 
-//		.makeSections(..)???
 // XXX make sure to handle lines ending in escape sequences correctly 
 //		when embedding overflow indicator...
 func (this *Lines) makeSectionChrome(str string, width int, rest ...string) []string {
@@ -450,9 +449,8 @@ func (this *Lines) expandTemplate(tpl string) string {
 func main(){
 	lines := Lines{}
 
-
 	testSizes := func(s string, w int, p int){
-		fmt.Println("SIZE PARSING: w:", w, "sep:", p, "s: \""+ s +"\" ->", 
+		fmt.Println("w:", w, "sep:", p, "s: \""+ s +"\" ->", 
 			lines.parseSizes(s, w, p)) }
 
 	testSizes("50%", 100, 0)
