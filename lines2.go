@@ -189,9 +189,7 @@ func (this *Lines) makeSection(str string, width int) (string, bool) {
 	return string(output), 
 		// overflow...
 		len(runes) - offset > width }
-// XXX should this account for separators???
-// XXX should this trim sizes???
-// XXX can we pre-parse this once???
+// XXX is this overcomplicated???
 func (this *Lines) parseSizes(str string, width int, sep int) []int {
 	str = strings.TrimSpace(str)
 	min_size := this.SpanMinSize
@@ -259,7 +257,7 @@ func (this *Lines) parseSizes(str string, width int, sep int) []int {
 	for i := 0; i < len(sizes); i++ {
 		// special case: overflow at the separator...
 		if sep > 0 && 
-				i < len(sizes)-1 && 
+				//i < len(sizes)-1 && 
 				total == width {
 			sizes[i] = 0
 			total++
@@ -289,6 +287,7 @@ func (this *Lines) parseSizes(str string, width int, sep int) []int {
 		sizes[i] = size }
 	return sizes }
 func (this *Lines) makeSections(str string, width int, sep_size int) []string {
+	// defaults...
 	marker := this.SpanMarker
 	if marker == "" {
 		marker = SPAN_MARKER }
@@ -351,7 +350,10 @@ func (this *Lines) makeSections(str string, width int, sep_size int) []string {
 				break }
 			res = append(res, doSection(getSection(i), sizes[i])...) }
 		// last section...
-		if sizes[i] > 0 {
+		if sizes[i] == 0 {
+			if len(res) == len(sizes) {
+				res = append(res, overflow) }
+		} else if sizes[i] > 0 {
 			res = append(res, doSection(getSection(i), sizes[i])...) } }
 	return res }
 //
@@ -418,7 +420,8 @@ func (this *Lines) makeSectionChrome(str string, width int, rest ...string) []st
 		// XXX is this correct -- we could remove a space from both the 
 		//		section as well as from a separator...
 		s := []rune(sections[i])
-		for i > 0 && len(s) == 0 {
+		for i > 0 && 
+				len(s) == 0 {
 			i--
 			s = []rune(sections[i]) }
 		// XXX handle escape sequences correctly...
@@ -542,12 +545,10 @@ func main(){
 	lines.SpanMode = "*,*,*,*,*,*,*,*,*,*"
 	fmt.Println(">"+
 		makeSectionChrome("", 20) + "<")
-	// XXX BUG
 	fmt.Println(">"+
 		makeSectionChrome("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 20) + "<")
 
 
-	//*
 	testLineSizes := func(str string, r ...string){
 		err := false
 		printed := false
@@ -559,19 +560,20 @@ func main(){
 					printed = true
 					fmt.Println("ERR: \""+ str +"\"") }
 				fmt.Println(">"+ s + "<") 
-				fmt.Printf("^%"+ fmt.Sprint(i) +"v^ should be: %v got: %v\n", "", i, len(s)) } } 
+				fmt.Printf("^%"+ fmt.Sprint(i) +"v^\n"+
+						"\tshould be: %v got: %v\n"+
+						"\tsizes: %v\n", 
+					"", i, len(s), 
+					lines.parseSizes(lines.SpanMode, i, len(string(lines.SpanSeparator)))) } } 
 		if ! err {
 			fmt.Println("OK:", str) } }
 
 	fmt.Println("")
 	lines.SpanMode = ""
 	testLineSizes("moo")
-	// XXX BUG: this breaks for sizes < 10...
 	testLineSizes("moo%SPANfoo")
-	// XXX BUG: this does not calculate the sizes correctly a lot of the time...
 	lines.SpanMode = "*,*,*,*,*,*,*,*,*,*"
 	testLineSizes("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw")
-	//*/
 	
 
 	fmt.Println("")
@@ -586,31 +588,40 @@ func main(){
 	fmt.Println(
 		makeSectionChrome("overflow overflow overflow overflow overflow overflow", 22))
 	lines.SpanMode = "*,*,*,*,*,*,*,*,*,*"
-	// XXX BUG
 	fmt.Println(
 		makeSectionChrome("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 22))
 
 	testBorderedSize := func(str string, w int){
-		lines.Border = "│┌─┐│└─┘"
 		s := makeSectionChrome(str, w)
 		fmt.Println("")
+		fmt.Println(str)
 		testSizes("*,*,*,*,*,*,*,*,*,*", w, 0)
 		testSizes("*,*,*,*,*,*,*,*,*,*", w, 1)
-		fmt.Printf("v%"+ fmt.Sprint(w-2) +"vv\n", "")
-		fmt.Println(s) 
-		if len(s) - 2 != w {
+		fmt.Printf("v%"+ fmt.Sprint(w) +"vv\n", "")
+		fmt.Printf("%#v\n", s) 
+		c := len(lines.Border)
+		if c > 0 {
+			c = 2 }
+		if len(s) - c != w {
+			fmt.Printf("\tparseSizes: %#v\n",
+				lines.parseSizes(lines.SpanMode, w-c, 1))
+			fmt.Printf("\tmakeSections: %#v\n",
+				lines.makeSections(str, w-c, 1))
 			fmt.Println("    -> ERR") 
 		} else {
 			fmt.Println("    -> OK") } }
-	// XXX BUG: we seem to be removing an extra space...
+	lines.Border = "│┌─┐│└─┘"
 	testBorderedSize("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 20)
-	// XXX BUG: we seem to be removing an extra space...
-	//			...should there be a col 0 here???
 	testBorderedSize("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 21)
-	// XXX BUG: we seem to be losing last sep...
 	testBorderedSize("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 22)
 	testBorderedSize("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 23)
 
+	// XXX BUG: these do not show overflow...
+	//		...this is likely because the last sections is 0 length...
+	lines.SpanMode = ""
+	testBorderedSize("moo%SPANfoo", 7)
+	lines.Border = ""
+	testBorderedSize("moo%SPANfoo", 5)
 }
 
 
