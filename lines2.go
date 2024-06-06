@@ -111,6 +111,7 @@ type Lines struct {
 	// cache...
 	__SpanMode struct {
 		text string
+		width int
 		value []int
 	}
 	SpanMarker string
@@ -326,14 +327,22 @@ func (this *Lines) makeSections(str string, width int, sep_size int) []string {
 			sizes = this.parseSizes("*,"+ fmt.Sprint(l), width, sep_size)
 		// sizing: manual (cached)...
 		} else {
+			//*
 			// cached result -- the same for each line, no need to recalculate...
-			if this.SpanMode == this.__SpanMode.text {
+			if this.SpanMode == this.__SpanMode.text && 
+					this.__SpanMode.width == width {
 				sizes = this.__SpanMode.value
 			// generate/cache...
 			} else {
+			//*/
 				sizes = this.parseSizes(this.SpanMode, width, sep_size)
+			//*
 				this.__SpanMode.text = this.SpanMode
+				this.__SpanMode.width = width
 				this.__SpanMode.value = sizes } }
+			/*/
+		}
+			//*/
 		// build the sections...
 		var i int
 		getSection := func(i int) string {
