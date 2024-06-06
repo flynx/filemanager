@@ -305,7 +305,7 @@ func (this *Lines) makeSections(str string, width int, sep_size int) []string {
 			// XXX avoid reprocessing this section below (???)
 			section := doSection(sections[len(sections)-1], 0)
 			l := len(section[0])
-			sizes = this.parseSizes(fmt.Sprint("*,", l), width, sep_size)
+			sizes = this.parseSizes("*,"+ fmt.Sprint(l), width, sep_size)
 		// sizing: manual...
 		} else {
 			sizes = this.parseSizes(this.SpanMode, width, sep_size) }
@@ -319,12 +319,12 @@ func (this *Lines) makeSections(str string, width int, sep_size int) []string {
 		//rest := width
 		for i=0; i < len(sizes)-1; i++ {
 			if sizes[i] < 0 {
+				if len(res) > 0 {
+					res[len(res)-1] = overflow }
 				break }
 			res = append(res, doSection(getSection(i), sizes[i])...) }
 		// last section...
-		if sizes[i] < 0 {
-			res = append(res, "", overflow)
-		} else if sizes[i] > 0 {
+		if sizes[i] > 0 {
 			res = append(res, doSection(getSection(i), sizes[i])...) } }
 	return res }
 //
@@ -442,7 +442,25 @@ func main(){
 	testSizes("*,*,*,*,*,*", 24, 0)
 	testSizes("*,*,*,*,*,*", 25, 0)
 	testSizes("*,*,*,*,*,*", 26, 0)
+	testSizes("", 4, 0)
 
+	// XXX BUG: these returns [0, 4], should be something like [4, -1]
+	fmt.Println("")
+	fmt.Println("BUG: should all produce be [4, -1]")
+	testSizes("*,1", 4, 0)
+	testSizes("*,2", 4, 0)
+	testSizes("*,3", 4, 0)
+	testSizes("*,4", 4, 0)
+	testSizes("*,5", 4, 0)
+	fmt.Println("BUG: should produce be [5, 4]")
+	testSizes("*,10", 9, 0)
+
+	fmt.Println("")
+	fmt.Println("OK:")
+	testSizes("*,6", 4, 0)
+	testSizes("*,7", 4, 0)
+
+	return
 
 	makeSection := func(s string, w int) string {
 		s, o := lines.makeSection(s, w)
@@ -502,6 +520,7 @@ func main(){
 		makeSectionChrome("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 20) + "<")
 
 
+	/*
 	testLineSizes := func(str string, r ...string){
 		err := false
 		printed := false
@@ -525,6 +544,7 @@ func main(){
 	// XXX BUG: this does not calculate the sizes correctly a lot of the time...
 	lines.SpanMode = "*,*,*,*,*,*,*,*,*,*"
 	testLineSizes("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw")
+	//*/
 	
 
 	fmt.Println("")
@@ -541,10 +561,25 @@ func main(){
 	lines.SpanMode = "*,*,*,*,*,*,*,*,*,*"
 	fmt.Println(
 		makeSectionChrome("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 22))
-	// XXX BUG: shows the bug from section above...
-	testSizes("*,*,*,*,*,*,*,*,*,*", 21, 0)
-	fmt.Println(
-		makeSectionChrome("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 23))
+
+	testBorderedSize := func(str string, w int){
+		lines.Border = "│┌─┐│└─┘"
+		s := makeSectionChrome(str, w)
+		fmt.Println("")
+		testSizes("*,*,*,*,*,*,*,*,*,*", w, 0)
+		testSizes("*,*,*,*,*,*,*,*,*,*", w, 1)
+		fmt.Printf("v%"+ fmt.Sprint(w-2) +"vv\n", "")
+		fmt.Println(s) 
+		if len(s) - 2 != w {
+			fmt.Println("    -> ERR") 
+		} else {
+			fmt.Println("    -> OK") } }
+	// XXX BUG: we seem to be removing an extra space...
+	testBorderedSize("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 20)
+	// XXX BUG: we seem to be removing an extra space...
+	testBorderedSize("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 21)
+	testBorderedSize("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 22)
+	testBorderedSize("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 23)
 
 }
 
