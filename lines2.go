@@ -56,8 +56,8 @@ func (this *LinesBuffer) Append(in any) *LinesBuffer {
 				this.Push(str) } }
 	return this }
 func (this *LinesBuffer) Write(in any) *LinesBuffer {
-	this.Lock()
-	defer this.Unlock()
+	//this.Lock()
+	//defer this.Unlock()
 	return this.
 		Clear().
 		Append(in) }
@@ -88,7 +88,7 @@ type Lines struct {
 	Liner
 
 	// XXX is this a good idea???
-	*LinesBuffer
+	LinesBuffer
 
 	Top int
 	Left int
@@ -444,7 +444,14 @@ func (this *Lines) makeSectionChrome(str string, width int, rest ...string) []st
 
 func (this *Lines) drawCell(r rune) *Lines {
 	return this }
-func (this *Lines) Draw(str string) *Lines {
+// XXX STUB...
+func (this *Lines) Draw() *Lines {
+	// XXX title...
+	for _, line := range this.Lines {
+		fmt.Println(
+			strings.Join(this.makeSectionChrome(line.text, this.Width), "") )
+	}
+	// XXX status...
 	return this }
 
 // XXX
@@ -456,7 +463,10 @@ func (this *Lines) expandTemplate(tpl string) string {
 
 
 func main(){
-	lines := Lines{}
+	lines := Lines{
+		// XXX need to automate this...
+		//LinesBuffer: &LinesBuffer{},
+	}
 
 	testSizes := func(s string, w int, p int){
 		fmt.Println("w:", w, "sep:", p, "s: \""+ s +"\" ->", 
@@ -626,6 +636,15 @@ func main(){
 	testBorderedSize("moo%SPANfoo", 7)
 	lines.Border = ""
 	testBorderedSize("moo%SPANfoo", 5)
+
+
+	fmt.Println("")
+	lines.SpanMode = "*,5"
+	lines.Width = 20
+	lines.Border = "│┌─┐│└─┘"
+	lines.Write("This%SPANis\nsome text\n\nThis is also\nsome text")
+	lines.Draw()
+
 }
 
 
