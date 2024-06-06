@@ -615,9 +615,6 @@ func main(){
 	testBorderedSize("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 21)
 	testBorderedSize("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 22)
 	testBorderedSize("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 23)
-
-	// XXX BUG: these do not show overflow...
-	//		...this is likely because the last sections is 0 length...
 	lines.SpanMode = ""
 	testBorderedSize("moo%SPANfoo", 7)
 	lines.Border = ""
