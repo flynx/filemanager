@@ -108,6 +108,9 @@ type Lines struct {
 	OverflowIndicator rune
 
 	SpanMode string
+	// cache...
+	_SpanMode string
+	_SpanMode_cache []int
 	SpanMarker string
 	SpanSeparator string
 	SpanMinSize int
@@ -211,11 +214,13 @@ func (this *Lines) parseSizes(str string, width int, sep int) []int {
 	for i, size := range spec {
 		size = strings.TrimSpace(size)
 		cols := -1
+		// *...
 		if size == "*" || 
 				size == "" {
 			stars++
 			if i < len(spec)-1 {
 				star_seps += sep }
+		// %...
 		} else if size[len(size)-1] == '%' {
 			p, err := strconv.ParseFloat(string(size[:len(size)-1]), 64)
 			if err != nil {
@@ -227,6 +232,8 @@ func (this *Lines) parseSizes(str string, width int, sep int) []int {
 			// accout for separators...
 			if i < len(spec)-1 {
 				cols -= sep }
+		// cols (explicit)
+		// NOTE: these do not include separators...
 		} else {
 			var err error
 			cols, err = strconv.Atoi(size) 
@@ -250,7 +257,14 @@ func (this *Lines) parseSizes(str string, width int, sep int) []int {
 			star_size = min_size } }
 	total := 0
 	for i := 0; i < len(sizes); i++ {
-		if total == width {
+		// special case: overflow at the separator...
+		if sep > 0 && 
+				i < len(sizes)-1 && 
+				total == width {
+			sizes[i] = 0
+			total++
+			continue }
+		if total >= width {
 			sizes[i] = -1
 			continue }
 		size := sizes[i]
@@ -262,10 +276,12 @@ func (this *Lines) parseSizes(str string, width int, sep int) []int {
 		total += size 
 		if i < len(sizes)-1 {
 			total += sep }
-		// overflow -- trim the cell(s)...
+		// overflow -- trim the cell...
 		if total > width {
 			size -= total - width
-			total = width }
+			// uncompensate for separator...
+			if i < len(sizes)-1 {
+				size += sep } }
 		// underflow -- add excess to last cell...
 		if i == len(sizes)-1 && 
 				total < width {
@@ -300,16 +316,23 @@ func (this *Lines) makeSections(str string, width int, sep_size int) []string {
 		return doSection(sections[0], width)
 
 	} else {
-		// sizing: automatic...
+		// sizing: automatic (uncached)...
+		// NOTE: we do not cache this because the output depends on sections...
 		sizes := []int{}
 		if this.SpanMode == "" || this.SpanMode == "fit-right" {
-			// XXX avoid reprocessing this section below (???)
 			section := doSection(sections[len(sections)-1], 0)
 			l := len(section[0])
 			sizes = this.parseSizes("*,"+ fmt.Sprint(l), width, sep_size)
-		// sizing: manual...
+		// sizing: manual (cached)...
 		} else {
-			sizes = this.parseSizes(this.SpanMode, width, sep_size) }
+			// cached result -- the same for each line, no need to recalculate...
+			if this.SpanMode == this._SpanMode {
+				sizes = this._SpanMode_cache 
+			// generate/cache...
+			} else {
+				sizes = this.parseSizes(this.SpanMode, width, sep_size)
+				this._SpanMode = this._SpanMode
+				this._SpanMode_cache = sizes } }
 		// build the sections...
 		var i int
 		getSection := func(i int) string {
@@ -317,10 +340,13 @@ func (this *Lines) makeSections(str string, width int, sep_size int) []string {
 			if i < len(sections) {
 				section = sections[i] }
 			return section }
-		//rest := width
 		for i=0; i < len(sizes)-1; i++ {
-			if sizes[i] < 0 {
+			// overflow...
+			if sizes[i] <= 0 {
 				if len(res) > 0 {
+					// a zero column -- separator + overflow...
+					if sizes[i] == 0 {
+						res = append(res, "") }
 					res[len(res)-1] = overflow }
 				break }
 			res = append(res, doSection(getSection(i), sizes[i])...) }
@@ -439,10 +465,18 @@ func main(){
 	testSizes("*,*,*", 20, 1)
 	testSizes("*,*,*,*", 20, 0)
 	testSizes("*,*,*,*,*,*", 20, 0)
+	testSizes("*,*,*,*,*,*", 21, 0)
 	testSizes("*,*,*,*,*,*", 22, 0)
 	testSizes("*,*,*,*,*,*", 24, 0)
 	testSizes("*,*,*,*,*,*", 25, 0)
 	testSizes("*,*,*,*,*,*", 26, 0)
+	testSizes("*,*,*,*,*,*", 19, 1)
+	testSizes("*,*,*,*,*,*", 20, 1)
+	testSizes("*,*,*,*,*,*", 21, 1)
+	testSizes("*,*,*,*,*,*", 22, 1)
+	testSizes("*,*,*,*,*,*", 24, 1)
+	testSizes("*,*,*,*,*,*", 25, 1)
+	testSizes("*,*,*,*,*,*", 26, 1)
 	testSizes("", 4, 0)
 	testSizes("*,1", 4, 0)
 	testSizes("*,2", 4, 0)
