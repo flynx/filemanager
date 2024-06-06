@@ -244,8 +244,9 @@ func (this *Lines) parseSizes(str string, width int, sep int) []int {
 	star_size := 0
 	if stars > 0 {
 		star_size = int(float64(rest) / float64(stars))
-		if star_size != 0 && 
-				star_size < min_size {
+		//if star_size != 0 && 
+		//		star_size < min_size {
+		if star_size < min_size {
 			star_size = min_size } }
 	total := 0
 	for i := 0; i < len(sizes); i++ {
@@ -443,24 +444,15 @@ func main(){
 	testSizes("*,*,*,*,*,*", 25, 0)
 	testSizes("*,*,*,*,*,*", 26, 0)
 	testSizes("", 4, 0)
-
-	// XXX BUG: these returns [0, 4], should be something like [4, -1]
-	fmt.Println("")
-	fmt.Println("BUG: should all produce be [4, -1]")
 	testSizes("*,1", 4, 0)
 	testSizes("*,2", 4, 0)
 	testSizes("*,3", 4, 0)
 	testSizes("*,4", 4, 0)
 	testSizes("*,5", 4, 0)
-	fmt.Println("BUG: should produce be [5, 4]")
 	testSizes("*,10", 9, 0)
-
-	fmt.Println("")
-	fmt.Println("OK:")
 	testSizes("*,6", 4, 0)
 	testSizes("*,7", 4, 0)
 
-	return
 
 	makeSection := func(s string, w int) string {
 		s, o := lines.makeSection(s, w)
@@ -516,11 +508,12 @@ func main(){
 	lines.SpanMode = "*,*,*,*,*,*,*,*,*,*"
 	fmt.Println(">"+
 		makeSectionChrome("", 20) + "<")
+	// XXX BUG
 	fmt.Println(">"+
 		makeSectionChrome("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 20) + "<")
 
 
-	/*
+	//*
 	testLineSizes := func(str string, r ...string){
 		err := false
 		printed := false
@@ -559,6 +552,7 @@ func main(){
 	fmt.Println(
 		makeSectionChrome("overflow overflow overflow overflow overflow overflow", 22))
 	lines.SpanMode = "*,*,*,*,*,*,*,*,*,*"
+	// XXX BUG
 	fmt.Println(
 		makeSectionChrome("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 22))
 
@@ -577,7 +571,9 @@ func main(){
 	// XXX BUG: we seem to be removing an extra space...
 	testBorderedSize("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 20)
 	// XXX BUG: we seem to be removing an extra space...
+	//			...should there be a col 0 here???
 	testBorderedSize("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 21)
+	// XXX BUG: we seem to be losing last sep...
 	testBorderedSize("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 22)
 	testBorderedSize("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 23)
 
