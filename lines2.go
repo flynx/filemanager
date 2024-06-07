@@ -95,10 +95,15 @@ type Lines struct {
 	Width int
 	Height int
 
+	RowOffset int
+	ColOffset int
+
 	//Theme Theme
 
 	Title string
+	HideTitle bool
 	Status string
+	HideStatus bool
 
 	TextOffsetV int
 	TextOffsetH int
@@ -118,19 +123,33 @@ type Lines struct {
 	SpanSeparator string
 	SpanMinSize int
 
+	// Format: 
+	//		"│┌─┐│└─┘"
+	//		 01234567
 	Border string
+	OverflowOverBorder bool
+
+	// Format: 
+	//		"█░"
+	//		 01
+	Scrollbar string
+	Filler rune
 }
 var LinesDefaults = Lines {
 	Title: "",
 	Status: "%CMD%SPAN $LINE/$LINES ",
 }
 // XXX add support for escape sequences...
-func (this *Lines) makeSection(str string, width int) (string, bool) {
+func (this *Lines) makeSection(str string, width int, rest ...string) (string, bool) {
+	fill := ' '
+	if len(rest) >= 1 {
+		fill = []rune(rest[0])[0]
+	} else if this.Filler != 0 {
+		fill = this.Filler }
 	// defaults...
 	tab := this.TabSize
 	if tab == 0 {
 		tab = TAB_SIZE }
-	fill := ' '
 
 	runes := []rune(str)
 	//expand := true
@@ -210,8 +229,7 @@ func (this *Lines) parseSizes(str string, width int, sep int) []int {
 	rest := width
 	sizes := []int{}
 	stars := 0
-	// build list of sizes...
-	star_seps := 0
+	// parse list of sizes...
 	for i, size := range spec {
 		size = strings.TrimSpace(size)
 		cols := -1
@@ -220,7 +238,7 @@ func (this *Lines) parseSizes(str string, width int, sep int) []int {
 				size == "" {
 			stars++
 			if i < len(spec)-1 {
-				star_seps += sep }
+				rest -= sep }
 		// %...
 		} else if size[len(size)-1] == '%' {
 			p, err := strconv.ParseFloat(string(size[:len(size)-1]), 64)
@@ -242,7 +260,9 @@ func (this *Lines) parseSizes(str string, width int, sep int) []int {
 				log.Println("Error parsing:", size, "in:", str) 
 				stars++
 				sizes = append(sizes, cols)
-				continue } }
+				continue } 
+			if i < len(spec)-1 {
+				rest -= sep } }
 		if cols > 0 && 
 				cols < min_size {
 			cols = min_size }
@@ -289,7 +309,7 @@ func (this *Lines) parseSizes(str string, width int, sep int) []int {
 			size += width - total }
 		sizes[i] = size }
 	return sizes }
-func (this *Lines) makeSections(str string, width int, sep_size int) []string {
+func (this *Lines) makeSections(str string, width int, sep_size int, rest ...string) []string {
 	// defaults...
 	marker := this.SpanMarker
 	if marker == "" {
@@ -302,7 +322,7 @@ func (this *Lines) makeSections(str string, width int, sep_size int) []string {
 
 	skip := false
 	doSection := func(str string, width int) []string {
-		str, o := this.makeSection(str, width)
+		str, o := this.makeSection(str, width, rest...)
 		sep := ""
 		// mark overflow if skipping sections too...
 		if o || skip {
@@ -327,21 +347,16 @@ func (this *Lines) makeSections(str string, width int, sep_size int) []string {
 			sizes = this.parseSizes("*,"+ fmt.Sprint(l), width, sep_size)
 		// sizing: manual (cached)...
 		} else {
-			//*
 			// cached result -- the same for each line, no need to recalculate...
 			if this.SpanMode == this.__SpanMode.text && 
 					this.__SpanMode.width == width {
 				sizes = this.__SpanMode.value
 			// generate/cache...
 			} else {
-			//*/
 				sizes = this.parseSizes(this.SpanMode, width, sep_size)
-			//*
 				this.__SpanMode.text = this.SpanMode
 				this.__SpanMode.width = width
-				this.__SpanMode.value = sizes } }
-			/*/
-		}
+				this.__SpanMode.value = sizes } } 
 			//*/
 		// build the sections...
 		var i int
@@ -368,7 +383,7 @@ func (this *Lines) makeSections(str string, width int, sep_size int) []string {
 			res = append(res, doSection(getSection(i), sizes[i])...) } }
 	return res }
 //
-//	.makeSectionChrome(<str>, <width>[, <left_border>[, <right_border>]])
+//	.makeSectionChrome(<str>, <width>[<span_separator>[, <left_border>, <right_border>[, <filler>]]])
 //		-> <line>
 //
 // Format:
@@ -393,18 +408,22 @@ func (this *Lines) makeSections(str string, width int, sep_size int) []string {
 // XXX make sure to handle lines ending in escape sequences correctly 
 //		when embedding overflow indicator...
 func (this *Lines) makeSectionChrome(str string, width int, rest ...string) []string {
-	l := ""
-	r := ""
-	if len(rest) >= 2 {
-		l = rest[0] 
-		r = rest[1] 
-		width -= len(rest[0]) + len(rest[1])
-	} else if this.Border != "" {
-		l = string([]rune(this.Border)[0])
-		r = string([]rune(this.Border)[4])
-		width -= 2 }
 	separator := this.SpanSeparator
-	sections := this.makeSections(str, width, len(separator))
+	if len(rest) >= 1 {
+		separator = rest[0]
+		rest = rest[1:] }
+	border_l := ""
+	border_r := ""
+	if len(rest) >= 2 {
+		border_l = rest[0] 
+		border_r = rest[1] 
+		width -= len([]rune(border_l)) + len([]rune(border_r))
+		rest = rest[2:]
+	} else if this.Border != "" {
+		border_l = string([]rune(this.Border)[0])
+		border_r = string([]rune(this.Border)[4])
+		width -= 2 }
+	sections := this.makeSections(str, width, len(separator), rest...)
 	// NOTE: we are skipping the last section as it already places the
 	//		overflow symbol in the right spot...
 	for i := 0; i < len(sections)-2; i += 2 {
@@ -420,9 +439,9 @@ func (this *Lines) makeSectionChrome(str string, width int, rest ...string) []st
 		sections[i], sections[i+1] = str, sep }
 	// borders...
 	if sections[len(sections)-1] == "" {
-		sections[len(sections)-1] = r 
+		sections[len(sections)-1] = border_r 
 	// overflow + no borders -> place last overflow on last char...
-	} else if this.Border == "" {
+	} else if border_r == "" {
 		i := len(sections)-2
 		// add space for the overflow char in the last non-eopty...
 		// XXX is this correct -- we could remove a space from both the 
@@ -435,7 +454,7 @@ func (this *Lines) makeSectionChrome(str string, width int, rest ...string) []st
 		// XXX handle escape sequences correctly...
 		if len(s) > 0 {
 			sections[i] = string(s[:len(s)-1]) } } 
-	return append([]string{ l }, sections...) }
+	return append([]string{ border_l }, sections...) }
 
 //func (this *Lines) makeTitleLine(str string, width int) []string {
 //}
@@ -446,12 +465,78 @@ func (this *Lines) drawCell(r rune) *Lines {
 	return this }
 // XXX STUB...
 func (this *Lines) Draw() *Lines {
-	// XXX title...
-	for _, line := range this.Lines {
-		fmt.Println(
-			strings.Join(this.makeSectionChrome(line.text, this.Width), "") )
-	}
-	// XXX status...
+	rows := this.Height
+	if ! this.HideTitle {
+		rows-- }
+	if ! this.HideStatus {
+		rows-- }
+	// title...
+	corner_l := ""
+	corner_r := ""
+	border_h := " "
+	if ! this.HideTitle {
+		if this.Border != "" {
+			corner_l = string([]rune(this.Border)[1])
+			corner_r = string([]rune(this.Border)[3]) 
+			border_h = string([]rune(this.Border)[2]) }
+		sections := this.makeSectionChrome(this.Title, this.Width, "", corner_l, corner_r, border_h)
+		// XXX STUB...
+		fmt.Println(strings.Join(sections, "")) }
+	// border...
+	border_l := ""
+	border_r := ""
+	if this.Border != "" {
+		border_l = string([]rune(this.Border)[0])
+		border_r = string([]rune(this.Border)[4]) }
+	// scrollbar...
+	scrollbar := false
+	scrollbar_bg := "░"
+	scrollbar_fg := "█"
+	if this.Scrollbar != "" {
+		scrollbar_fg = string([]rune(this.Scrollbar)[0])
+		scrollbar_bg = string([]rune(this.Scrollbar)[1]) }
+	var scroller_size, scroller_offset int
+	if len(this.Lines) > rows {
+		scrollbar = true 
+		r := float64(rows) / float64(len(this.Lines))
+		scroller_size = 1 + int(float64(rows - 1) * r)
+		scroller_offset = int(float64(this.RowOffset + 1) * r) }
+	// content...
+	for i := 0; i < rows; i++ {
+		line := this.Lines[i + this.RowOffset]
+		text := string([]rune(line.text)[this.ColOffset:])
+		// line...
+		sections := []string{}
+		if scrollbar || 
+				! this.OverflowOverBorder {
+			s := border_r
+			if scrollbar {
+				s = scrollbar_fg
+				if scroller_offset > i || scroller_offset + scroller_size <= i {
+					s = scrollbar_bg } }
+			sections = append(
+				append([]string{border_l}, 
+					this.makeSectionChrome(
+						text, this.Width - len([]rune(border_l)) - len([]rune(s)),
+						this.SpanSeparator, "", "")...),
+				s)
+		// line with overflow over border...
+		} else {
+			sections = this.makeSectionChrome(text, this.Width, 
+				this.SpanSeparator, border_l, border_r) }
+		// XXX STUB...
+		fmt.Println(strings.Join(sections, "")) }
+	// status...
+	if ! this.HideStatus {
+		if this.Border != "" {
+			corner_l = string([]rune(this.Border)[5])
+			corner_r = string([]rune(this.Border)[7])
+			border_h = string([]rune(this.Border)[6]) }
+		sections := this.makeSectionChrome(
+			this.Status, this.Width, 
+			"", corner_l, corner_r, border_h)
+		// XXX STUB...
+		fmt.Println(strings.Join(sections, "")) }
 	return this }
 
 // XXX
@@ -627,22 +712,28 @@ func main(){
 			fmt.Println("    -> ERR") 
 		} else {
 			fmt.Println("    -> OK") } }
+	lines.SpanMode = "*,*,*,*,*,*,*,*,*,*"
 	lines.Border = "│┌─┐│└─┘"
 	testBorderedSize("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 20)
 	testBorderedSize("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 21)
 	testBorderedSize("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 22)
 	testBorderedSize("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 23)
-	lines.SpanMode = ""
-	testBorderedSize("moo%SPANfoo", 7)
-	lines.Border = ""
-	testBorderedSize("moo%SPANfoo", 5)
 
 
 	fmt.Println("")
 	lines.SpanMode = "*,5"
 	lines.Width = 20
+	lines.Height = 6
 	lines.Border = "│┌─┐│└─┘"
-	lines.Write("This%SPANis\nsome text\n\nThis is also\nsome text")
+	lines.Write(
+		"This%SPANis\n"+
+		"some text\n"+
+		"\n"+
+		"This is also\n"+
+		"some%SPANmore text\n"+
+		// XXX need to extend the separator from the above line...
+		"\n"+
+		"\n")
 	lines.Draw()
 
 }
