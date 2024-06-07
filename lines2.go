@@ -68,8 +68,7 @@ func (this *LinesBuffer) Write(in any) *LinesBuffer {
 //		...don't tell me that a Go-y solution is passing function pointers))))
 // XXX revise name... 
 type Liner interface {
-	// XXX need to cast style to an apporpriate type in the implementation...
-	drawCell(col, row int, r rune, style any) *Liner
+	drawCells(col, row int, str string, style string)
 }
 
 var TAB_SIZE = 8
@@ -80,6 +79,9 @@ var SPAN_MARKER = "%SPAN"
 // XXX this would require us to support escaping...
 //var SPAN_MARKER = "|"
 var SPAN_MIN_WIDTH = 5
+
+//var SCROLLBAR = "█░"
+var SCROLLBAR = "┃│"
 
 // Lines
 //
@@ -133,7 +135,7 @@ type Lines struct {
 	// Format: 
 	//		"█░"
 	//		 01
-	// NOTE: if this is set to "" the default "█░" will be used.
+	// NOTE: if this is set to "" the default SCROLLBAR will be used.
 	Scrollbar string
 	ScrollbarDisabled bool
 
@@ -500,6 +502,7 @@ func (this *Lines) drawLine(col, row int, sections []string, style string) *Line
 	// XXX STUB...
 	fmt.Print("\n")
 	return this }
+	// XXX handle non-lines...
 func (this *Lines) Draw() *Lines {
 	rows := this.Height
 	if ! this.HideTitle {
@@ -538,8 +541,8 @@ func (this *Lines) Draw() *Lines {
 	var scrollbar_fg, scrollbar_bg string
 	var scroller_size, scroller_offset int
 	if ! this.ScrollbarDisabled {
-		scrollbar_bg = "░"
-		scrollbar_fg = "█"
+		scrollbar_fg = string([]rune(SCROLLBAR)[0])
+		scrollbar_bg = string([]rune(SCROLLBAR)[1])
 		if this.Scrollbar != "" {
 			scrollbar_fg = string([]rune(this.Scrollbar)[0])
 			scrollbar_bg = string([]rune(this.Scrollbar)[1]) }
