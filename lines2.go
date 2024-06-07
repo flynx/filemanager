@@ -97,6 +97,7 @@ type Lines struct {
 
 	RowOffset int
 	ColOffset int
+	CurrentRow int
 
 	//Theme Theme
 
@@ -464,11 +465,20 @@ func (this *Lines) makeSectionChrome(str string, width int, rest ...string) []st
 //func (this *Lines) makeStatusLine(str string, width int) []string {
 //}
 
+// XXX
+func (this *Lines) expandTemplate(tpl string) string {
+	// XXX
+	return tpl }
+
+// XXX
 func (this *Lines) drawCell(r rune) *Lines {
+	// XXX
 	return this }
 // XXX STUB...
-func (this *Lines) drawLine(sections []string) *Lines {
-	fmt.Println(strings.Join(sections, ""))
+// XXX handle styles...
+func (this *Lines) drawLine(sections []string, style string) *Lines {
+	fmt.Println(
+		strings.Join(sections, ""))
 	return this }
 func (this *Lines) Draw() *Lines {
 	rows := this.Height
@@ -486,8 +496,11 @@ func (this *Lines) Draw() *Lines {
 			corner_l = string([]rune(this.Border)[1])
 			corner_r = string([]rune(this.Border)[3]) 
 			border_h = string([]rune(this.Border)[2]) }
-		sections := this.makeSectionChrome(this.Title, this.Width, "", corner_l, corner_r, border_h)
-		this.drawLine(sections) }
+		sections := this.makeSectionChrome(
+			this.expandTemplate(this.Title), 
+			this.Width, 
+			"", corner_l, corner_r, border_h)
+		this.drawLine(sections, "title") }
 
 	// content...
 	//
@@ -514,7 +527,8 @@ func (this *Lines) Draw() *Lines {
 			scroller_offset = int(float64(this.RowOffset + 1) * r) } }
 	// lines...
 	for i := 0; i < rows; i++ {
-		line := this.Lines[i + this.RowOffset]
+		row := i + this.RowOffset
+		line := this.Lines[row]
 		text := string([]rune(line.text)[this.ColOffset:])
 		// line...
 		sections := []string{}
@@ -528,14 +542,21 @@ func (this *Lines) Draw() *Lines {
 			sections = append(
 				append([]string{border_l}, 
 					this.makeSectionChrome(
-						text, this.Width - len([]rune(border_l)) - len([]rune(s)),
+						text, 
+						this.Width - len([]rune(border_l)) - len([]rune(s)),
 						this.SpanSeparator, "", "")...),
 				s)
 		// line with overflow over border...
 		} else {
-			sections = this.makeSectionChrome(text, this.Width, 
+			sections = this.makeSectionChrome(
+				text, 
+				this.Width, 
 				this.SpanSeparator, border_l, border_r) }
-		this.drawLine(sections) }
+		// style...
+		style := "normal"
+		if row == this.CurrentRow {
+			style = "current" }
+		this.drawLine(sections, style) }
 
 	// status...
 	if ! this.HideStatus {
@@ -544,24 +565,19 @@ func (this *Lines) Draw() *Lines {
 			corner_r = string([]rune(this.Border)[7])
 			border_h = string([]rune(this.Border)[6]) }
 		sections := this.makeSectionChrome(
-			this.Status, this.Width, 
+			this.expandTemplate(this.Status), 
+			this.Width, 
 			"", corner_l, corner_r, border_h)
-		this.drawLine(sections) }
+		this.drawLine(sections, "status") }
+
 	return this }
 
-// XXX
-func (this *Lines) expandTemplate(tpl string) string {
-	// XXX
-	return tpl }
 
 
 
 
 func main(){
-	lines := Lines{
-		// XXX need to automate this...
-		//LinesBuffer: &LinesBuffer{},
-	}
+	lines := Lines{}
 
 	testSizes := func(s string, w int, p int){
 		fmt.Println("w:", w, "sep:", p, "s: \""+ s +"\" ->", 
