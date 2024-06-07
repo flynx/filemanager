@@ -215,13 +215,13 @@ func (this *Lines) makeSection(str string, width int, rest ...string) (string, b
 	return string(output), 
 		// overflow...
 		len(runes) - offset > width }
-// XXX is this overcomplicated???
 func (this *Lines) parseSizes(str string, width int, sep int) []int {
 	str = strings.TrimSpace(str)
 	min_size := this.SpanMinSize
 	if min_size == 0 {
 		min_size = SPAN_MIN_WIDTH }
 	spec := []string{}
+
 	// special case...
 	if str == "100%" {
 		spec = []string{str}
@@ -230,14 +230,17 @@ func (this *Lines) parseSizes(str string, width int, sep int) []int {
 		// only one col specified -> append "*"...
 		if len(spec) < 2 {
 			spec = append(spec, "*") } }
+
+	// parse list of sizes...
 	rest := width
 	sizes := []int{}
 	stars := 0
-	// parse list of sizes...
 	for i, size := range spec {
 		size = strings.TrimSpace(size)
 		cols := -1
 		// *...
+		// NOTE: *'s are merked as -1 width and expanded after we calculate 
+		//		all the concrete sizes...
 		if size == "*" || 
 				size == "" {
 			stars++
@@ -251,11 +254,14 @@ func (this *Lines) parseSizes(str string, width int, sep int) []int {
 				stars++
 				sizes = append(sizes, cols)
 				continue }
-			cols = int(float64(width) * (p / 100))
+			// XXX CEIL_ROUND the "+ 0.5" biases the rounding up (ceiling) 
+			//		and fixes the "50%" -> 49/51 @ 101 split but will 
+			//		this break other things???
+			cols = int(float64(width) * (p / 100) + 0.5)
 			// accout for separators...
 			if i < len(spec)-1 {
 				cols -= sep }
-		// cols (explicit)
+		// explicit cols...
 		// NOTE: these do not include separators...
 		} else {
 			var err error
@@ -267,11 +273,13 @@ func (this *Lines) parseSizes(str string, width int, sep int) []int {
 				continue } 
 			if i < len(spec)-1 {
 				rest -= sep } }
+		// min width...
 		if cols > 0 && 
 				cols < min_size {
 			cols = min_size }
 		rest -= cols
 		sizes = append(sizes, cols) }
+
 	// fill *'s and trim overflow...
 	star_size := 0
 	if stars > 0 {
@@ -460,25 +468,37 @@ func (this *Lines) makeSectionChrome(str string, width int, rest ...string) []st
 			sections[i] = string(s[:len(s)-1]) } } 
 	return append([]string{ border_l }, sections...) }
 
-//func (this *Lines) makeTitleLine(str string, width int) []string {
-//}
-//func (this *Lines) makeStatusLine(str string, width int) []string {
-//}
-
 // XXX
 func (this *Lines) expandTemplate(tpl string) string {
 	// XXX
 	return tpl }
 
-// XXX
-func (this *Lines) drawCell(r rune) *Lines {
-	// XXX
+// XXX pass col, row...
+func (this *Lines) drawCells(col, row int, str string, style string) *Lines {
+	fmt.Print(str)
 	return this }
-// XXX STUB...
-// XXX handle styles...
-func (this *Lines) drawLine(sections []string, style string) *Lines {
+// XXX pass col, row...
+func (this *Lines) drawLine(col, row int, sections []string, style string) *Lines {
+	/*/ XXX STUB...
 	fmt.Println(
 		strings.Join(sections, ""))
+	return this
+	//*/
+	this.drawCells(col, row, sections[0], "border")
+	col += len(sections[0])
+	i := 1
+	for ; i < len(sections)-2; i+=2 {
+		section, sep := sections[i], sections[i+1]
+		this.drawCells(col, row, section, style +"-text")
+		col += len(sections[i])
+		this.drawCells(col, row, sep, style +"-separator") 
+		col += len(sections[i]) }
+	this.drawCells(col, row, sections[i], style +"-text")
+	col += len(sections[i])
+	this.drawCells(col, row, sections[i+1], "border")
+	col += len(sections[i+1])
+	// XXX STUB...
+	fmt.Print("\n")
 	return this }
 func (this *Lines) Draw() *Lines {
 	rows := this.Height
@@ -486,6 +506,8 @@ func (this *Lines) Draw() *Lines {
 		rows-- }
 	if ! this.HideStatus {
 		rows-- }
+	row := 0
+	col := 0
 
 	// title...
 	corner_l := ""
@@ -500,7 +522,8 @@ func (this *Lines) Draw() *Lines {
 			this.expandTemplate(this.Title), 
 			this.Width, 
 			"", corner_l, corner_r, border_h)
-		this.drawLine(sections, "title") }
+		this.drawLine(col, row, sections, "title") 
+		row++ }
 
 	// content...
 	//
@@ -556,7 +579,8 @@ func (this *Lines) Draw() *Lines {
 		style := "normal"
 		if row == this.CurrentRow {
 			style = "current" }
-		this.drawLine(sections, style) }
+		this.drawLine(col, row, sections, style) 
+		row++ }
 
 	// status...
 	if ! this.HideStatus {
@@ -568,7 +592,7 @@ func (this *Lines) Draw() *Lines {
 			this.expandTemplate(this.Status), 
 			this.Width, 
 			"", corner_l, corner_r, border_h)
-		this.drawLine(sections, "status") }
+		this.drawLine(col, row, sections, "status") }
 
 	return this }
 
@@ -586,8 +610,14 @@ func main(){
 	testSizes("50%", 100, 0)
 	testSizes("50%", 101, 0)
 	// XXX this yields an odd split of 49/51 -- can we make this more natural???
+	//		...fixed but see note CEIL_ROUND
 	testSizes("50%", 101, 1)
+	testSizes("50%", 100, 1)
 	testSizes("50%,", 101, 0)
+	testSizes("50%,50%", 100, 0)
+	testSizes("50%,50%", 101, 0)
+	testSizes("50%,50%", 100, 1)
+	testSizes("50%,50%", 101, 1)
 	testSizes("10,50%,10", 101, 0)
 	testSizes("10,*,10", 101, 0)
 	testSizes("10,*,*,10", 101, 0)
