@@ -132,7 +132,10 @@ type Lines struct {
 	// Format: 
 	//		"█░"
 	//		 01
+	// NOTE: if this is set to "" the default "█░" will be used.
 	Scrollbar string
+	ScrollbarDisabled bool
+
 	Filler rune
 }
 var LinesDefaults = Lines {
@@ -464,12 +467,16 @@ func (this *Lines) makeSectionChrome(str string, width int, rest ...string) []st
 func (this *Lines) drawCell(r rune) *Lines {
 	return this }
 // XXX STUB...
+func (this *Lines) drawLine(sections []string) *Lines {
+	fmt.Println(strings.Join(sections, ""))
+	return this }
 func (this *Lines) Draw() *Lines {
 	rows := this.Height
 	if ! this.HideTitle {
 		rows-- }
 	if ! this.HideStatus {
 		rows-- }
+
 	// title...
 	corner_l := ""
 	corner_r := ""
@@ -480,8 +487,10 @@ func (this *Lines) Draw() *Lines {
 			corner_r = string([]rune(this.Border)[3]) 
 			border_h = string([]rune(this.Border)[2]) }
 		sections := this.makeSectionChrome(this.Title, this.Width, "", corner_l, corner_r, border_h)
-		// XXX STUB...
-		fmt.Println(strings.Join(sections, "")) }
+		this.drawLine(sections) }
+
+	// content...
+	//
 	// border...
 	border_l := ""
 	border_r := ""
@@ -490,18 +499,20 @@ func (this *Lines) Draw() *Lines {
 		border_r = string([]rune(this.Border)[4]) }
 	// scrollbar...
 	scrollbar := false
-	scrollbar_bg := "░"
-	scrollbar_fg := "█"
-	if this.Scrollbar != "" {
-		scrollbar_fg = string([]rune(this.Scrollbar)[0])
-		scrollbar_bg = string([]rune(this.Scrollbar)[1]) }
+	var scrollbar_fg, scrollbar_bg string
 	var scroller_size, scroller_offset int
-	if len(this.Lines) > rows {
-		scrollbar = true 
-		r := float64(rows) / float64(len(this.Lines))
-		scroller_size = 1 + int(float64(rows - 1) * r)
-		scroller_offset = int(float64(this.RowOffset + 1) * r) }
-	// content...
+	if ! this.ScrollbarDisabled {
+		scrollbar_bg = "░"
+		scrollbar_fg = "█"
+		if this.Scrollbar != "" {
+			scrollbar_fg = string([]rune(this.Scrollbar)[0])
+			scrollbar_bg = string([]rune(this.Scrollbar)[1]) }
+		if len(this.Lines) > rows {
+			scrollbar = true 
+			r := float64(rows) / float64(len(this.Lines))
+			scroller_size = 1 + int(float64(rows - 1) * r)
+			scroller_offset = int(float64(this.RowOffset + 1) * r) } }
+	// lines...
 	for i := 0; i < rows; i++ {
 		line := this.Lines[i + this.RowOffset]
 		text := string([]rune(line.text)[this.ColOffset:])
@@ -524,8 +535,8 @@ func (this *Lines) Draw() *Lines {
 		} else {
 			sections = this.makeSectionChrome(text, this.Width, 
 				this.SpanSeparator, border_l, border_r) }
-		// XXX STUB...
-		fmt.Println(strings.Join(sections, "")) }
+		this.drawLine(sections) }
+
 	// status...
 	if ! this.HideStatus {
 		if this.Border != "" {
@@ -535,8 +546,7 @@ func (this *Lines) Draw() *Lines {
 		sections := this.makeSectionChrome(
 			this.Status, this.Width, 
 			"", corner_l, corner_r, border_h)
-		// XXX STUB...
-		fmt.Println(strings.Join(sections, "")) }
+		this.drawLine(sections) }
 	return this }
 
 // XXX
