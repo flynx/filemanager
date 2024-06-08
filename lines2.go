@@ -125,6 +125,7 @@ type Lines struct {
 	SpanMarker string
 	SpanSeparator string
 	SpanMinSize int
+	SpanNoExtend bool
 
 	// Format: 
 	//		"│┌─┐│└─┘"
@@ -437,7 +438,7 @@ func (this *Lines) makeSectionChrome(str string, width int, rest ...string) []st
 		border_l = string([]rune(this.Border)[0])
 		border_r = string([]rune(this.Border)[4])
 		width -= 2 }
-	sections := this.makeSections(str, width, len(separator), rest...)
+	sections := this.makeSections(str, width, len([]rune(separator)), rest...)
 	// NOTE: we are skipping the last section as it already places the
 	//		overflow symbol in the right spot...
 	for i := 0; i < len(sections)-2; i += 2 {
@@ -475,10 +476,9 @@ func (this *Lines) expandTemplate(tpl string) string {
 	// XXX
 	return tpl }
 
-// XXX pass col, row...
 func (this *Lines) drawCells(col, row int, str string, style string) {
 	fmt.Print(str) }
-// XXX pass col, row...
+
 func (this *Lines) drawLine(col, row int, sections []string, style string) *Lines {
 	/*/ XXX STUB...
 	fmt.Println(
@@ -502,6 +502,7 @@ func (this *Lines) drawLine(col, row int, sections []string, style string) *Line
 	fmt.Print("\n")
 	return this }
 	// XXX handle non-lines...
+	// XXX extend separators through non-lines...
 func (this *Lines) Draw() *Lines {
 	rows := this.Height
 	if ! this.HideTitle {
@@ -551,12 +552,23 @@ func (this *Lines) Draw() *Lines {
 			scroller_size = 1 + int(float64(rows - 1) * r)
 			scroller_offset = int(float64(this.RowOffset + 1) * r) } }
 	// lines...
+	sections := []string{}
 	for i := 0; i < rows; i++ {
 		row := i + this.RowOffset
-		line := this.Lines[row]
-		text := string([]rune(line.text)[this.ColOffset:])
+		text := ""
+		// get line...
+		if row < len(this.Lines) {
+			line := this.Lines[row]
+			text = string([]rune(line.text)[this.ColOffset:]) 
+		// no lines left...
+		} else if ! this.SpanNoExtend {
+			s := this.SpanMarker
+			if s == "" {
+				s = SPAN_MARKER }
+			n := int(float64(len(sections) - 3) / 2)
+			// XXX we can directly generate a slice instead of parsing this...
+			text = strings.Repeat(s, n) }
 		// line...
-		sections := []string{}
 		if scrollbar || 
 				! this.OverflowOverBorder {
 			s := border_r
@@ -683,7 +695,8 @@ func main(){
 		makeSectionChrome("moo%SPANfoo", 20, "[[", "]]") + "<")
 	fmt.Println(">"+
 		makeSectionChrome("moo%SPANfoo", 20) + "<")
-	lines.SpanSeparator = "|"
+	//lines.SpanSeparator = "|"
+	lines.SpanSeparator = "│"
 	fmt.Println(">"+
 		makeSectionChrome("moo%SPANfoo", 20) + "<")
 	fmt.Println(">"+
@@ -714,7 +727,7 @@ func main(){
 		printed := false
 		for i := 4; i < 40; i++ {
 			s := makeSectionChrome(str, i, r...)
-			if len(s) != i {
+			if len([]rune(s)) != i {
 				err = true
 				if ! printed {
 					printed = true
@@ -724,7 +737,7 @@ func main(){
 						"\tshould be: %v got: %v\n"+
 						"\tsizes: %v\n", 
 					"", i, len(s), 
-					lines.parseSizes(lines.SpanMode, i, len(string(lines.SpanSeparator)))) } } 
+					lines.parseSizes(lines.SpanMode, i, len([]rune(lines.SpanSeparator)))) } } 
 		if ! err {
 			fmt.Println("OK:", str) } }
 
@@ -761,8 +774,11 @@ func main(){
 		fmt.Printf("%#v\n", s) 
 		c := len(lines.Border)
 		if c > 0 {
-			c = 2 }
-		if len(s) - c != w {
+			c = len(string([]rune(lines.Border)[0])) + 
+				len(string([]rune(lines.Border)[4])) }
+		//if len([]rune(s)) - c != w {
+		if len([]rune(s)) != w {
+			//fmt.Println("length: expected:", w, "got:", len([]rune(s)))
 			fmt.Printf("\tparseSizes: %#v\n",
 				lines.parseSizes(lines.SpanMode, w-c, 1))
 			fmt.Printf("\tmakeSections: %#v\n",
@@ -794,6 +810,9 @@ func main(){
 		"\n")
 	lines.Draw()
 
+	fmt.Println("")
+	lines.Write("a single%SPANline")
+	lines.Draw()
 }
 
 
