@@ -10,6 +10,7 @@ import "bufio"
 import "sync"
 
 
+
 // Row
 //
 type Row struct {
@@ -19,6 +20,8 @@ type Row struct {
 	text string
 }
 
+
+
 // LinesBuffer
 //
 type LinesBuffer struct {
@@ -26,6 +29,7 @@ type LinesBuffer struct {
 	Lines []Row
 	Width int
 }
+
 func (this *LinesBuffer) Clear() *LinesBuffer {
 	this.Lines = []Row{}
 	this.Width = 0
@@ -62,14 +66,21 @@ func (this *LinesBuffer) Write(in any) *LinesBuffer {
 		Clear().
 		Append(in) }
 
-// Liner
+
+
+// CellsDrawer
 //
 // XXX not sure how to define an easily overloadable/extendable "object"... 
 //		...don't tell me that a Go-y solution is passing function pointers))))
 // XXX revise name... 
-type Liner interface {
+type CellsDrawer interface {
 	drawCells(col, row int, str string, style string)
 }
+
+
+
+// Lines
+//
 
 var TAB_SIZE = 8
 
@@ -83,49 +94,35 @@ var SPAN_MIN_WIDTH = 5
 //var SCROLLBAR = "█░"
 var SCROLLBAR = "┃│"
 
-// Lines
-//
 // XXX should this be Reader/Writer???
 type Lines struct {
-	Liner
+	CellsDrawer
 
 	// XXX is this a good idea???
 	LinesBuffer
 
+	// geometry...
 	Top int
 	Left int
 	Width int
 	Height int
 
+	// positioning...
 	RowOffset int
 	ColOffset int
 	CurrentRow int
 
 	//Theme Theme
 
+	// chrome...
 	Title string
 	HideTitle bool
 	Status string
 	HideStatus bool
 
-	TextOffsetV int
-	TextOffsetH int
-
 	TabSize int
 
 	OverflowIndicator rune
-
-	SpanMode string
-	// cache...
-	__SpanMode struct {
-		text string
-		width int
-		value []int
-	}
-	SpanMarker string
-	SpanSeparator string
-	SpanMinSize int
-	SpanNoExtend bool
 
 	// Format: 
 	//		"│┌─┐│└─┘"
@@ -141,11 +138,27 @@ type Lines struct {
 	ScrollbarDisabled bool
 
 	Filler rune
+
+	// column spanning...
+	SpanMode string
+	// cache...
+	__SpanMode struct {
+		text string
+		width int
+		value []int
+	}
+	SpanMarker string
+	SpanSeparator string
+	SpanMinSize int
+	SpanNoExtend bool
+
 }
+// XXX can we integrate this transparently???
 var LinesDefaults = Lines {
 	Title: "",
 	Status: "%CMD%SPAN $LINE/$LINES ",
 }
+
 // XXX add support for escape sequences...
 func (this *Lines) makeSection(str string, width int, rest ...string) (string, bool) {
 	fill := ' '
@@ -478,8 +491,8 @@ func (this *Lines) expandTemplate(tpl string) string {
 
 // XXX return/handle errors???
 func (this *Lines) drawCells(col, row int, str string, style string) {
-	if this.Liner != nil {
-		this.Liner.drawCells(col, row, str, style)
+	if this.CellsDrawer != nil {
+		this.CellsDrawer.drawCells(col, row, str, style)
 	} else {
 		fmt.Print(str) } }
 
@@ -817,4 +830,4 @@ func main(){
 	lines.Draw()
 }
 
-
+// vim:set ts=4 sw=4 :
