@@ -476,8 +476,12 @@ func (this *Lines) expandTemplate(tpl string) string {
 	// XXX
 	return tpl }
 
+// XXX return/handle errors???
 func (this *Lines) drawCells(col, row int, str string, style string) {
-	fmt.Print(str) }
+	if this.Liner != nil {
+		this.Liner.drawCells(col, row, str, style)
+	} else {
+		fmt.Print(str) } }
 
 func (this *Lines) drawLine(col, row int, sections []string, style string) *Lines {
 	/*/ XXX STUB...
@@ -501,8 +505,6 @@ func (this *Lines) drawLine(col, row int, sections []string, style string) *Line
 	// XXX STUB...
 	fmt.Print("\n")
 	return this }
-	// XXX handle non-lines...
-	// XXX extend separators through non-lines...
 func (this *Lines) Draw() *Lines {
 	rows := this.Height
 	if ! this.HideTitle {
