@@ -476,9 +476,8 @@ func (this *Lines) expandTemplate(tpl string) string {
 	return tpl }
 
 // XXX pass col, row...
-func (this *Lines) drawCells(col, row int, str string, style string) *Lines {
-	fmt.Print(str)
-	return this }
+func (this *Lines) drawCells(col, row int, str string, style string) {
+	fmt.Print(str) }
 // XXX pass col, row...
 func (this *Lines) drawLine(col, row int, sections []string, style string) *Lines {
 	/*/ XXX STUB...
