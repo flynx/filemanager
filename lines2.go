@@ -494,6 +494,7 @@ func (this *Lines) makeSectionChrome(str string, width int, rest ...string) []st
 func (this *Lines) makeEnv() Env {
 	l := len(this.Lines)
 	i := this.RowOffset + this.CurrentRow
+	// test and friends...
 	var text, text_left, text_right string
 	if i < l {
 		text = this.Lines[i].text
@@ -505,6 +506,7 @@ func (this *Lines) makeEnv() Env {
 		text_left = sections[0]
 		if len(sections) > 1 {
 			text_right = sections[len(sections)-1] } }
+
 	env := Env {
 		"INDEX": fmt.Sprint(i),
 		"LINE": fmt.Sprint(i + 1),
@@ -518,7 +520,8 @@ func (this *Lines) makeEnv() Env {
 	}
 	for k, v := range this.Env {
 		env[k] = v }
-	return this.Env }
+
+	return env }
 // XXX
 func (this *Lines) expandTemplate(tpl string, env Env) string {
 	// XXX
