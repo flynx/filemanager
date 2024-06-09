@@ -10,6 +10,10 @@ import "bufio"
 import "sync"
 
 
+// XXX is this too generic???
+type Env map[string]string
+
+
 
 // Row
 //
@@ -111,6 +115,8 @@ type Lines struct {
 	RowOffset int
 	ColOffset int
 	CurrentRow int
+
+	Env Env
 
 	//Theme Theme
 
@@ -484,8 +490,37 @@ func (this *Lines) makeSectionChrome(str string, width int, rest ...string) []st
 			sections[i] = string(s[:len(s)-1]) } } 
 	return append([]string{ border_l }, sections...) }
 
+// XXX do we include process env here???
+func (this *Lines) makeEnv() Env {
+	l := len(this.Lines)
+	i := this.RowOffset + this.CurrentRow
+	var text, text_left, text_right string
+	if i < l {
+		text = this.Lines[i].text
+		marker := this.SpanMarker
+		if marker == "" {
+			marker = SPAN_MARKER }
+		// XXX might be a good idea to support basic arrays.. (???)
+		sections := strings.Split(text, marker)
+		text_left = sections[0]
+		if len(sections) > 1 {
+			text_right = sections[len(sections)-1] } }
+	env := Env {
+		"INDEX": fmt.Sprint(i),
+		"LINE": fmt.Sprint(i + 1),
+		"LINES": fmt.Sprint(l),
+		"TEXT": text,
+		"TEXT_LEFT": text_left,
+		"TEXT_RIGHT": text_right,
+		// XXX ACTIVE -- selection or current...
+		// XXX SELECTION
+		// XXX SELECTED
+	}
+	for k, v := range this.Env {
+		env[k] = v }
+	return this.Env }
 // XXX
-func (this *Lines) expandTemplate(tpl string) string {
+func (this *Lines) expandTemplate(tpl string, env Env) string {
 	// XXX
 	return tpl }
 
@@ -527,17 +562,20 @@ func (this *Lines) Draw() *Lines {
 	row := 0
 	col := 0
 
+	var env Env
+
 	// title...
 	corner_l := ""
 	corner_r := ""
 	border_h := " "
 	if ! this.HideTitle {
+		env = this.makeEnv()
 		if this.Border != "" {
 			corner_l = string([]rune(this.Border)[1])
 			corner_r = string([]rune(this.Border)[3]) 
 			border_h = string([]rune(this.Border)[2]) }
 		sections := this.makeSectionChrome(
-			this.expandTemplate(this.Title), 
+			this.expandTemplate(this.Title, env), 
 			this.Width, 
 			"", corner_l, corner_r, border_h)
 		this.drawLine(col, row, sections, "title") 
@@ -571,9 +609,10 @@ func (this *Lines) Draw() *Lines {
 	for i := 0; i < rows; i++ {
 		row := i + this.RowOffset
 		text := ""
+		var line Row
 		// get line...
 		if row < len(this.Lines) {
-			line := this.Lines[row]
+			line = this.Lines[row]
 			text = string([]rune(line.text)[this.ColOffset:]) 
 		// no lines left...
 		} else if ! this.SpanNoExtend {
@@ -608,17 +647,24 @@ func (this *Lines) Draw() *Lines {
 		style := "normal"
 		if row == this.CurrentRow {
 			style = "current" }
+		if line.selected {
+			if style == "current" {
+				style = "current-selected"
+			} else {
+				style = "selected" } }
 		this.drawLine(col, row, sections, style) 
 		row++ }
 
 	// status...
 	if ! this.HideStatus {
+		if len(env) == 0 {
+			env = this.makeEnv() }
 		if this.Border != "" {
 			corner_l = string([]rune(this.Border)[5])
 			corner_r = string([]rune(this.Border)[7])
 			border_h = string([]rune(this.Border)[6]) }
 		sections := this.makeSectionChrome(
-			this.expandTemplate(this.Status), 
+			this.expandTemplate(this.Status, env), 
 			this.Width, 
 			"", corner_l, corner_r, border_h)
 		this.drawLine(col, row, sections, "status") }
