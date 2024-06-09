@@ -433,7 +433,7 @@ func (this *Lines) makeSections(str string, width int, sep_size int, rest ...str
 // XXX shoud we be able to distinguish between last cell overflow and 
 //		and section overflow???
 //		...currently it is not possible to do so...
-// XXX make sure to handle lines ending in escape sequences correctly 
+// XXX make sure to handle/trim lines ending in escape sequences correctly 
 //		when embedding overflow indicator...
 func (this *Lines) makeSectionChrome(str string, width int, rest ...string) []string {
 	separator := this.SpanSeparator
@@ -485,6 +485,8 @@ func (this *Lines) makeSectionChrome(str string, width int, rest ...string) []st
 	return append([]string{ border_l }, sections...) }
 
 // XXX
+//var isEnvVar = regexp.MustCompile(`(\$[a-zA-Z_]+|\$\{[a-zA-Z_]+\})`)
+//var isPlaceholder = regexp.MustCompile(`(%[a-zA-Z_]+|%\{[a-zA-Z_]+\})`)
 func (this *Lines) expandTemplate(tpl string) string {
 	// XXX
 	return tpl }
@@ -495,7 +497,6 @@ func (this *Lines) drawCells(col, row int, str string, style string) {
 		this.CellsDrawer.drawCells(col, row, str, style)
 	} else {
 		fmt.Print(str) } }
-
 func (this *Lines) drawLine(col, row int, sections []string, style string) *Lines {
 	/*/ XXX STUB...
 	fmt.Println(
@@ -518,6 +519,7 @@ func (this *Lines) drawLine(col, row int, sections []string, style string) *Line
 	// XXX STUB...
 	fmt.Print("\n")
 	return this }
+
 func (this *Lines) Draw() *Lines {
 	rows := this.Height
 	if ! this.HideTitle {

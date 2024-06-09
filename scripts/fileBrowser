@@ -13,7 +13,7 @@ PAGER=${PAGER:-"bat --paging=always"}
 # XXX need to sanatize file names -- quotes will break things...
 DIR="$DIR" \
 PAGER="$PAGER" \
-	go run lines \
+	go run lines.go \
 		-l debug.log \
 		-c 'echo ".." ; \
 			ls \

@@ -11,7 +11,7 @@ PAGER=${PAGER:-"bat --paging=always"}
 
 DIR="$DIR" \
 PAGER="$PAGER" \
-	go run lines \
+	go run lines.go \
 		-l debug.log \
 		-c "find "$DIR" "$FIND_ARGS" \
 			| sed -e 's/^${DIR//\//\\/}\///'" \
