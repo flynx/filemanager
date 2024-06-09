@@ -1,18 +1,21 @@
 
 package main
 
-import "fmt"
-import "log"
-import "io"
-import "strings"
-import "strconv"
-import "bufio"
-import "sync"
+import (
+	"fmt"
+	"log"
+	"io"
+	"strings"
+	"strconv"
+	"bufio"
+	"sync"
+	"regexp"
+	"os"
+)
 
 
 // XXX is this too generic???
 type Env map[string]string
-
 
 
 // Row
@@ -72,6 +75,13 @@ func (this *LinesBuffer) Write(in any) *LinesBuffer {
 
 
 
+// Placeholders
+//
+type Placeholders map[string] func(*Lines) string
+var PLACEHOLDERS = Placeholders {}
+
+
+
 // CellsDrawer
 //
 // XXX not sure how to define an easily overloadable/extendable "object"... 
@@ -104,6 +114,8 @@ type Lines struct {
 
 	// XXX is this a good idea???
 	LinesBuffer
+
+	Placeholders *Placeholders
 
 	// geometry...
 	Top int
@@ -490,7 +502,6 @@ func (this *Lines) makeSectionChrome(str string, width int, rest ...string) []st
 			sections[i] = string(s[:len(s)-1]) } } 
 	return append([]string{ border_l }, sections...) }
 
-// XXX do we include process env here???
 func (this *Lines) makeEnv() Env {
 	l := len(this.Lines)
 	i := this.RowOffset + this.CurrentRow
@@ -522,12 +533,43 @@ func (this *Lines) makeEnv() Env {
 		env[k] = v }
 
 	return env }
-// XXX
-//var isEnvVar = regexp.MustCompile(`(\$[a-zA-Z_]+|\$\{[a-zA-Z_]+\})`)
-//var isPlaceholder = regexp.MustCompile(`(%[a-zA-Z_]+|%\{[a-zA-Z_]+\})`)
-func (this *Lines) expandTemplate(tpl string, env Env) string {
-	// XXX
-	return tpl }
+
+var isEnvVar = regexp.MustCompile(`(\$[a-zA-Z_]+|\$\{[a-zA-Z_]+\})`)
+var isPlaceholder = regexp.MustCompile(`(%[a-zA-Z_]+|%\{[a-zA-Z_]+\})`)
+func (this *Lines) expandTemplate(str string, env Env) string {
+	str = string(isEnvVar.ReplaceAllFunc(
+		[]byte(str), 
+		func(match []byte) []byte {
+			// normalize...
+			name := string(match[1:])
+			if name[0] == '{' {
+				name = string(name[1:len(name)-1]) }
+			// get the value...
+			if val, ok := env[name] ; ok {
+				return []byte(val)
+			} else {
+				return []byte(os.Getenv(name)) }
+			return []byte("") }))
+	// handle placeholders...
+	marker := this.SpanMarker
+	if marker == "" {
+		marker = SPAN_MARKER }
+	placeholders := PLACEHOLDERS 
+	if this.Placeholders != nil {
+		placeholders = *this.Placeholders }
+	str = string(isPlaceholder.ReplaceAllFunc(
+		[]byte(str), 
+		func(match []byte) []byte {
+			// normalize...
+			name := string(match[1:])
+			if name[0] == '{' {
+				name = string(name[1:len(name)-1]) }
+			if name == "%" {
+				return []byte(name) }
+			if f, ok := placeholders[name]; ok {
+				return []byte(f(this)) }
+			return match }))
+	return str }
 
 // XXX return/handle errors???
 func (this *Lines) drawCells(col, row int, str string, style string) {
