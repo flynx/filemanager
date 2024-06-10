@@ -77,8 +77,9 @@ func (this *LinesBuffer) Write(in any) *LinesBuffer {
 
 // Placeholders
 //
-type Placeholders map[string] func(*Lines) string
-var PLACEHOLDERS = Placeholders {}
+type Placeholders map[string] func(*Lines, Env) string
+var PLACEHOLDERS = Placeholders {
+}
 
 
 
@@ -115,6 +116,7 @@ type Lines struct {
 	// XXX is this a good idea???
 	LinesBuffer
 
+	// template placeholder handlers...
 	Placeholders *Placeholders
 
 	// geometry...
@@ -534,22 +536,9 @@ func (this *Lines) makeEnv() Env {
 
 	return env }
 
-var isEnvVar = regexp.MustCompile(`(\$[a-zA-Z_]+|\$\{[a-zA-Z_]+\})`)
-var isPlaceholder = regexp.MustCompile(`(%[a-zA-Z_]+|%\{[a-zA-Z_]+\})`)
+// XXX add %CMD support...
+var iTemplatePattern = regexp.MustCompile(`([%$]{2}|[$%][a-zA-Z_]+|[$%]\{[a-zA-Z_]+\})`)
 func (this *Lines) expandTemplate(str string, env Env) string {
-	str = string(isEnvVar.ReplaceAllFunc(
-		[]byte(str), 
-		func(match []byte) []byte {
-			// normalize...
-			name := string(match[1:])
-			if name[0] == '{' {
-				name = string(name[1:len(name)-1]) }
-			// get the value...
-			if val, ok := env[name] ; ok {
-				return []byte(val)
-			} else {
-				return []byte(os.Getenv(name)) }
-			return []byte("") }))
 	// handle placeholders...
 	marker := this.SpanMarker
 	if marker == "" {
@@ -557,17 +546,35 @@ func (this *Lines) expandTemplate(str string, env Env) string {
 	placeholders := PLACEHOLDERS 
 	if this.Placeholders != nil {
 		placeholders = *this.Placeholders }
-	str = string(isPlaceholder.ReplaceAllFunc(
+	str = string(isTemplatePattern.ReplaceAllFunc(
 		[]byte(str), 
 		func(match []byte) []byte {
 			// normalize...
 			name := string(match[1:])
-			if name[0] == '{' {
-				name = string(name[1:len(name)-1]) }
-			if name == "%" {
-				return []byte(name) }
-			if f, ok := placeholders[name]; ok {
-				return []byte(f(this)) }
+			// $NAME
+			if match[0] == "$"[0] {
+				if name[0] == '{' {
+					name = string(name[1:len(name)-1]) }
+				if name == "$" {
+					return []byte(name) }
+				// get the value...
+				if val, ok := env[name] ; ok {
+					return []byte(val)
+				} else {
+					return []byte(os.Getenv(name)) }
+				return []byte{}
+			// %NAME
+			} else if match[0] == "%"[0] {
+				if name[0] == '{' {
+					name = string(name[1:len(name)-1]) }
+				if name == "%" {
+					return []byte(name) }
+				if f, ok := placeholders[name]; ok {
+					return []byte(f(this, env)) }
+				// XXX should undefined placeholders get returned as-is (current) 
+				//		or be blank???
+				//return []byte{} }))
+				return match }
 			return match }))
 	return str }
 
@@ -724,6 +731,29 @@ func (this *Lines) Draw() *Lines {
 
 func main(){
 	lines := Lines{}
+
+	PLACEHOLDERS["TEST"] = 
+		func(this *Lines, env Env) string {
+			v, ok := env["TEST"]
+			if ! ok {
+				env["TEST"] = "1"
+			} else {
+				if i, err := strconv.Atoi(v); err == nil {
+					env["TEST"] = fmt.Sprint(i+1) } }
+			return "test string " + env["TEST"] }
+	env := lines.makeEnv()
+	fmt.Println(lines.expandTemplate(`
+Template expansion test:
+	$$MOO: $MOO
+	$$INDEX: $INDEX
+	$$LINE: $LINE
+	$$LINES: $LINES
+	%%MOO: %MOO
+	%%%%: %%
+	%%TEST: %TEST
+	%%TEST: %TEST
+	$$TEST: $TEST
+	`, env))
 
 	testSizes := func(s string, w int, p int){
 		fmt.Println("w:", w, "sep:", p, "s: \""+ s +"\" ->", 
