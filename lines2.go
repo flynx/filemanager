@@ -79,6 +79,13 @@ func (this *LinesBuffer) Write(in any) *LinesBuffer {
 //
 type Placeholders map[string] func(*Lines, Env) string
 var PLACEHOLDERS = Placeholders {
+	"CMD": func(this *Lines, env Env){
+		cmd, ok := env["CMD"]
+		if ! ok {
+			return "" }
+		res := ""
+		// XXX call the command...
+		return res },
 }
 
 
