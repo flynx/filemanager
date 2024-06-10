@@ -79,12 +79,13 @@ func (this *LinesBuffer) Write(in any) *LinesBuffer {
 //
 type Placeholders map[string] func(*Lines, Env) string
 var PLACEHOLDERS = Placeholders {
-	"CMD": func(this *Lines, env Env){
+	"CMD": func(this *Lines, env Env) string {
 		cmd, ok := env["CMD"]
 		if ! ok {
 			return "" }
 		res := ""
 		// XXX call the command...
+		fmt.Println("---", cmd)
 		return res },
 }
 
@@ -544,7 +545,7 @@ func (this *Lines) makeEnv() Env {
 	return env }
 
 // XXX add %CMD support...
-var iTemplatePattern = regexp.MustCompile(`([%$]{2}|[$%][a-zA-Z_]+|[$%]\{[a-zA-Z_]+\})`)
+var isTemplatePattern = regexp.MustCompile(`([%$]{2}|[$%][a-zA-Z_]+|[$%]\{[a-zA-Z_]+\})`)
 func (this *Lines) expandTemplate(str string, env Env) string {
 	// handle placeholders...
 	marker := this.SpanMarker
@@ -614,6 +615,8 @@ func (this *Lines) drawLine(col, row int, sections []string, style string) *Line
 	fmt.Print("\n")
 	return this }
 
+// XXX sould be nice to control how we output from this level...
+//		...i.e. Draw to string or draw to terminal...
 func (this *Lines) Draw() *Lines {
 	rows := this.Height
 	if ! this.HideTitle {
@@ -760,53 +763,8 @@ Template expansion test:
 	%%TEST: %TEST
 	%%TEST: %TEST
 	$$TEST: $TEST
+	%%CMD: %CMD
 	`, env))
-
-	testSizes := func(s string, w int, p int){
-		fmt.Println("w:", w, "sep:", p, "s: \""+ s +"\" ->", 
-			lines.parseSizes(s, w, p)) }
-
-	testSizes("50%", 100, 0)
-	testSizes("50%", 101, 0)
-	// XXX this yields an odd split of 49/51 -- can we make this more natural???
-	//		...fixed but see note CEIL_ROUND
-	testSizes("50%", 101, 1)
-	testSizes("50%", 100, 1)
-	testSizes("50%,", 101, 0)
-	testSizes("50%,50%", 100, 0)
-	testSizes("50%,50%", 101, 0)
-	testSizes("50%,50%", 100, 1)
-	testSizes("50%,50%", 101, 1)
-	testSizes("10,50%,10", 101, 0)
-	testSizes("10,*,10", 101, 0)
-	testSizes("10,*,*,10", 101, 0)
-	testSizes("*,*,*", 100, 0)
-	testSizes("*,*,*", 20, 0)
-	testSizes("*,*,*", 20, 1)
-	testSizes("*,*,*,*", 20, 0)
-	testSizes("*,*,*,*,*,*", 20, 0)
-	testSizes("*,*,*,*,*,*", 21, 0)
-	testSizes("*,*,*,*,*,*", 22, 0)
-	testSizes("*,*,*,*,*,*", 24, 0)
-	testSizes("*,*,*,*,*,*", 25, 0)
-	testSizes("*,*,*,*,*,*", 26, 0)
-	testSizes("*,*,*,*,*,*", 19, 1)
-	testSizes("*,*,*,*,*,*", 20, 1)
-	testSizes("*,*,*,*,*,*", 21, 1)
-	testSizes("*,*,*,*,*,*", 22, 1)
-	testSizes("*,*,*,*,*,*", 24, 1)
-	testSizes("*,*,*,*,*,*", 25, 1)
-	testSizes("*,*,*,*,*,*", 26, 1)
-	testSizes("", 4, 0)
-	testSizes("*,1", 4, 0)
-	testSizes("*,2", 4, 0)
-	testSizes("*,3", 4, 0)
-	testSizes("*,4", 4, 0)
-	testSizes("*,5", 4, 0)
-	testSizes("*,10", 9, 0)
-	testSizes("*,6", 4, 0)
-	testSizes("*,7", 4, 0)
-
 
 	makeSection := func(s string, w int) string {
 		s, o := lines.makeSection(s, w)
@@ -908,6 +866,10 @@ Template expansion test:
 	lines.SpanMode = "*,*,*,*,*,*,*,*,*,*"
 	fmt.Println(
 		makeSectionChrome("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 22))
+
+	testSizes := func(s string, w int, p int){
+		fmt.Println("w:", w, "sep:", p, "s: \""+ s +"\" ->", 
+			lines.parseSizes(s, w, p)) }
 
 	testBorderedSize := func(str string, w int){
 		s := makeSectionChrome(str, w)
