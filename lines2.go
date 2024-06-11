@@ -7,6 +7,7 @@ import (
 	"io"
 	"strings"
 	"strconv"
+	//"slices"
 	"bufio"
 	"sync"
 	"regexp"
@@ -266,9 +267,12 @@ func (this *Lines) parseSizes(str string, width int, sep int) []int {
 		min_size = SPAN_MIN_WIDTH }
 	spec := []string{}
 
-	// special case...
-	if str == "100%" {
+	// special case: single col...
+	if str == "100%" || 
+			str == "*" ||
+			str == "" {
 		spec = []string{str}
+	// 2+ cols...
 	} else {
 		spec = strings.Split(str, ",") 
 		// only one col specified -> append "*"...
@@ -288,8 +292,8 @@ func (this *Lines) parseSizes(str string, width int, sep int) []int {
 		if size == "*" || 
 				size == "" {
 			stars++
-			if i < len(spec)-1 {
-				rest -= sep }
+			//if i < len(spec)-1 {
+			//	rest -= sep }
 		// %...
 		} else if size[len(size)-1] == '%' {
 			p, err := strconv.ParseFloat(string(size[:len(size)-1]), 64)
@@ -321,13 +325,15 @@ func (this *Lines) parseSizes(str string, width int, sep int) []int {
 		if cols > 0 && 
 				cols < min_size {
 			cols = min_size }
-		rest -= cols
+		if cols > 0 {
+		rest -= cols }
 		sizes = append(sizes, cols) }
 
 	// fill *'s and trim overflow...
 	star_size := 0
 	if stars > 0 {
-		star_size = int(float64(rest) / float64(stars))
+		star_size = int(float64(rest) / float64(stars) + 0.5)
+		//fmt.Println("###", rest, "/", stars, "->", size, over)
 		//if star_size != 0 && 
 		//		star_size < min_size {
 		if star_size < min_size {

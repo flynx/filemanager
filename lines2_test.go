@@ -11,7 +11,9 @@ func TestTeplateExpansion(t *testing.T){
 func TestParseSizes(t *testing.T){
 	lines := Lines{}
 
+	n := 0
 	testSizes := func(s string, w int, p int, expected []int){
+		defer func(){ n++ }()
 		testSum := func(target string, l []int) bool {
 			sum := 0
 			c := 0
@@ -21,10 +23,10 @@ func TestParseSizes(t *testing.T){
 					sum += e } }
 			sum += (c - 1) * p
 			if sum != w {
-				t.Errorf("parseSizes(%#v, %#v, %#v): bad "+target+" sum of widths:\n"+
+				t.Fatalf("#%v: parseSizes(%#v, %#v, %#v): bad "+target+" sum of widths:\n"+
 						"\texpected sum must be: %#v\n"+
 						"\tgot:                  %#v",
-					s, w, p, w, sum) 
+					n, s, w, p, w, sum) 
 					return false } 
 			return true }
 
@@ -39,12 +41,16 @@ func TestParseSizes(t *testing.T){
 		for i, v := range res {
 			if len(expected) != len(res) || 
 					expected[i] != v {
-				t.Errorf("parseSizes(%#v, %#v, %#v):\n"+
+					t.Errorf("#%v: parseSizes(%#v, %#v, %#v):\n"+
 						"\texpected: %#v\n"+
 						"\tgot:      %#v",
-					s, w, p, expected, res) 
+					n, s, w, p, expected, res) 
 				return } } }
 
+	// special case: single col...
+	testSizes("100%", 4, 0, []int{4})
+	testSizes("*", 4, 0, []int{4})
+	testSizes("", 4, 0, []int{4})
 
 	testSizes("50%", 100, 0, []int{50, 50})
 	testSizes("50%", 101, 0, []int{51, 50})
@@ -76,6 +82,7 @@ func TestParseSizes(t *testing.T){
 	//testSizes("*,*,*,*", 20, 0, []int{6,6,6,2})
 	testSizes("*,*,*,*", 20, 0, []int{5,5,5,5})
 
+	// overflow...
 	testSizes("*,*,*,*,*,*", 20, 0, []int{5,5,5,5,-1,-1})
 	testSizes("*,*,*,*,*,*", 21, 0, []int{5,5,5,5,1,-1})
 	testSizes("*,*,*,*,*,*", 22, 0, []int{5,5,5,5,2,-1})
@@ -93,9 +100,7 @@ func TestParseSizes(t *testing.T){
 	testSizes("*,*,*,*,*,*", 25, 1, []int{4,4,4,4,4,0})
 	testSizes("*,*,*,*,*,*", 26, 1, []int{4,4,4,4,4,1})
 
-	testSizes("", 4, 0, []int{4, -1})
-
-	// row overflow...
+	// min overflow...
 	// NOTE: the first col will get to min width and the seond will not fit...
 	testSizes("*,1", 4, 0, []int{4, -1})
 	testSizes("*,2", 4, 0, []int{4, -1})
