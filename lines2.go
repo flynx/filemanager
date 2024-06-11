@@ -748,48 +748,6 @@ func (this *Lines) Draw() *Lines {
 func main(){
 	lines := Lines{}
 
-	PLACEHOLDERS["TEST"] = 
-		func(this *Lines, env Env) string {
-			v, ok := env["TEST"]
-			if ! ok {
-				env["TEST"] = "1"
-			} else {
-				if i, err := strconv.Atoi(v); err == nil {
-					env["TEST"] = fmt.Sprint(i+1) } }
-			return "test string " + env["TEST"] }
-	env := lines.makeEnv()
-	fmt.Println(lines.expandTemplate(`
-Template expansion test:
-	$$MOO: $MOO
-	$$INDEX: $INDEX
-	$$LINE: $LINE
-	$$LINES: $LINES
-	%%MOO: %MOO
-	%%%%: %%
-	%%TEST: %TEST
-	%%TEST: %TEST
-	$$TEST: $TEST
-	%%CMD: %CMD
-	`, env))
-
-	makeSection := func(s string, w int) string {
-		s, o := lines.makeSection(s, w)
-		if o {
-			r := []rune(s)
-			r[len(r)-1] = '}' 
-			s = string(r) }
-		return s }
-
-	fmt.Println("")
-	fmt.Println(">"+ makeSection("no overflow", 0) +"<")
-	fmt.Println(">"+ makeSection("no overflow no overflow no overflow no overflow", 0) +"<")
-	fmt.Println(">"+ makeSection("a b c", 20) +"<")
-	fmt.Println(">"+ makeSection("tab     b       c", 20) +"<")
-	fmt.Println(">"+ makeSection("tab\tb\tc", 20) +"<")
-	fmt.Println(">"+ makeSection("overflow overflow overflow overflow overflow", 20) +"<")
-	fmt.Println(">"+ makeSection("tab overflow\t\t\t\tmoo", 20) +"<")
-
-
 	makeSectionChrome := func(s string, w int, r ...string) string {
 		return strings.Join(lines.makeSectionChrome(s, w, r...), "") }
 
