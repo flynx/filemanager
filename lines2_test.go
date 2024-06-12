@@ -217,7 +217,7 @@ func TestSectionChrome(t *testing.T){
 	// XXX
 }
 
-func TestIntegration(t *testing.T){
+func TestDraw(t *testing.T){
 	// XXX
 }
 
