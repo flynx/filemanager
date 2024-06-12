@@ -22,10 +22,10 @@ type Env map[string]string
 // Row
 //
 type Row struct {
-	selected bool
-	transformed bool
-	populated bool
-	text string
+	Selected bool
+	Transformed bool
+	Populated bool
+	Text string
 }
 
 
@@ -35,20 +35,22 @@ type Row struct {
 type LinesBuffer struct {
 	sync.Mutex
 	Lines []Row
+	Index int
 	Width int
 }
 
 func (this *LinesBuffer) Clear() *LinesBuffer {
 	this.Lines = []Row{}
+	this.Index = 0
 	this.Width = 0
 	return this }
 func (this *LinesBuffer) String() string {
 	lines := []string{}
 	for _, line := range this.Lines {
-		lines = append(lines, line.text) }
+		lines = append(lines, line.Text) }
 	return strings.Join(lines, "\n") }
 func (this *LinesBuffer) Push(line string) *LinesBuffer {
-	this.Lines = append(this.Lines, Row{ text: line })
+	this.Lines = append(this.Lines, Row{ Text: line })
 	l := len([]rune(line))
 	if this.Width < l {
 		this.Width = l }
@@ -73,6 +75,47 @@ func (this *LinesBuffer) Write(in any) *LinesBuffer {
 	return this.
 		Clear().
 		Append(in) }
+
+
+// introspection...
+//
+// XXX should these be here or in actions???
+/* XXX can't seem to figure out how to indicate empty .Lines...
+func (this *LinesBuffer) CurrentRow() Row {
+	if len(this.Lines) == 0 {
+		return nil }
+	return this.Lines[this.Index] }
+//*/
+func (this *LinesBuffer) Current() string {
+	if len(this.Lines) == 0 {
+		return "" }
+	return this.Lines[this.Index].Text }
+
+func (this *LinesBuffer) SelectedRows() []Row {
+	res := []Row{}
+	for _, row := range this.Lines {
+		if row.Selected {
+			res = append(res, row) } }
+	return res }
+func (this *LinesBuffer) Selected() []string {
+	res := []string{}
+	for _, row := range this.Lines {
+		if row.Selected {
+			res = append(res, row.Text) } }
+	return res }
+
+func (this *LinesBuffer) ActiveRows() []Row {
+	sel := this.SelectedRows()
+	if len(sel) == 0 &&
+			len(this.Lines) > 0 {
+		sel = []Row{ this.Lines[this.Index] } }
+	return sel }
+func (this *LinesBuffer) Active() []string {
+	sel := this.Selected()
+	if len(sel) == 0 &&
+			len(this.Lines) > 0 {
+		sel = []string{ this.Current() } }
+	return sel }
 
 
 
@@ -137,7 +180,6 @@ type Lines struct {
 	// positioning...
 	RowOffset int
 	ColOffset int
-	CurrentRow int
 
 	Env Env
 
@@ -520,11 +562,11 @@ func (this *Lines) makeSectionChrome(str string, width int, rest ...string) []st
 
 func (this *Lines) makeEnv() Env {
 	l := len(this.Lines)
-	i := this.RowOffset + this.CurrentRow
+	i := this.RowOffset + this.Index
 	// test and friends...
 	var text, text_left, text_right string
 	if i < l {
-		text = this.Lines[i].text
+		text = this.Lines[i].Text
 		marker := this.SpanMarker
 		if marker == "" {
 			marker = SPAN_MARKER }
@@ -683,7 +725,7 @@ func (this *Lines) Draw() *Lines {
 		// get line...
 		if row < len(this.Lines) {
 			line = this.Lines[row]
-			text = string([]rune(line.text)[this.ColOffset:]) 
+			text = string([]rune(line.Text)[this.ColOffset:]) 
 		// no lines left...
 		} else if ! this.SpanNoExtend {
 			s := this.SpanMarker
@@ -715,9 +757,9 @@ func (this *Lines) Draw() *Lines {
 				this.SpanSeparator, border_l, border_r) }
 		// style...
 		style := "normal"
-		if row == this.CurrentRow {
+		if row == this.Index {
 			style = "current" }
-		if line.selected {
+		if line.Selected {
 			if style == "current" {
 				style = "current-selected"
 			} else {
@@ -740,7 +782,6 @@ func (this *Lines) Draw() *Lines {
 		this.drawLine(col, row, sections, "status") }
 
 	return this }
-
 
 
 

@@ -46,15 +46,15 @@ func TestTeplateExpansion(t *testing.T){
 	test("%MOO", env, "%MOO")
 
 	// index...
-	lines.CurrentRow = 0
+	lines.Index = 0
 	test("$INDEX", lines.makeEnv(), "0")
-	lines.CurrentRow = 5
+	lines.Index = 5
 	test("$INDEX", lines.makeEnv(), "5")
 
 	// line...
-	lines.CurrentRow = 0
+	lines.Index = 0
 	test("$LINE", lines.makeEnv(), "1")
-	lines.CurrentRow = 6
+	lines.Index = 6
 	test("$LINE", lines.makeEnv(), "7")
 
 	// lines...
