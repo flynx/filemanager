@@ -38,7 +38,7 @@ type LinesBuffer struct {
 	Index int
 	Width int
 }
-
+// Editing...
 func (this *LinesBuffer) Clear() *LinesBuffer {
 	this.Lines = []Row{}
 	this.Index = 0
@@ -75,10 +75,7 @@ func (this *LinesBuffer) Write(in any) *LinesBuffer {
 	return this.
 		Clear().
 		Append(in) }
-
-
 // introspection...
-//
 // XXX should these be here or in actions???
 /* XXX can't seem to figure out how to indicate empty .Lines...
 func (this *LinesBuffer) CurrentRow() Row {
@@ -90,7 +87,6 @@ func (this *LinesBuffer) Current() string {
 	if len(this.Lines) == 0 {
 		return "" }
 	return this.Lines[this.Index].Text }
-
 func (this *LinesBuffer) SelectedRows() []Row {
 	res := []Row{}
 	for _, row := range this.Lines {
@@ -103,7 +99,6 @@ func (this *LinesBuffer) Selected() []string {
 		if row.Selected {
 			res = append(res, row.Text) } }
 	return res }
-
 func (this *LinesBuffer) ActiveRows() []Row {
 	sel := this.SelectedRows()
 	if len(sel) == 0 &&
@@ -313,7 +308,7 @@ func (this *Lines) parseSizes(str string, width int, sep int) []int {
 	if str == "100%" || 
 			str == "*" ||
 			str == "" {
-		spec = []string{str}
+		return []int{width}
 	// 2+ cols...
 	} else {
 		spec = strings.Split(str, ",") 
@@ -334,8 +329,6 @@ func (this *Lines) parseSizes(str string, width int, sep int) []int {
 		if size == "*" || 
 				size == "" {
 			stars++
-			//if i < len(spec)-1 {
-			//	rest -= sep }
 		// %...
 		} else if size[len(size)-1] == '%' {
 			p, err := strconv.ParseFloat(string(size[:len(size)-1]), 64)
@@ -371,15 +364,30 @@ func (this *Lines) parseSizes(str string, width int, sep int) []int {
 		rest -= cols }
 		sizes = append(sizes, cols) }
 
-	// fill *'s and trim overflow...
-	star_size := 0
+	// precalculate * sizes...
+	star_sizes := []int{}
 	if stars > 0 {
-		star_size = int(float64(rest) / float64(stars) + 0.5)
-		//fmt.Println("###", rest, "/", stars, "->", size, over)
-		//if star_size != 0 && 
-		//		star_size < min_size {
-		if star_size < min_size {
-			star_size = min_size } }
+		size := int(float64(rest) / float64(stars) + 0.5)
+		if size < min_size {
+			size = min_size }
+		for i := 0; i < stars; i++ {
+			star_sizes = append(star_sizes, size) }
+		// overflowing/underflowing (rounding error)...
+		if size > min_size {
+			d := rest - size * stars
+			// trim tail elements...
+			if d < 0 {
+				for i := stars-1; d < 0 && i >= 0; i--  {
+					star_sizes[i]--
+					d++ }
+			// pad head elements...
+			} else if d > 0 {
+				for i := 0; d > 0 && i < stars; i++  {
+					star_sizes[i]++
+					d-- } } } }
+
+	// fill *'s and trim overflow...
+	star := 0
 	total := 0
 	for i := 0; i < len(sizes); i++ {
 		// special case: overflow at the separator...
@@ -393,9 +401,10 @@ func (this *Lines) parseSizes(str string, width int, sep int) []int {
 			sizes[i] = -1
 			continue }
 		size := sizes[i]
-		// star...
+		// *...
 		if size < 0 {
-			size = star_size
+			size = star_sizes[star]
+			star++
 			if i < len(sizes)-1 {
 				size -= sep } }
 		total += size 
