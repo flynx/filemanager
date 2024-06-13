@@ -3,10 +3,60 @@ package main
 
 import (
 	"testing"
+	"strings"
 	"strconv"
 	"fmt"
+
+	"github.com/stretchr/testify/assert"
 )
 
+func TestLinesBuffer(t *testing.T){
+	buf := LinesBuffer{}
+
+	t.Run("String", func(t *testing.T){
+		assert.Equal(t, buf.String(), "", "Initial .String() failed")
+	})
+
+	s := "a line"
+
+	// XXX this is the same as Append(..) test -- generalize...
+	t.Run("Push", func(t *testing.T){
+		buf.Push(s)
+		assert.Equal(t, buf.String(), s, "Push failed")
+		buf.Push(s)
+		assert.Equal(t, buf.String(), s +"\n"+ s, "Push failed")
+		buf.Push(s, s)
+		assert.Equal(t, buf.String(), strings.Join([]string{s,s,s,s}, "\n"), "Push failed")
+		buf.Push()
+		assert.Equal(t, buf.String(), strings.Join([]string{s,s,s,s}, "\n"), "Push failed")
+	})
+
+	buf = LinesBuffer{}
+	// XXX test reader/scanner...
+	t.Run("Append", func(t *testing.T){
+		buf.Append(s)
+		assert.Equal(t, buf.String(), s, "Append failed")
+		buf.Append(s)
+		assert.Equal(t, buf.String(), s +"\n"+ s, "Append failed")
+		buf.Append(s, s)
+		assert.Equal(t, buf.String(), strings.Join([]string{s,s,s,s}, "\n"), "Append failed")
+		buf.Append()
+		assert.Equal(t, buf.String(), strings.Join([]string{s,s,s,s}, "\n"), "Append failed")
+	})
+
+	t.Run("Clear", func(t *testing.T){
+		buf.Clear()
+		assert.Equal(t, buf.String(), "", "Clear failed")
+	})
+
+	t.Run("Write", func(t *testing.T){
+		buf.Clear()
+		buf.Append(s, s, s)
+		assert.Equal(t, buf.String(), strings.Join([]string{s,s,s}, "\n"), "Append failed")
+		buf.Write(s)
+		assert.Equal(t, buf.String(), s, "Write failed")
+	})
+}
 
 func TestTeplateExpansion(t *testing.T){
 	lines := Lines{}
@@ -142,8 +192,12 @@ func TestParseSizes(t *testing.T){
 	test("50%,50%", 101, 1, []int{50,50})
 	test("10,50%,10", 101, 0, []int{10,51,40})
 	test("10,*,10", 101, 0, []int{10, 81, 10})
+	test("10,*,*,10", 100, 0, []int{10, 40, 40, 10})
 	test("10,*,*,10", 101, 0, []int{10, 41, 40, 10})
+	test("10,*,*,10", 102, 0, []int{10, 41, 41, 10})
+	test("*,*,*", 99, 0, []int{33, 33, 33})
 	test("*,*,*", 100, 0, []int{34, 33, 33})
+	test("*,*,*", 101, 0, []int{34, 34, 33})
 	test("*,*,*", 20, 0, []int{7, 7, 6})
 	test("*,*,*", 20, 1, []int{6,6,6})
 	test("*,*,*,*", 20, 0, []int{5,5,5,5})

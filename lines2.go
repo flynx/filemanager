@@ -49,25 +49,28 @@ func (this *LinesBuffer) String() string {
 	for _, line := range this.Lines {
 		lines = append(lines, line.Text) }
 	return strings.Join(lines, "\n") }
-func (this *LinesBuffer) Push(line string) *LinesBuffer {
-	this.Lines = append(this.Lines, Row{ Text: line })
-	l := len([]rune(line))
-	if this.Width < l {
-		this.Width = l }
+func (this *LinesBuffer) Push(lines ...string) *LinesBuffer {
+	for _, line := range lines {
+		this.Lines = append(this.Lines, Row{ Text: line })
+		l := len([]rune(line))
+		if this.Width < l {
+			this.Width = l } }
 	return this }
-func (this *LinesBuffer) Append(in any) *LinesBuffer {
-	switch in.(type) {
-		// XXX this is covered by default, do we need this case???
-		//case string:
-		//	for _, str := range strings.Split(in.(string), "\n") {
-		//		this.Push(str) }
-		case io.Reader:
-			scanner := bufio.NewScanner(in.(io.Reader))
-			for scanner.Scan(){
-				this.Push(scanner.Text()) } 
-		default:
-			for _, str := range strings.Split(fmt.Sprint(in), "\n") {
-				this.Push(str) } }
+// like .Push(..) but can accept io.Reader's...
+func (this *LinesBuffer) Append(strs ...any) *LinesBuffer {
+	for _, in := range strs {
+		switch in.(type) {
+			// XXX this is covered by default, do we need this case???
+			//case string:
+			//	for _, str := range strings.Split(in.(string), "\n") {
+			//		this.Push(str) }
+			case io.Reader:
+				scanner := bufio.NewScanner(in.(io.Reader))
+				for scanner.Scan(){
+					this.Push(scanner.Text()) } 
+			default:
+				for _, str := range strings.Split(fmt.Sprint(in), "\n") {
+					this.Push(str) } } }
 	return this }
 func (this *LinesBuffer) Write(in any) *LinesBuffer {
 	//this.Lock()
@@ -75,7 +78,7 @@ func (this *LinesBuffer) Write(in any) *LinesBuffer {
 	return this.
 		Clear().
 		Append(in) }
-// introspection...
+// Introspection...
 // XXX should these be here or in actions???
 /* XXX can't seem to figure out how to indicate empty .Lines...
 func (this *LinesBuffer) CurrentRow() Row {
@@ -601,7 +604,6 @@ func (this *Lines) makeEnv() Env {
 
 	return env }
 
-// XXX add %CMD support...
 var isTemplatePattern = regexp.MustCompile(`([%$]{2}|[$%][a-zA-Z_]+|[$%]\{[a-zA-Z_]+\})`)
 func (this *Lines) expandTemplate(str string, env Env) string {
 	// handle placeholders...
