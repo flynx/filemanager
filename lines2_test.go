@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+
 func TestLinesBuffer(t *testing.T){
 	buf := LinesBuffer{}
 

@@ -1347,7 +1347,7 @@ func makeCallEnv(cmd *exec.Cmd) []string {
 
 
 // XXX need to rethink the external call API...
-type Command struct {
+type Cmd struct {
 	State string
 	Done chan bool
 	Kill chan bool
@@ -1357,7 +1357,7 @@ type Command struct {
 }
 // XXX should we use bytes.Buffer or cmd.StdoutPipe()/cmd.StderrPipe() ???
 // XXX should stdin be io.ReadCloser???
-func goCallCommand(code string, stdin io.Reader) Command {
+func goCallCommand(code string, stdin io.Reader) Cmd {
 	// build the command...
 	shell := strings.Fields(SHELL)
 	cmd := exec.Command(shell[0], append(shell[1:], code)...)
@@ -1374,7 +1374,7 @@ func goCallCommand(code string, stdin io.Reader) Command {
 	// output package...
 	done := make(chan bool)
 	kill := make(chan bool)
-	res := Command {
+	res := Cmd {
 		State: "pending",
 		Done: done,
 		Kill: kill,
@@ -1420,7 +1420,7 @@ func goCallCommand(code string, stdin io.Reader) Command {
 		done <- done_state }()
 
 	return res }
-func goCallTransform(code string, line string) Command {
+func goCallTransform(code string, line string) Cmd {
 	var stdin bytes.Buffer
 	stdin.Write([]byte(line))
 	return goCallCommand(code, &stdin) }
