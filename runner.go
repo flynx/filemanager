@@ -14,7 +14,7 @@ import (
 	//"strconv"
 	//"slices"
 	"bufio"
-	"bytes"
+	//"bytes"
 	//"sync"
 	//"regexp"
 	//"os"
@@ -55,14 +55,8 @@ func (this *Runner) Run(code string, stdin io.Reader) *Runner {
 	//cmd.Env = this.makeEnv()
 
 	cmd.Stdin = stdin
-
-	//stdout := &bytes.Buffer{}
-	stdout, _ := cmd.StdoutPipe()
-	this.Stdout = stdout
-	//cmd.Stdout = stdout
-
-	stderr := &bytes.Buffer{}
-	cmd.Stderr = stderr
+	this.Stdout, _ = cmd.StdoutPipe()
+	this.Stderr, _ = cmd.StdoutPipe()
 
 	done := make(chan bool)
 	this.Done = done
@@ -86,7 +80,7 @@ func (this *Runner) Run(code string, stdin io.Reader) *Runner {
 		// handle errors...
 		if err := cmd.Wait(); err != nil {
 			log.Println("Error executing: \""+ code +"\"", err) 
-			scanner := bufio.NewScanner(stderr)
+			scanner := bufio.NewScanner(this.Stderr)
 			lines := []string{}
 			for scanner.Scan() {
 				lines = append(lines, scanner.Text()) }
