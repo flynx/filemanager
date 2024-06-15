@@ -72,6 +72,7 @@ func (this *LinesBuffer) Append(strs ...any) *LinesBuffer {
 				for _, str := range strings.Split(fmt.Sprint(in), "\n") {
 					this.Push(str) } } }
 	return this }
+// XXX this does not comply to io.Writer -- rename...
 func (this *LinesBuffer) Write(in any) *LinesBuffer {
 	//this.Lock()
 	//defer this.Unlock()

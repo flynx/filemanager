@@ -14,13 +14,12 @@ import (
 
 
 func TestBasics(t *testing.T){
-	r := Runner{}
+	r := Cmd{}
 	//cmd := "pwd; sleep 1; ls"
 	cmd := "pwd; sleep 0.2; ls"
 
 	fmt.Println("$", cmd)
-	//r.Run(cmd, &bytes.Buffer{})
-	r.Run(cmd)
+	r.Run(cmd, nil)
 
 	go func(){
 		scanner := bufio.NewScanner(r.Stdout)
@@ -32,8 +31,55 @@ func TestBasics(t *testing.T){
 	fmt.Println("done.")
 }
 
+
+
+func TestMIMO(t *testing.T){
+	cmd := "cat"
+	r := Cmd{}
+
+	out, in := io.Pipe()
+
+	r.Run(cmd, out)
+
+	go func(){
+		scanner := bufio.NewScanner(r.Stdout)
+		for scanner.Scan() {
+			fmt.Println("    >>", scanner.Text()) } }()
+
+	io.WriteString(in, "moo\n")
+	io.WriteString(in, "foo\n")
+	time.Sleep(time.Second)
+	io.WriteString(in, "boo\n")
+	io.WriteString(in, "moo\n")
+
+	fmt.Println("async")
+	in.Close()
+
+	<-r.Done
+}
+
+
+func TestRun(t *testing.T){
+	out, in := io.Pipe()
+	cmd := Run("cat", out).
+		HandleLine(func(line string){
+			fmt.Println("    >>", line) })
+
+	//time.Sleep(time.Second)
+	io.WriteString(in, "moo\n")
+	io.WriteString(in, "foo\n")
+	time.Sleep(time.Second)
+	io.WriteString(in, "boo\n")
+	io.WriteString(in, "moo\n")
+
+	fmt.Println("async")
+	in.Close()
+
+	<-cmd.Done
+}
+
 func TestRawMIMO(t *testing.T){
-	// XXX
+	/*/ XXX
 	cmd := "cat"
 	c := exec.Command(cmd)
 	/*/
@@ -41,7 +87,12 @@ func TestRawMIMO(t *testing.T){
 	c := exec.Command("bash", "-c", "cat")
 	//*/
 
+	// XXX both of these work...
+	o, in := io.Pipe()
+	c.Stdin = o
+	/*/
 	in, _ := c.StdinPipe()
+	//*/
 	out, _ := c.StdoutPipe()
 
 	fmt.Println(cmd)
