@@ -44,7 +44,8 @@ func (this *Runner) Kill() *Runner {
 	if this.Cmd != nil {
 		this.Process.Kill() }
 	return this }
-func (this *Runner) Run(code string, stdin io.Reader) *Runner {
+//func (this *Runner) Run(code string, stdin io.Reader) *Runner {
+func (this *Runner) Run(code string) *Runner {
 	shell := this.Shell
 	if shell == "" {
 		shell = SHELL }
@@ -54,14 +55,13 @@ func (this *Runner) Run(code string, stdin io.Reader) *Runner {
 	this.Cmd = cmd
 	//cmd.Env = this.makeEnv()
 
-	cmd.Stdin = stdin
+	//cmd.Stdin = stdin
 	this.Stdout, _ = cmd.StdoutPipe()
 	this.Stderr, _ = cmd.StdoutPipe()
 
 	done := make(chan bool)
 	this.Done = done
 	// set state...
-	// XXX do we need this???
 	go func(){
 		res := <-done
 		if res {
