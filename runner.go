@@ -43,6 +43,7 @@ type Cmd struct {
 }
 
 // Sorthands...
+//
 // XXX add ability to auto restart without losing context...
 func Run(code string, stdin io.Reader) (*Cmd, error) {
 	cmd := Cmd{
@@ -61,6 +62,7 @@ func RunFilter(code string, handler LineHandler) (*Cmd, io.WriteCloser, error) {
 		return cmd, in, err }
 	cmd.Stdin = in
 	return cmd, in, nil }
+
 
 type LineHandler func(string)
 func (this *Cmd) HandleLine(handler LineHandler) (*Cmd, error) {
@@ -144,7 +146,13 @@ func (this *Cmd) Kill() *Cmd {
 		this.Process.Kill() }
 	return this }
 
-// XXX do we need this???
+// helpers...
+//
+// XXX do we need these???
+// XXX should these infirm to io.Writer, i.e. return nothing???
+func (this *Cmd) Write(data []byte) *Cmd {
+	this.Stdin.Write(data) 
+	return this }
 func (this *Cmd) WriteString(str string) *Cmd {
 	// XXX how do we handle errors (.Stdin can be nil/closed/..)???
 	io.WriteString(this.Stdin, str) 
