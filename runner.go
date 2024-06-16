@@ -33,7 +33,7 @@ type Cmd struct {
 	Error error
 	Done <-chan bool
 
-	// XXX
+	// XXX is overloading this a good idea???
 	Stdin io.WriteCloser
 
 	Stdout io.Reader
@@ -59,6 +59,7 @@ func RunFilter(code string, handler LineHandler) (*Cmd, io.WriteCloser, error) {
 		return cmd, in, err }
 	if cmd, err = cmd.HandleLine(handler); err != nil {
 		return cmd, in, err }
+	cmd.Stdin = in
 	return cmd, in, nil }
 
 type LineHandler func(string)
@@ -78,6 +79,7 @@ func (this *Cmd) makeEnv(){
 // XXX make this restartable... (???)
 //		...for this to work ew'll need to also handle stdin/stdout/stderr
 //		correctly... not sure how to do this when they are closed...
+// XXX should this be public???
 func (this *Cmd) Run(code string, stdin io.Reader) (*Cmd, error) {
 	// can't run twice...
 	if this.State != "" {
