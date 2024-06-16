@@ -32,38 +32,19 @@ func TestBasics(t *testing.T){
 }
 
 
-
-func TestMIMO(t *testing.T){
-	cmd := "cat"
-	r := Cmd{}
-
-	out, in := io.Pipe()
-
-	r.Run(cmd, out)
-
-	go func(){
-		scanner := bufio.NewScanner(r.Stdout)
-		for scanner.Scan() {
-			fmt.Println("    >>", scanner.Text()) } }()
-
-	io.WriteString(in, "moo\n")
-	io.WriteString(in, "foo\n")
-	time.Sleep(time.Second)
-	io.WriteString(in, "boo\n")
-	io.WriteString(in, "moo\n")
-
-	fmt.Println("async")
-	in.Close()
-
-	<-r.Done
-}
-
-
 func TestRun(t *testing.T){
+	/* XXX
 	out, in := io.Pipe()
-	cmd := Run("cat", out).
-		HandleLine(func(line string){
+	cmd, _ := Run("cat", out)
+	cmd.HandleLine(
+		func(line string){
 			fmt.Println("    >>", line) })
+	/*/
+	cmd, in, _ := RunFilter(
+		"cat", 
+		func(line string){
+			fmt.Println("    >>", line) })
+	//*/
 
 	//time.Sleep(time.Second)
 	io.WriteString(in, "moo\n")
