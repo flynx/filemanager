@@ -34,6 +34,7 @@ type Cmd struct {
 	Done <-chan bool
 
 	// XXX is overloading this a good idea???
+	//		...these face the oposite direction relative to exec.Cmd...
 	Stdin io.WriteCloser
 
 	Stdout io.Reader
