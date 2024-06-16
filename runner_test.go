@@ -14,6 +14,7 @@ import (
 
 
 
+// XXX this can sometimes truncate output -- sync error??
 func TestRaw(t *testing.T){
 	/*/ XXX
 	cmd := "cat"
@@ -60,6 +61,7 @@ func TestRaw(t *testing.T){
 	fmt.Println("done.")
 }
 
+// XXX this can sometimes truncate output -- sync error??
 func TestBasics(t *testing.T){
 	c := Cmd{}
 	//cmd := "pwd; sleep 1; ls"
@@ -79,6 +81,7 @@ func TestBasics(t *testing.T){
 	fmt.Println("done.")
 }
 
+// XXX this can sometimes truncate output -- sync error??
 func TestRun(t *testing.T){
 	cmd, in, err := RunFilter(
 		"cat", 

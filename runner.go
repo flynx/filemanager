@@ -33,6 +33,9 @@ type Cmd struct {
 	Error error
 	Done <-chan bool
 
+	// XXX
+	Stdin io.WriteCloser
+
 	Stdout io.Reader
 	Stderr io.Reader
 
@@ -139,7 +142,11 @@ func (this *Cmd) Kill() *Cmd {
 		this.Process.Kill() }
 	return this }
 
-
+// XXX do we need this???
+func (this *Cmd) WriteString(str string) *Cmd {
+	// XXX how do we handle errors (.Stdin can be nil/closed/..)???
+	io.WriteString(this.Stdin, str) 
+	return this }
 
 
 
