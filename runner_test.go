@@ -91,11 +91,11 @@ func TestRun(t *testing.T){
 		t.Fatal(err) }
 
 	//time.Sleep(time.Second)
-	io.WriteString(in, "moo\n")
 	io.WriteString(in, "foo\n")
+	cmd.WriteString("moo\n")
 	time.Sleep(time.Second)
-	io.WriteString(in, "boo\n")
-	io.WriteString(in, "moo\n")
+	cmd.WriteString("boo\n")
+	cmd.WriteString("moo\n")
 
 	fmt.Println("async")
 	in.Close()
