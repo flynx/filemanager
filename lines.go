@@ -2104,6 +2104,7 @@ var options struct {
 		ListSpinners bool `long:"list-spinners" description:"List spinner styles"`
 		ListColors bool `long:"list-colors" description:"List usable color names"`
 	} `group:"Introspection"`
+
 }
 
 
