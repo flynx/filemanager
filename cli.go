@@ -29,19 +29,27 @@ func (this *TcellDrawer) Setup() *TcellDrawer {
 	this.EnableMouse()
 	this.EnablePaste()
 
-	this.Update()
-
-	// XXX draw...
-
-	this.Show()
-
-	// XXX event loop ???
+	// XXX
 
 	return this }
 func (this *TcellDrawer) Update() *TcellDrawer {
 
 	// XXX update geometry...
 
+	return this }
+func (this *TcellDrawer) Loop() *TcellDrawer {
+	/*/ XXX event loop ???
+	for {
+		this.Update()
+		// XXX draw...
+		this.Show()
+
+		evt := screen.PollEvent()
+
+		switch evt := evt.(type) {
+			// XXX
+		} }
+	//*/
 	return this }
 // handle panics and cleanup...
 func (this *TcellDrawer) Finalize() *TcellDrawer {
@@ -86,6 +94,8 @@ func main(){
 	defer drawer.Finalize()
 
 	// XXX start the event loop...
+	//		...should this be in os.Exit(..) ???
+	drawer.Loop()
 
 	fmt.Printf("--- %#v\n", lines)
 }
