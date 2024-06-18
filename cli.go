@@ -24,17 +24,51 @@ func (this *TcellDrawer) Setup() *TcellDrawer {
 	if err != nil {
 		log.Panic(err) }
 	this.Screen = screen
-	// XXX
+	if err := this.Screen.Init(); err != nil {
+		log.Panic(err) }
+	this.EnableMouse()
+	this.EnablePaste()
+
+	this.Update()
+
+	// XXX draw...
+
+	this.Show()
+
+	// XXX event loop ???
+
 	return this }
+func (this *TcellDrawer) Update() *TcellDrawer {
+
+	// XXX update geometry...
+
+	return this }
+// handle panics and cleanup...
+func (this *TcellDrawer) Finalize() *TcellDrawer {
+	maybePanic := recover()
+	this.Screen.Fini()
+	if maybePanic != nil {
+		panic(maybePanic) } 
+	return this }
+
 func (this *TcellDrawer) drawCells(col, row int, str string, style string) {
 	// XXX get the style...
 	// XXX
-	//for i, r := range []rune(str) {
-	//	// XXX draw cell
-	//}
+	/* XXX
+	for i, r := range []rune(str) {
+		// XXX draw cell
+	}
+	//*/
 }
 
+
+
+
 func main(){
+	// XXX  should this be the controller???
+	//		...since this would house the event look it would be logical...
+	//		on the other hand referencing to lines here would introduce 
+	//		a circular reference (does not feel good)...
 	drawer := TcellDrawer{
 		// XXX
 	}
@@ -49,6 +83,9 @@ func main(){
 	//			for other methods/stuff...
 	//		- a different approach to extension???
 	drawer.Setup()
+	defer drawer.Finalize()
+
+	// XXX start the event loop...
 
 	fmt.Printf("--- %#v\n", lines)
 }
