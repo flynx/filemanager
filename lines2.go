@@ -798,6 +798,7 @@ func (this *Lines) Draw() *Lines {
 
 
 
+/*
 func main(){
 	lines := Lines{}
 
@@ -938,5 +939,6 @@ func main(){
 	lines.Write("a single%SPANline")
 	lines.Draw()
 }
+//*/
 
 // vim:set ts=4 sw=4 :
