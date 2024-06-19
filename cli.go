@@ -95,7 +95,13 @@ func (this *TcellDrawer) drawCells(col, row int, str string, style string) {
 	for i, r := range []rune(str) {
 		this.SetContent(col+i, row, r, nil, s) } }
 
-func NewTcellLines() TcellDrawer {
+func NewTcellLines(l ...Lines) TcellDrawer {
+	var lines Lines
+	if len(l) == 0 {
+		lines = Lines{}
+	} else {
+		lines = l[0] }
+
 	// XXX  should this be the controller???
 	//		...since this would house the event look it would be logical...
 	//		on the other hand referencing to lines here would introduce 
@@ -107,7 +113,7 @@ func NewTcellLines() TcellDrawer {
 	//			will only partially solve the issue -- needing the ref
 	//			for other methods/stuff...
 	//		- a different approach to extension???
-	drawer.Setup(Lines{})
+	drawer.Setup(lines)
 
 	return drawer }
 
@@ -115,14 +121,20 @@ func NewTcellLines() TcellDrawer {
 
 
 func main(){
+	//* XXX stub...
+	lines := NewTcellLines(Lines{
+		//SpanMode: "*,5",
+		Width: 20,
+		Height: 6,
+		Border: "│┌─┐│└─┘",
+	})
+	lines.Lines.Write("Some text")
+	/*/
 	lines := NewTcellLines()
+	//*/
 
 	// XXX set settings...
-	//lines.Lines.SpanMode = "*,5"
-	lines.Lines.Width = 20
-	lines.Lines.Height = 6
-	lines.Lines.Border = "│┌─┐│└─┘"
-	lines.Lines.Write("Some text")
+
 
 	os.Exit(
 		toExitCode(
