@@ -57,7 +57,7 @@ func (this *TcellDrawer) Setup(lines Lines) *TcellDrawer {
 	// XXX
 
 	return this }
-func (this *TcellDrawer) Update() *TcellDrawer {
+func (this *TcellDrawer) UpdateGeometry() *TcellDrawer {
 
 	// XXX update geometry...
 
@@ -66,7 +66,7 @@ func (this *TcellDrawer) Loop() Result {
 	defer this.Finalize()
 	// XXX event loop ???
 	for {
-		this.Update()
+		this.UpdateGeometry()
 		this.Lines.Draw()
 		this.Show()
 
@@ -95,6 +95,7 @@ func (this *TcellDrawer) drawCells(col, row int, str string, style string) {
 	for i, r := range []rune(str) {
 		this.SetContent(col+i, row, r, nil, s) } }
 
+// XXX should this take Lines ot Settings???
 func NewTcellLines(l ...Lines) TcellDrawer {
 	var lines Lines
 	if len(l) == 0 {
@@ -102,17 +103,7 @@ func NewTcellLines(l ...Lines) TcellDrawer {
 	} else {
 		lines = l[0] }
 
-	// XXX  should this be the controller???
-	//		...since this would house the event look it would be logical...
-	//		on the other hand referencing to lines here would introduce 
-	//		a circular reference (does not feel good)...
 	drawer := TcellDrawer{}
-
-	// XXX can we combine drawer and lines and not jugle two things???
-	//		- we could add .Setup(..) to CellsDrawer inteface but this
-	//			will only partially solve the issue -- needing the ref
-	//			for other methods/stuff...
-	//		- a different approach to extension???
 	drawer.Setup(lines)
 
 	return drawer }
@@ -131,10 +122,11 @@ func main(){
 	lines.Lines.Write("Some text")
 	/*/
 	lines := NewTcellLines()
-	//*/
 
 	// XXX set settings...
+	// XXX
 
+	//*/
 
 	os.Exit(
 		toExitCode(

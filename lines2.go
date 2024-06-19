@@ -668,11 +668,12 @@ func (this *Lines) drawLine(col, row int, sections []string, style string) *Line
 	col += runes(sections[i])
 	this.drawCells(col, row, sections[i+1], "border")
 	col += runes(sections[i+1])
+	// let the .drawCells(..) know the line is done...
+	// NOTE: this is here to help the overloading code handle/ignore 
+	//		newlines... 
 	this.drawCells(col, row, "\n", "EOL")
 	return this }
 
-// XXX sould be nice to control how we output from this level...
-//		...i.e. Draw to string or draw to terminal...
 func (this *Lines) Draw() *Lines {
 	rows := this.Height
 	if ! this.HideTitle {
