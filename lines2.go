@@ -653,26 +653,22 @@ func (this *Lines) drawCells(col, row int, str string, style string) {
 	} else {
 		fmt.Print(str) } }
 func (this *Lines) drawLine(col, row int, sections []string, style string) *Lines {
-	/*/ XXX STUB...
-	fmt.Println(
-		strings.Join(sections, ""))
-	return this
-	//*/
+	runes := func(s string) int {
+		return len([]rune(s)) }
 	this.drawCells(col, row, sections[0], "border")
-	col += len(sections[0])
+	col += runes(sections[0])
 	i := 1
 	for ; i < len(sections)-2; i+=2 {
 		section, sep := sections[i], sections[i+1]
 		this.drawCells(col, row, section, style +"-text")
-		col += len(sections[i])
+		col += runes(sections[i])
 		this.drawCells(col, row, sep, style +"-separator") 
-		col += len(sections[i]) }
+		col += runes(sections[i]) }
 	this.drawCells(col, row, sections[i], style +"-text")
-	col += len(sections[i])
+	col += runes(sections[i])
 	this.drawCells(col, row, sections[i+1], "border")
-	col += len(sections[i+1])
-	// XXX STUB...
-	fmt.Print("\n")
+	col += runes(sections[i+1])
+	this.drawCells(col, row, "\n", "EOL")
 	return this }
 
 // XXX sould be nice to control how we output from this level...
@@ -731,12 +727,12 @@ func (this *Lines) Draw() *Lines {
 	// lines...
 	sections := []string{}
 	for i := 0; i < rows; i++ {
-		row := i + this.RowOffset
+		r := i + this.RowOffset
 		text := ""
 		var line Row
 		// get line...
-		if row < len(this.Lines) {
-			line = this.Lines[row]
+		if r < len(this.Lines) {
+			line = this.Lines[r]
 			text = string([]rune(line.Text)[this.ColOffset:]) 
 		// no lines left...
 		} else if ! this.SpanNoExtend {
@@ -754,13 +750,12 @@ func (this *Lines) Draw() *Lines {
 				s = scrollbar_fg
 				if scroller_offset > i || scroller_offset + scroller_size <= i {
 					s = scrollbar_bg } }
-			sections = append(
-				append([]string{border_l}, 
-					this.makeSectionChrome(
-						text, 
-						this.Width - len([]rune(border_l)) - len([]rune(s)),
-						this.SpanSeparator, "", "")...),
-				s)
+			sections = this.makeSectionChrome(
+				text, 
+				this.Width - len([]rune(border_l)) - len([]rune(s)),
+				this.SpanSeparator, "", "")
+			sections[0] = border_l
+			sections[len(sections)-1] = s
 		// line with overflow over border...
 		} else {
 			sections = this.makeSectionChrome(
