@@ -17,6 +17,8 @@ import (
 
 type TcellDrawer struct {
 	tcell.Screen
+
+	Lines Lines
 	// XXX
 }
 func (this *TcellDrawer) Setup() *TcellDrawer {
