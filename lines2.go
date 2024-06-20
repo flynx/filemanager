@@ -15,6 +15,112 @@ import (
 )
 
 
+
+// XXX need ways to indicate:
+//		- default color (bg/fg) / reset
+//		- reverse
+type Style []string
+type Theme map[string]Style
+var THEME = Theme {
+	"default": {
+		"default",
+	},
+
+	"normal-text": {
+		"default",
+	},
+	"normal-separator": {
+		"gray", 
+		"background",
+	},
+
+	"current-text": {
+		"reverse",
+	},
+	"current-separator": {
+		"background",
+		"gray", 
+	},
+
+	"selected-text": {
+		"yellow", 
+		"background",
+	},
+	"selected-separator": {
+		"gray", 
+		"background",
+	},
+
+	"current-selected-text": {
+		"background",
+		"yellow", 
+	},
+	"current-selected-separator": {
+		"gray",
+		"yellow", 
+	},
+
+	"background": {
+		"default",
+	},
+	"border": {
+		"default",
+	},
+}
+// Get best matching theme...
+//
+// Search example:
+//		theme.getStyle("current-selected-text")
+//			-> theme["current-selected-text"]
+//			-> theme["current-selected"]
+//			-> theme["current-text"]
+//			-> theme["current"]
+//			-> theme["selected-text"]
+//			-> theme["selected"]
+//			-> theme["default-text"]
+//			-> theme["default"]
+//			-> {"white", "black"}
+func (this Theme) getStyle(style string) (string, Style) {
+	// special case...
+	if style == "EOL" {
+		return "EOL", []string{"EOL"} }
+	// direct match...
+	res, ok := this[style]
+	if ok {
+		return style, res }
+	var get func([]string) (string, Style)
+	get = func(s []string) (string, Style) {
+		if len(s) == 1 {
+			return "", []string{} }
+		n := strings.Join(s[:len(s)-1], "-")
+		res, ok := this[n]
+		if ok {
+			return n, res } 
+		if len(s) > 2 {
+			if n, res := get(append(s[:len(s)-2], s[len(s)-1])) ; len(res) > 0 {
+				return n, res } 
+			if n, res := get(s[1:]) ; len(res) > 0 {
+				return n, res } }
+		return "", []string{} }
+	// search...
+	s := strings.Split(style, "-")
+	if n, res := get(s); len(res) > 0 {
+		return n, res }
+	// default...
+	if len(s) > 1 {
+		res, ok := this["default-"+ s[len(s)-1]]
+		if ok {
+			return "default-"+ s[len(s)-1], res } }
+	res, ok = this["default"]
+	if ok {
+		return "default", res }
+	return "default", []string{
+		"white",
+		"black",
+	} }
+
+
+
 // XXX is this too generic???
 type Env map[string]string
 
@@ -140,7 +246,7 @@ var PLACEHOLDERS = Placeholders {
 //		...don't tell me that a Go-y solution is passing function pointers))))
 // XXX revise name... 
 type CellsDrawer interface {
-	drawCells(col, row int, str string, style string)
+	drawCells(col, row int, str string, style_name string, style Style)
 }
 
 
@@ -222,6 +328,7 @@ type Lines struct {
 	SpanMinSize int
 	SpanNoExtend bool
 
+	Theme Theme
 }
 // XXX can we integrate this transparently???
 var LinesDefaults = Lines {
@@ -256,7 +363,7 @@ func (this *Lines) makeSection(str string, width int, rest ...string) (string, b
 	// NOTE: to draw N blanks:
 	//		- set blanks to N
 	//		- either
-	//			- decrement i -- will draw a blank on curent position... 
+	//			- decrement i -- will draw a blank on current position... 
 	//			- continue
 	//		- or:
 	//			- skip to this.drawCell(..)
@@ -649,7 +756,11 @@ func (this *Lines) expandTemplate(str string, env Env) string {
 // XXX return/handle errors???
 func (this *Lines) drawCells(col, row int, str string, style string) {
 	if this.CellsDrawer != nil {
-		this.CellsDrawer.drawCells(col, row, str, style)
+		theme := this.Theme
+		if theme == nil {
+			theme = THEME }
+		n, s := theme.getStyle(style)
+		this.CellsDrawer.drawCells(col, row, str, n, s)
 	} else {
 		fmt.Print(str) } }
 func (this *Lines) drawLine(col, row int, sections []string, style string) *Lines {
@@ -663,7 +774,7 @@ func (this *Lines) drawLine(col, row int, sections []string, style string) *Line
 		this.drawCells(col, row, section, style +"-text")
 		col += runes(sections[i])
 		this.drawCells(col, row, sep, style +"-separator") 
-		col += runes(sections[i]) }
+		col += runes(sections[i+1]) }
 	this.drawCells(col, row, sections[i], style +"-text")
 	col += runes(sections[i])
 	this.drawCells(col, row, sections[i+1], "border")
@@ -675,6 +786,9 @@ func (this *Lines) drawLine(col, row int, sections []string, style string) *Line
 	return this }
 
 func (this *Lines) Draw() *Lines {
+	overflow := string(OVERFLOW_INDICATOR)
+	if this.OverflowIndicator != 0 {
+		overflow = string(this.OverflowIndicator) }
 	rows := this.Height
 	if ! this.HideTitle {
 		rows-- }
@@ -689,7 +803,10 @@ func (this *Lines) Draw() *Lines {
 	corner_l := ""
 	corner_r := ""
 	border_h := " "
-	if ! this.HideTitle {
+	top_line := 0
+	if ! this.HideTitle || 
+			this.Border != "" {
+		top_line = 1
 		env = this.makeEnv()
 		if this.Border != "" {
 			corner_l = string([]rune(this.Border)[1])
@@ -735,7 +852,7 @@ func (this *Lines) Draw() *Lines {
 		if r < len(this.Lines) {
 			line = this.Lines[r]
 			text = string([]rune(line.Text)[this.ColOffset:]) 
-		// no lines left...
+		// no lines left -- generate template for empty lines...
 		} else if ! this.SpanNoExtend {
 			s := this.SpanMarker
 			if s == "" {
@@ -756,7 +873,17 @@ func (this *Lines) Draw() *Lines {
 				this.Width - len([]rune(border_l)) - len([]rune(s)),
 				this.SpanSeparator, "", "")
 			sections[0] = border_l
+			// XXX can we get a case when the last section is neither "" nor overflow???
+			//* XXX overflow as separator...
+			if sections[len(sections)-1] == overflow {
+				sections = append(sections, "", s)
+			} else {
+				sections[len(sections)-1] = s }
+			/*/ // XXX overflow as part of text...
+			if sections[len(sections)-1] == overflow {
+				sections[len(sections)-2] += overflow }
 			sections[len(sections)-1] = s
+			//*/
 		// line with overflow over border...
 		} else {
 			sections = this.makeSectionChrome(
@@ -765,8 +892,8 @@ func (this *Lines) Draw() *Lines {
 				this.SpanSeparator, border_l, border_r) }
 		// style...
 		style := "normal"
-		if row == this.Index {
-			style = "current" }
+		if row == this.Index + top_line {
+			style = "current" } 
 		if line.Selected {
 			if style == "current" {
 				style = "current-selected"

@@ -245,10 +245,13 @@ func TestSection(t *testing.T){
 	test := func(str string, w int) {
 		t.Run(fmt.Sprintf("%v:%#v:%v", n, str, w), func(t *testing.T){
 			defer func(){ n++ }()
+			//* XXX
 			s, _ := lines.makeSection(str, w)
-			//s, o := lines.makeSection(str, w)
-			//if testing.Verbose() {
-			//	fmt.Printf("%v: .makeSection(%#v, %v) -> %#v, %#v\n", n, str, w, s, o) }
+			/*/
+			s, o := lines.makeSection(str, w)
+			if testing.Verbose() {
+				fmt.Printf("%v: .makeSection(%#v, %v) -> %#v, %#v\n", n, str, w, s, o) }
+			//*/
 			if len(s) != w {
 				t.Fatalf("#%v: .makeSection(%#v, %#v): bad length::\n"+
 						"\texpected: %#v\n"+
@@ -264,8 +267,38 @@ func TestSectionChrome(t *testing.T){
 	// XXX
 }
 
+type TestDrawer struct {}
+func (this *TestDrawer) drawCells(col, row int, str string, style_name string, style Style) {
+	fmt.Printf("%2v, %-2v: %#-25v (%-20v: %#v)\n", col, row, str, style_name, style) }
 func TestDraw(t *testing.T){
-	// XXX
+	var lines Lines
+	draw := func(){
+		lines.Width = 20
+		lines.Height = 6
+		// XXX wothout this .Draw() will break...
+		lines.SpanMode = "*,5"
+		lines.Clear()
+		lines.Append(
+			"Some text",
+			"Current",
+			"Selected%SPANColumn")
+		lines.Index = 1
+		lines.Lines[2].Selected = true
+		lines.Border = "│┌─┐│└─┘"
+		lines.SpanSeparator = "|"
+		lines.Draw() }
+
+
+	lines = Lines{}
+
+	draw()
+
+	lines = Lines{
+		CellsDrawer: &TestDrawer{},
+	}
+
+	draw()
+
 }
 
 
