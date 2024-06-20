@@ -103,7 +103,7 @@ var THEME = Theme {
 //			-> theme["selected"]
 //			-> theme["default-text"]
 //			-> theme["default"]
-//			-> {"white", "black"}
+//			-> {"default"}
 func (this Theme) getStyle(style string) (string, Style) {
 	// special case...
 	if style == "EOL" {
@@ -138,10 +138,7 @@ func (this Theme) getStyle(style string) (string, Style) {
 	res, ok = this["default"]
 	if ok {
 		return "default", res }
-	return "default", []string{
-		"white",
-		"black",
-	} }
+	return "default", []string{ "default" } }
 
 
 
