@@ -256,7 +256,6 @@ func Style2TcellStyle(style Style) tcell.Style {
 func (this *TcellDrawer) drawCells(col, row int, str string, style_name string, style Style) {
 	if style_name == "EOL" {
 		return }
-	//log.Printf("%2v, %-2v: %3v:%#-25v (%v)\n", col, row, len([]rune(str)), str, style_name)
 	// get style (cached)...
 	if this.__style_cache == nil {
 		this.__style_cache = map[string]tcell.Style{} }
@@ -264,6 +263,7 @@ func (this *TcellDrawer) drawCells(col, row int, str string, style_name string, 
 	if ! ok {
 		s := Style2TcellStyle(style)
 		this.__style_cache[style_name] = s }
+	// draw...
 	for i, r := range []rune(str) {
 		this.SetContent(col+i, row, r, nil, s) } }
 

@@ -60,6 +60,30 @@ var THEME = Theme {
 		"yellow", 
 	},
 
+	"title": {
+		"default",
+	},
+	/*
+	"title-text": {
+		"default",
+	},
+	"title-separator": {
+		"default",
+	},
+	//*/
+
+	"status": {
+		"default",
+	},
+	/*
+	"status-text": {
+		"default",
+	},
+	"status-separator": {
+		"default",
+	},
+	//*/
+
 	"background": {
 		"default",
 	},
