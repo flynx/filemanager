@@ -33,11 +33,19 @@ var THEME = Theme {
 		"gray", 
 		"background",
 	},
+	"normal-overflow": {
+		"gray", 
+		"background",
+	},
 
 	"current-text": {
 		"reverse",
 	},
 	"current-separator": {
+		"background",
+		"gray", 
+	},
+	"current-overflow": {
 		"background",
 		"gray", 
 	},
@@ -50,12 +58,20 @@ var THEME = Theme {
 		"gray", 
 		"background",
 	},
+	"selected-overflow": {
+		"gray", 
+		"background",
+	},
 
 	"current-selected-text": {
 		"background",
 		"yellow", 
 	},
 	"current-selected-separator": {
+		"gray",
+		"yellow", 
+	},
+	"current-selected-overflow": {
 		"gray",
 		"yellow", 
 	},
@@ -70,6 +86,9 @@ var THEME = Theme {
 	"title-separator": {
 		"default",
 	},
+	"title-overflow": {
+		"default",
+	},
 	//*/
 
 	"status": {
@@ -80,6 +99,9 @@ var THEME = Theme {
 		"default",
 	},
 	"status-separator": {
+		"default",
+	},
+	"status-overflow": {
 		"default",
 	},
 	//*/
@@ -142,8 +164,8 @@ func (this Theme) getStyle(style string) (string, Style) {
 
 
 
-// XXX is this too generic???
 type Env map[string]string
+
 
 
 // Row
@@ -785,6 +807,9 @@ func (this *Lines) drawCells(col, row int, str string, style string) {
 	} else {
 		fmt.Print(str) } }
 func (this *Lines) drawLine(col, row int, sections []string, style string) *Lines {
+	overflow := string(OVERFLOW_INDICATOR)
+	if this.OverflowIndicator != 0 {
+		overflow = string(this.OverflowIndicator) }
 	runes := func(s string) int {
 		return len([]rune(s)) }
 	this.drawCells(col, row, sections[0], "border")
@@ -794,7 +819,10 @@ func (this *Lines) drawLine(col, row int, sections []string, style string) *Line
 		section, sep := sections[i], sections[i+1]
 		this.drawCells(col, row, section, style +"-text")
 		col += runes(sections[i])
-		this.drawCells(col, row, sep, style +"-separator") 
+		if sep == overflow {
+			this.drawCells(col, row, sep, style +"-overflow")
+		} else {
+			this.drawCells(col, row, sep, style +"-separator") }
 		col += runes(sections[i+1]) }
 	this.drawCells(col, row, sections[i], style +"-text")
 	col += runes(sections[i])

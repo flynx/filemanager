@@ -287,7 +287,7 @@ func main(){
 	//* XXX stub...
 	lines := NewTcellLines(Lines{
 		SpanMode: "*,5",
-		SpanSeparator: "|",
+		SpanSeparator: "│",
 		Width: 20,
 		Height: 6,
 		Border: "│┌─┐│└─┘",
