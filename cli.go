@@ -192,7 +192,11 @@ type TcellDrawer struct {
 	//		
 	Align []string
 
+
+	// caches...
 	__style_cache map[string]tcell.Style
+	__int_cache map[string]int
+	__float_cache map[string]float64
 }
 func (this *TcellDrawer) Setup(lines Lines) *TcellDrawer {
 	this.Lines = &lines
@@ -221,27 +225,40 @@ func (this *TcellDrawer) updateGeometry() *TcellDrawer {
 	if len(Align) == 0 {
 		Align = []string{"top", "left"} }
 
+	// XXX should this be more generic???
+	// XXX revise the error case...
+	cachedFloat := func(str string) float64 {
+		v, ok := this.__float_cache[str]
+		if ! ok {
+			var err error
+			// handle "%"...
+			if str[len(str)-1] == '%' {
+				str = string(str[0:len(str)-1]) }
+			v, err = strconv.ParseFloat(str, 32)
+			if err != nil {
+				log.Println(err) } 
+			this.__float_cache[str] = v }
+		return v }
+
 	// Width...
-	if Width == "auto" || Width == "" {
+	if Width == "auto" || 
+			Width == "" {
 		this.Lines.Width = W
 	} else if Width[len(Width)-1] == '%' {
-		r, err := strconv.ParseFloat(string(Width[0:len(Width)-1]), 32)
-		if err != nil {
-			log.Println("Error parsing width", Width) }
-		this.Lines.Width = int(float64(W) * (r / 100))
+		this.Lines.Width = int(float64(W) * (cachedFloat(Width) / 100))
 	} else {
+		// XXX revise the error case + cache???
 		this.Lines.Width, err = strconv.Atoi(Width)
 		if err != nil {
 			log.Println("Error parsing width", Width) } }
 	// Height...
-	if Height == "auto" || Height == "" {
+	if Height == "auto" || 
+			Height == "" {
 		this.Lines.Height = H
 	} else if Height[len(Height)-1] == '%' {
-		r, err := strconv.ParseFloat(string(Height[0:len(Height)-1]), 32)
-		if err != nil {
-			log.Println("Error parsing height", Height) }
-		this.Lines.Height = int(float64(H) * (r / 100))
+		this.Lines.Height = int(float64(H) * (cachedFloat(Height) / 100))
 	} else {
+		// XXX revise the error case + cache???
 		this.Lines.Height, err = strconv.Atoi(Height)
 		if err != nil {
 			log.Println("Error parsing height", Height) } }
@@ -256,6 +273,7 @@ func (this *TcellDrawer) updateGeometry() *TcellDrawer {
 		this.Lines.Left = W - this.Lines.Width
 	} else if Align[0] != "center" {
 		left_set = false
+		// XXX revise the error case + cache???
 		this.Lines.Left, err = strconv.Atoi(Align[0])
 		if err != nil {
 			log.Println("Error parsing left", Align[0]) } }
@@ -269,6 +287,7 @@ func (this *TcellDrawer) updateGeometry() *TcellDrawer {
 		this.Lines.Top = H - this.Lines.Height
 	} else if Align[1] != "center" {
 		top_set = false
+		// XXX revise the error case + cache???
 		this.Lines.Top, err = strconv.Atoi(Align[1]) 
 		if err != nil {
 			log.Println("Error parsing top", Align[1]) } }
