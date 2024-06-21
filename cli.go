@@ -15,7 +15,8 @@ import (
 	"log"
 	"os"
 	//"strings"
-	//"slices"
+	"strconv"
+	"slices"
 	//"reflect"
 
 	"github.com/gdamore/tcell/v2"
@@ -175,6 +176,22 @@ type TcellDrawer struct {
 	Lines *Lines
 	// XXX
 
+	// Geometry
+	//
+	// Format:
+	//		"auto" | "50%" | "20"
+	Width string
+	Height string
+
+	// Format:
+	//
+	Top string
+	Left string
+
+	// Format:
+	//		
+	Align []string
+
 	__style_cache map[string]tcell.Style
 }
 func (this *TcellDrawer) Setup(lines Lines) *TcellDrawer {
@@ -195,23 +212,99 @@ func (this *TcellDrawer) Setup(lines Lines) *TcellDrawer {
 func (this *TcellDrawer) UpdateTheme() *TcellDrawer {
 	this.__style_cache = nil
 	return this }
-func (this *TcellDrawer) UpdateGeometry() *TcellDrawer {
 
-	// XXX update geometry...
+func (this *TcellDrawer) updateGeometry() *TcellDrawer {
+	var err error
+	W, H := this.Screen.Size()
+	Width, Height := this.Width, this.Height
+	Align := this.Align
+	if len(Align) == 0 {
+		Align = []string{"top", "left"} }
 
+	// Width...
+	if Width == "auto" || Width == "" {
+		this.Lines.Width = W
+	} else if Width[len(Width)-1] == '%' {
+		r, err := strconv.ParseFloat(string(Width[0:len(Width)-1]), 32)
+		if err != nil {
+			log.Println("Error parsing width", Width) }
+		this.Lines.Width = int(float64(W) * (r / 100))
+	} else {
+		this.Lines.Width, err = strconv.Atoi(Width)
+		if err != nil {
+			log.Println("Error parsing width", Width) } }
+	// Height...
+	if Height == "auto" || Height == "" {
+		this.Lines.Height = H
+	} else if Height[len(Height)-1] == '%' {
+		r, err := strconv.ParseFloat(string(Height[0:len(Height)-1]), 32)
+		if err != nil {
+			log.Println("Error parsing height", Height) }
+		this.Lines.Height = int(float64(H) * (r / 100))
+	} else {
+		this.Lines.Height, err = strconv.Atoi(Height)
+		if err != nil {
+			log.Println("Error parsing height", Height) } }
+
+	// Left (value)
+	left_set := false
+	if slices.Contains(Align, "left") {
+		left_set = false
+		this.Lines.Left = 0
+	} else if slices.Contains(Align, "right") {
+		left_set = false
+		this.Lines.Left = W - this.Lines.Width
+	} else if Align[0] != "center" {
+		left_set = false
+		this.Lines.Left, err = strconv.Atoi(Align[0])
+		if err != nil {
+			log.Println("Error parsing left", Align[0]) } }
+	// Top (value)
+	top_set := false
+	if slices.Contains(Align, "top") {
+		top_set = false
+		this.Lines.Top = 0
+	} else if slices.Contains(Align, "bottom") {
+		top_set = false
+		this.Lines.Top = H - this.Lines.Height
+	} else if Align[1] != "center" {
+		top_set = false
+		this.Lines.Top, err = strconv.Atoi(Align[1]) 
+		if err != nil {
+			log.Println("Error parsing top", Align[1]) } }
+	// Left (center)
+	if ! left_set {
+		if top_set && 
+				slices.Contains(Align, "center") || 
+				Align[0] == "center" {
+			this.Lines.Left = int(float64(W - this.Lines.Width) / 2) } }
+	// Top (center)
+	if ! top_set {
+		if top_set && 
+				slices.Contains(Align, "center") || 
+				Align[0] == "center" {
+			this.Lines.Top = int(float64(H - this.Lines.Height) / 2) } }
 	return this }
+func (this *TcellDrawer) handleScrollLimits() *TcellDrawer {
+	// XXX
+	return this}
+
 func (this *TcellDrawer) Loop() Result {
 	defer this.Finalize()
-	// XXX event loop ???
 	for {
-		this.UpdateGeometry()
+		this.updateGeometry()
 		this.Lines.Draw()
 		this.Show()
 
 		evt := this.PollEvent()
 
 		switch evt := evt.(type) {
-			// XXX
+			// keep the selection in the same spot...
+			case *tcell.EventResize:
+				// XXX we do not need to .updateGeometry() as we are doing it above... 
+				//this.updateGeometry()
+				this.handleScrollLimits()
+			// XXX STUB exit on keypress...
 			case *tcell.EventKey:
 				log.Println("---", evt)
 				return OK
@@ -224,6 +317,9 @@ func (this *TcellDrawer) Finalize() {
 	if maybePanic != nil {
 		panic(maybePanic) } }
 
+// XXX might be nice to be able to set flags like underline, bold, italic, ...etc.
+// XXX BUG: "background"/"foreground" do not work as we can't yet get 
+// 		the actual default colors...
 func Style2TcellStyle(style Style) tcell.Style {
 	// full style...
 	if len(style) == 1 {
@@ -235,21 +331,24 @@ func Style2TcellStyle(style Style) tcell.Style {
 				return tcell.StyleDefault } }
 	// componnt style...
 	res := tcell.StyleDefault
-	fg, bg, _ := res.Decompose()
+	// XXX this returns "default" "default" -- very usefull...
+	bg, fg, _ := tcell.StyleDefault.Decompose()
 	if style[0] != "default" && 
 			style[0] != "foreground" && 
 			style[0] != "fg" {
 		switch style[0] {
 			case "background":
-				res.Foreground(bg)
+				log.Println("Style2TcellStyle(..): \"background\" / \"foreground\" colors do not work yet.")
+				res = res.Foreground(bg)
 			default:
 				res = res.Foreground(tcell.GetColor(style[0])) } }
 	if style[1] != "default" &&
-			style[0] != "background" && 
-			style[0] != "bg" {
-		switch style[0] {
+			style[1] != "background" && 
+			style[1] != "bg" {
+		switch style[1] {
 			case "foreground":
-				res.Background(fg)
+				log.Println("Style2TcellStyle(..): \"background\" / \"foreground\" colors do not work yet.")
+				res = res.Background(fg)
 			default:
 				res = res.Background(tcell.GetColor(style[1])) } }
 	return res }
@@ -288,13 +387,11 @@ func main(){
 	lines := NewTcellLines(Lines{
 		SpanMode: "*,5",
 		SpanSeparator: "│",
-		Width: 20,
-		Height: 6,
 		Border: "│┌─┐│└─┘",
 	})
 	lines.Lines.Append(
 		"Some text",
-		"Current",
+		"Current%SPAN",
 		"Some%SPANColumns")
 	lines.Lines.Index = 1
 	lines.Lines.Lines[0].Selected = true

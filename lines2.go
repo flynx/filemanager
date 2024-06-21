@@ -42,12 +42,14 @@ var THEME = Theme {
 		"reverse",
 	},
 	"current-separator": {
-		"background",
 		"gray", 
+		// XXX need to reference foreground...
+		//"white",
+		"foreground",
 	},
 	"current-overflow": {
-		"background",
 		"gray", 
+		"foreground",
 	},
 
 	"selected-text": {
@@ -810,8 +812,16 @@ func (this *Lines) drawLine(col, row int, sections []string, style string) *Line
 	overflow := string(OVERFLOW_INDICATOR)
 	if this.OverflowIndicator != 0 {
 		overflow = string(this.OverflowIndicator) }
+
+	// helper: length in runes...
 	runes := func(s string) int {
 		return len([]rune(s)) }
+
+	// add offset...
+	col += this.Left
+	row += this.Top
+
+	// draw...
 	this.drawCells(col, row, sections[0], "border")
 	col += runes(sections[0])
 	i := 1
