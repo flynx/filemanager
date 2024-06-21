@@ -304,24 +304,24 @@ func (this *TcellDrawer) updateGeometry() *TcellDrawer {
 				Align[0] == "center" {
 			this.Lines.Top = int(float64(H - this.Lines.Height) / 2) } }
 	return this }
+// keep the selection in the same spot...
 func (this *TcellDrawer) handleScrollLimits() *TcellDrawer {
 	// XXX
 	return this}
 
 func (this *TcellDrawer) Loop() Result {
 	defer this.Finalize()
+
+	this.updateGeometry()
 	for {
-		this.updateGeometry()
 		this.Lines.Draw()
 		this.Show()
 
 		evt := this.PollEvent()
 
 		switch evt := evt.(type) {
-			// keep the selection in the same spot...
 			case *tcell.EventResize:
-				// XXX we do not need to .updateGeometry() as we are doing it above... 
-				//this.updateGeometry()
+				this.updateGeometry()
 				this.handleScrollLimits()
 			// XXX STUB exit on keypress...
 			case *tcell.EventKey:
