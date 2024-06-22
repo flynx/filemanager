@@ -602,11 +602,6 @@ type TcellDrawer struct {
 	Height string
 
 	// Format:
-	//
-	//Top string
-	//Left string
-
-	// Format:
 	//		<value> ::= {<left>, <top>}	
 	//		<left> ::= "left" | "center" | "right" | "42"
 	//		<top> ::= "top" | "center" | "bottom" | "42"
@@ -1087,7 +1082,8 @@ func (this *TcellDrawer) Loop() Result {
 						evt.Key() == tcell.KeyCtrlC {
 					return OK }
 			// XXX mouse...
-			// XXX
+			case *tcell.EventMouse:
+				// XXX
 		} }
 	return OK }
 // handle panics and cleanup...

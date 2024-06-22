@@ -16,6 +16,43 @@ import (
 
 
 
+
+// Toggle...
+//
+// XXX add a multi toggle...
+type Toggle int
+const (
+	Next Toggle = iota
+	On
+	Off
+)
+func (this Toggle) Toggle(in bool) bool {
+	if this == Next {
+		return ! in
+	} else if this == On {
+		return true }
+	return false }
+
+
+
+// Togglable...
+//
+type Togglable bool
+func (this Togglable) Toggle(mode Toggle) Togglable {
+	if mode == Next {
+		return this.Next()
+	} else if mode == On {
+		return true }
+	return false }
+func (this Togglable) Next() Togglable {
+	return ! this }
+func (this Togglable) On() Togglable {
+	return true }
+func (this Togglable) Off() Togglable {
+	return false }
+
+
+
 // Theme...
 //
 type Style []string
@@ -156,7 +193,7 @@ type Env map[string]string
 // Row
 //
 type Row struct {
-	Selected bool
+	Selected Togglable
 	Transformed bool
 	Populated bool
 	Text string
@@ -237,54 +274,54 @@ func (this *LinesBuffer) Selected() []string {
 		if row.Selected {
 			res = append(res, row.Text) } }
 	return res }
-// XXX this is not correct...
-func (this *LinesBuffer) Select(selection []any) *LinesBuffer {
-	// deselect...
-	this.SelectNone()
-	if len(selection) == 0 {
-		return this }
-	switch selection[0].(type) {
+// XXX would be nice to make this generic...
+func (this *LinesBuffer) Select(selection any, mode ...Toggle) *LinesBuffer {
+	var m Toggle 
+	if len(mode) != 0 {
+		m = mode[0] }
+
+	toggle := func(lst []Row, i int){
+		lst[i].Selected = lst[i].Selected.Toggle(m) }
+
+	switch selection.(type) {
 		// rows...
-		case Row:
-			for i, _ := range selection {
-				row := selection[i].(Row)
-				row.Selected = true }
+		case []Row:
+			s := selection.([]Row)
+			for i, _ := range s {
+				toggle(s, i) }
 		// indexes...
-		case int:
-			for _, v := range selection {
-				i := v.(int)
-				this.Lines[i].Selected = true }
+		case []int:
+			s := selection.([]int)
+			for _, i := range s {
+				toggle(this.Lines, i) }
 		// strings...
-		case string:
+		case []string:
+			s := selection.([]string)
 			var i = 0
-			for _, v := range selection {
-				line := v.(string)
+			for _, line := range s{
 				for i < len(this.Lines) {
 					if line == this.Lines[i].Text {
-						this.Lines[i].Selected = true } 
+						toggle(this.Lines, i) }
 					i++ }
 				// loop over .Lines in case we've got the selection out of 
 				// order...
 				if i >= len(this.Lines) - 1 {
 					i = 0 } } }
 	return this }
-// XXX
+func (this *LinesBuffer) SetSelection(selection any, mode ...Toggle) *LinesBuffer {
+	this.SelectNone()
+	var m Toggle
+	if len(mode) == 0 {
+		m = mode[0] }
+	return this.Select(selection, m) }
 func (this *LinesBuffer) SelectToggle(selection []any) *LinesBuffer {
-	// XXX
+	this.Select(this.Lines, Next)
 	return this }
 func (this *LinesBuffer) SelectAll() *LinesBuffer {
-	for i := range this.Lines {
-		// XXX HACK? we are not iterating over values as there seems to
-		//		be no way to get the item by reference rather than by 
-		//		value (i.e. a copy)
-		this.Lines[i].Selected = true }
+	this.Select(this.Lines, On)
 	return this }
 func (this *LinesBuffer) SelectNone() *LinesBuffer {
-	for i := range this.Lines {
-		// XXX HACK? we are not iterating over values as there seems to
-		//		be no way to get the item by reference rather than by 
-		//		value (i.e. a copy)
-		this.Lines[i].Selected = false }
+	this.Select(this.Lines, Off)
 	return this }
 func (this *LinesBuffer) ActiveRows() []Row {
 	sel := this.SelectedRows()
@@ -432,6 +469,12 @@ func (this *Lines) Cols() int {
 			this.Rows() < len(this.Lines) {
 		w-- }
 	return w }
+
+func (this *Lines) GetStyle(style string) (string, Style) {
+	theme := this.Theme
+	if theme == nil {
+		theme = THEME }
+	return theme.GetStyle(style) }
 
 // XXX add support for escape sequences...
 func (this *Lines) makeSection(str string, width int, rest ...string) (string, bool) {
@@ -850,12 +893,6 @@ func (this *Lines) expandTemplate(str string, env Env) string {
 			return match }))
 	return str }
 
-func (this *Lines) GetStyle(style string) (string, Style) {
-	theme := this.Theme
-	if theme == nil {
-		theme = THEME }
-	return theme.GetStyle(style) }
-// XXX return/handle errors???
 func (this *Lines) drawCells(col, row int, str string, style string) {
 	if this.CellsDrawer != nil {
 		n, s := this.GetStyle(style)
