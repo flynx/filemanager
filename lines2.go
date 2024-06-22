@@ -16,57 +16,49 @@ import (
 
 
 
-// XXX need ways to indicate:
-//		- default color (bg/fg) / reset
-//		- reverse
+// Theme...
+//
 type Style []string
 type Theme map[string]Style
 var THEME = Theme {
-	"default": {
-		"default",
-	},
+	"default": {},
 
-	"normal-text": {
-		"default",
-	},
+	"normal-text": {},
 	"normal-separator": {
 		"gray", 
-		"background",
 	},
 	"normal-overflow": {
 		"gray", 
-		"background",
-	},
-
-	"current-text": {
-		"reverse",
-	},
-	"current-separator": {
-		"gray", 
-		// XXX need to reference foreground...
-		//"white",
-		"foreground",
-	},
-	"current-overflow": {
-		"gray", 
-		"foreground",
 	},
 
 	"selected-text": {
 		"yellow", 
-		"background",
 	},
 	"selected-separator": {
 		"gray", 
-		"background",
 	},
 	"selected-overflow": {
 		"gray", 
-		"background",
+	},
+
+	"current-text": {
+		"bold",
+		"reverse",
+	},
+	"current-separator": {
+		"reverse",
+		"default",
+		"gray", 
+	},
+	"current-overflow": {
+		"reverse",
+		"default",
+		"gray", 
 	},
 
 	"current-selected-text": {
-		"background",
+		"bold",
+		"reverse",
 		"yellow", 
 	},
 	"current-selected-separator": {
@@ -79,54 +71,36 @@ var THEME = Theme {
 	},
 
 	"title": {
-		"default",
+		"bold",
 	},
 	/*
-	"title-text": {
-		"default",
-	},
-	"title-separator": {
-		"default",
-	},
-	"title-overflow": {
-		"default",
-	},
+	"title-text": {},
+	"title-separator": {},
+	"title-overflow": {},
 	//*/
 
-	"status": {
-		"default",
-	},
+	"status": {},
 	/*
-	"status-text": {
-		"default",
-	},
-	"status-separator": {
-		"default",
-	},
-	"status-overflow": {
-		"default",
-	},
+	"status-text": {},
+	"status-separator": {},
+	"status-overflow": {},
 	//*/
 
-	"background": {
-		"default",
-	},
-	"border": {
-		"default",
-	},
+	"background": {},
+	"border": {},
 }
 // Get best matching theme...
 //
 // Search example:
 //		theme.getStyle("current-selected-text")
-//			-> theme["current-selected-text"]
-//			-> theme["current-selected"]
-//			-> theme["current-text"]
-//			-> theme["current"]
-//			-> theme["selected-text"]
-//			-> theme["selected"]
-//			-> theme["default-text"]
-//			-> theme["default"]
+//			-> theme["current-selected-text"]?
+//			-> theme["current-selected"]?
+//			-> theme["current-text"]?
+//			-> theme["current"]?
+//			-> theme["selected-text"]?
+//			-> theme["selected"]?
+//			-> theme["default-text"]?
+//			-> theme["default"]?
 //			-> {"default"}
 func (this Theme) getStyle(style string) (string, Style) {
 	// special case...

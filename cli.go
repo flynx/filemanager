@@ -436,6 +436,7 @@ func (this *Actions) Deselect(rows ...int) Result {
 	for _, i := range rows {
 		this.Lines.Lines[i].Selected = false }
 	return OK }
+// XXX us this.Lines.SelectToggle(..)
 func (this *Actions) SelectToggle(rows ...int) Result {
 	this.Action()
 	if len(rows) == 0 {
@@ -567,7 +568,6 @@ func (this *Actions) Fail() Result {
 	return Fail }
 func (this *Actions) Exit() Result {
 	return Exit }
-
 
 
 
@@ -830,50 +830,64 @@ func (this *TcellDrawer) Finalize() {
 	if maybePanic != nil {
 		panic(maybePanic) } }
 
-// XXX might be nice to be able to set flags like underline, bold, italic, ...etc.
-// XXX BUG: "background"/"foreground" do not work as we can't yet get 
-// 		the actual default colors...
+// XXX URLS are supported but not usable yet as there is no way to set 
+//		the url...
+//		use: "url:<url>"
+// XXX would be nice to be able to use "foreground" and "background" 
+//		colors in a predictable manner -- currently they reference curent 
+//		colors
+//		...i.e. {"yellow", "foreground"} will set both colors to yellow...
 func (this *TcellDrawer) Style2TcellStyle(style_name string, style Style) tcell.Style {
 	// cache...
-	cache := func(s tcell.Style) tcell.Style {
-		this.__style_cache[style_name] = s 
-		return s }
 	if this.__style_cache == nil {
 		this.__style_cache = map[string]tcell.Style{} }
 	s, ok := this.__style_cache[style_name]
 	if ok {
 		return s }
+	cache := func(s tcell.Style) tcell.Style {
+		this.__style_cache[style_name] = s 
+		return s }
 
-	// full style...
-	if len(style) == 1 {
-		switch style[0] {
-			case "reverse":
-				return cache(tcell.StyleDefault.
-					Reverse(true))
-			default:
-				return cache(tcell.StyleDefault) } }
 	// componnt style...
 	res := tcell.StyleDefault
-	// XXX this returns "default" "default" -- very usefull...
-	bg, fg, _ := tcell.StyleDefault.Decompose()
-	if style[0] != "default" && 
-			style[0] != "foreground" && 
-			style[0] != "fg" {
-		switch style[0] {
-			case "background":
-				log.Println("Style2TcellStyle(..): \"background\" / \"foreground\" colors do not work yet.")
-				res = res.Foreground(bg)
+	// set flags...
+	colors := []string{}
+	for _, s := range style {
+		switch s {
+			case "blink":
+				res = res.Blink(true)
+			case "bold":
+				res = res.Bold(true)
+			case "dim":
+				res = res.Dim(true)
+			case "italic":
+				res = res.Italic(true)
+			case "normal":
+				res = res.Normal()
+			case "reverse":
+				res = res.Reverse(true)
+			case "strike-through":
+				res = res.StrikeThrough(true)
+			case "underline":
+				res = res.Underline(true)
 			default:
-				res = res.Foreground(tcell.GetColor(style[0])) } }
-	if style[1] != "default" &&
-			style[1] != "background" && 
-			style[1] != "bg" {
-		switch style[1] {
-			case "foreground":
-				log.Println("Style2TcellStyle(..): \"background\" / \"foreground\" colors do not work yet.")
-				res = res.Background(fg)
-			default:
-				res = res.Background(tcell.GetColor(style[1])) } }
+				// urls...
+				if string(s[:len("url")]) == "url" {
+					p := strings.SplitN(s, ":", 1)
+					url := ""
+					if len(p) > 1 {
+						url = p[1] }
+					res = res.Url(url)
+				// colors...
+				} else {
+					colors = append(colors, s) } } }
+	// set the colors...
+	if len(colors) > 0 {
+		res = res.Foreground(
+			tcell.GetColor(colors[0])) }
+	if len(colors) > 1 {
+		res = res.Background(
+			tcell.GetColor(colors[1])) }
 	return cache(res) }
 func (this *TcellDrawer) drawCells(col, row int, str string, style_name string, style Style) {
 	if style_name == "EOL" {
@@ -886,7 +900,6 @@ func (this *TcellDrawer) Fill() *TcellDrawer {
 	this.Screen.Fill(' ', this.Style2TcellStyle("background", s))
 	return this }
 
-// XXX should this be HandleAction or CallAction???
 func (this *TcellDrawer) HandleAction(actions string) Result {
 	// XXX make split here a bit more cleaver:
 	//		- support ";"
