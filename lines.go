@@ -1230,8 +1230,12 @@ func (this *Actions) SelectEnd(rows ...int) Result {
 		start, end = SELECT_MOTION_START, rows[0]
 	} else {
 		start = SELECT_MOTION_START
+		end = CURRENT_ROW + ROW_OFFSET
 		// NOTE: we are not selecting the last item intentionally...
-		end = CURRENT_ROW + ROW_OFFSET - 1 }
+		if end < start {
+			end++
+		} else if end > start {
+			end-- } }
 	// normalize direction...
 	if SELECT_MOTION_START > end {
 		start, end = end, start }

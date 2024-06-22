@@ -11,13 +11,19 @@
 package main
 
 import (
-	//"fmt"
+	"fmt"
 	"log"
 	"os"
-	//"strings"
+	//"io"
+	"runtime"
+	//"bytes"
+	"strings"
+	"unicode"
+	//"bufio"
 	"strconv"
 	"slices"
-	//"reflect"
+	//"regexp"
+	"reflect"
 
 	"github.com/gdamore/tcell/v2"
 	//"github.com/jessevdk/go-flags"
@@ -125,7 +131,7 @@ var KEYBINDINGS = Keybindings {
 		SelectStart
 		PageUp
 		SelectEndCurrent`,
-	"shift+PageDn": `
+	"shift+PgDn": `
 		SelectStart
 		PageDown
 		SelectEndCurrent`,
@@ -146,6 +152,79 @@ var KEYBINDINGS = Keybindings {
 	"ctrl+r": "Update",
 	"ctrl+l": "Refresh",
 }
+
+
+
+func key2keys(mods []string, key string, rest ...string) []string {
+	key_seq := []string{}
+	Key := ""
+	if len(rest) > 0 {
+		Key = rest[0] }
+
+	// XXX STUB -- still need 3 and 4 mod combinations for completeness...
+	//		...generate combinations + sort by length...
+	for i := 0; i < len(mods); i++ {
+		for j := i+1; j < len(mods); j++ {
+			key_seq = append(key_seq, mods[i] +"+"+ mods[j] +"+"+ key) } }
+	for _, m := range mods {
+		key_seq = append(key_seq, m +"+"+ key) }
+	// uppercase letter...
+	if Key != "" {
+		key_seq = append(key_seq, Key) }
+	key_seq = append(key_seq, key)
+
+	return key_seq }
+func evt2keys(evt tcell.EventKey) []string {
+	mods := []string{}
+	shifted := false
+
+	var key, Key string
+
+	mod, k, r := evt.Modifiers(), evt.Key(), evt.Rune()
+
+	// handle key and shift state...
+	if k == tcell.KeyRune {
+		if unicode.IsUpper(r) {
+			shifted = true
+			Key = string(r)
+			mods = append(mods, "shift") }
+		key = string(unicode.ToLower(r))
+	// special keys...
+	} else if k > tcell.KeyRune || k <= tcell.KeyDEL {
+		key = evt.Name()
+	// ascii...
+	} else {
+		if unicode.IsUpper(rune(k)) {
+			shifted = true 
+			Key = string(k)
+			mods = append(mods, "shift") } 
+		key = strings.ToLower(string(k)) } 
+
+	// split out mods and normalize...
+	key_mods := strings.Split(key, "+")
+	key = key_mods[len(key_mods)-1]
+	if k := []rune(key) ; len(k) == 1 && unicode.IsUpper(k[0]) {
+		key = strings.ToLower(key) }
+	key_mods = key_mods[:len(key_mods)-1]
+
+	// basic translation...
+	if key == " " {
+		key = "Space" }
+
+	if slices.Contains(key_mods, "Ctrl") || 
+			mod & tcell.ModCtrl != 0 {
+		mods = append(mods, "ctrl") }
+	if slices.Contains(key_mods, "Alt") || 
+			mod & tcell.ModAlt != 0 {
+		mods = append(mods, "alt") }
+	if slices.Contains(key_mods, "Meta") || 
+			mod & tcell.ModMeta != 0 {
+		mods = append(mods, "meta") }
+	if !shifted && mod & tcell.ModShift != 0 {
+		mods = append(mods, "shift") }
+
+	return key2keys(mods, key, Key) }
+
 
 
 type Result int
@@ -170,11 +249,340 @@ func toExitCode(r Result) int {
 
 
 
+// Actions...
+//
+type Actions struct {
+	// XXX this needs to be more generic...
+	*TcellDrawer
+
+	last string
+
+	// can be:
+	//	"select"
+	//	"deselect"
+	//	""			- toggle
+	SelectMotion string
+	SelectMotionStart int
+}
+
+func NewActions(d *TcellDrawer) Actions {
+	return Actions{
+		TcellDrawer: d,
+	} }
+
+// base action...
+// update the .last attr with the action name...
+func (this *Actions) Action() Result {
+	pc, _, _, ok := runtime.Caller(1)
+	this.last = ""
+	if ok {
+		path := strings.Split(runtime.FuncForPC(pc).Name(), ".")
+		this.last = path[len(path)-1] }
+	return OK }
+
+// Debug helper...
+func (this *Actions) LOG() Result {
+	log.Println("ACTION: LOG")
+	return OK }
+
+func (this *Actions) Focus() Result {
+	// second click on same row...
+	if this.MouseRow == this.Lines.Index {
+		res := this.HandleKey("ClickSelected") 
+		if res == Missing {
+			res = OK }
+		if res != OK {
+			return res } }
+	// select row...
+	this.Lines.Index = this.MouseRow
+	return OK }
+
+//* XXX
+// vertical navigation...
+func (this *Actions) Up() Result {
+	this.Action()
+	if this.Lines.Index > 0 && 
+			// at scroll threshold (top)...
+			(this.Lines.Index > this.ScrollThreshold ||
+				this.Lines.RowOffset == 0) {
+		this.Lines.Index-- 
+	// scroll the buffer...
+	} else {
+		this.ScrollUp() }
+	return OK }
+func (this *Actions) Down() Result {
+	this.Action()
+	rows := this.Lines.Rows()
+	// within the text buffer...
+	if this.Lines.Index + this.Lines.RowOffset < len(this.Lines.Lines)-1 && 
+			// within screen...
+			this.Lines.Index < rows-1 && 
+			// buffer smaller than screen...
+			(rows >= len(this.Lines.Lines) ||
+				// screen at end of buffer...
+				this.Lines.RowOffset + rows == len(this.Lines.Lines) ||
+				// at scroll threshold (bottom)...
+				this.Lines.Index < rows - this.ScrollThreshold - 1) {
+		this.Lines.Index++ 
+	// scroll the buffer...
+	} else {
+		this.ScrollDown() }
+	return OK }
+
+// XXX should these track this.Lines.Index relative to screen (current) or 
+//		relative to content???
+func (this *Actions) ScrollUp() Result {
+	this.Action()
+	if this.Lines.RowOffset > 0 {
+		this.Lines.RowOffset-- }
+	return OK }
+func (this *Actions) ScrollDown() Result {
+	this.Action()
+	rows := this.Lines.Rows()
+	if this.Lines.RowOffset + rows < len(this.Lines.Lines) {
+		this.Lines.RowOffset++ } 
+	return OK }
+
+func (this *Actions) PageUp() Result {
+	this.Action()
+	if this.Lines.RowOffset > 0 {
+		rows := this.Lines.Rows()
+		this.Lines.RowOffset -= rows 
+		if this.Lines.RowOffset < 0 {
+			this.Top() } 
+	} else if this.Lines.RowOffset == 0 {
+		this.Top() } 
+	return OK }
+func (this *Actions) PageDown() Result {
+	this.Action()
+	rows := this.Lines.Rows()
+	if len(this.Lines.Lines) < rows {
+		this.Lines.Index = len(this.Lines.Lines) - 1
+		return OK }
+	offset := len(this.Lines.Lines) - rows
+	if this.Lines.RowOffset < offset {
+		this.Lines.RowOffset += rows 
+		if this.Lines.RowOffset > offset {
+			this.Bottom() } 
+	} else if this.Lines.RowOffset == offset {
+		this.Bottom() } 
+	return OK }
+
+func (this *Actions) Top() Result {
+	this.Action()
+	if this.Lines.RowOffset == 0 {
+		this.Lines.Index = 0 
+	} else {
+		this.Lines.RowOffset = 0 }
+	return OK }
+func (this *Actions) Bottom() Result {
+	this.Action()
+	rows := this.Lines.Rows()
+	if len(this.Lines.Lines) < rows {
+		this.Lines.Index = len(this.Lines.Lines) - 1
+		return OK }
+	offset := len(this.Lines.Lines) - rows 
+	if this.Lines.RowOffset == offset {
+		this.Lines.Index = rows - 1
+	} else {
+		this.Lines.RowOffset = len(this.Lines.Lines) - rows }
+	return OK }
+//*/
+
+/*// XXX horizontal navigation...
+func (this *Actions) Left() Result {
+	this.Action()
+	// XXX
+	return OK }
+func (this *Actions) Right() Result {
+	this.Action()
+	// XXX
+	return OK }
+
+func (this *Actions) ScrollLeft() Result {
+	this.Action()
+	// XXX
+	return OK }
+func (this *Actions) ScrollRight() Result {
+	this.Action()
+	// XXX
+	return OK }
+
+func (this *Actions) LeftEdge() Result {
+	this.Action()
+	// XXX
+	return OK }
+func (this *Actions) RightEdge() Result {
+	this.Action()
+	// XXX
+	return OK }
+//*/
+
+// selection...
+// NOTE: the selection is expected to mostly be in order.
+// XXX would be nice to be able to match only left/right side of span...
+//		...not sure how to configure this...
+func (this *Actions) Select(rows ...int) Result {
+	this.Action()
+	if len(rows) == 0 {
+		rows = []int{this.Lines.Index + this.Lines.RowOffset} }
+	for _, i := range rows {
+		this.Lines.Lines[i].Selected = true }
+	return OK }
+func (this *Actions) Deselect(rows ...int) Result {
+	this.Action()
+	if len(rows) == 0 {
+		rows = []int{this.Lines.Index + this.Lines.RowOffset} }
+	for _, i := range rows {
+		this.Lines.Lines[i].Selected = false }
+	return OK }
+func (this *Actions) SelectToggle(rows ...int) Result {
+	this.Action()
+	if len(rows) == 0 {
+		rows = []int{this.Lines.Index + this.Lines.RowOffset} }
+	for _, i := range rows {
+		if this.Lines.Lines[i].Selected {
+			this.Lines.Lines[i].Selected = false 
+		} else {
+			this.Lines.Lines[i].Selected = true } }
+	return OK }
+func (this *Actions) SelectAll() Result {
+	this.Action()
+	this.Lines.SelectAll()
+	return OK }
+func (this *Actions) SelectNone() Result {
+	this.Action()
+	this.Lines.SelectNone()
+	return OK }
+func (this *Actions) SelectInverse() Result {
+	this.Action()
+	rows := []int{}
+	for i := 0 ; i < len(this.Lines.Lines) ; i++ {
+		rows = append(rows, i) }
+	return this.SelectToggle(rows...) }
+
+// BUG/FEATURE: after releasing shift and then pressing it again with 
+//		motion a new selection session is not started rather the old one 
+//		is continud...
+//		...this is not a bug, we cant do anything about it unless we can 
+//		detect shift key press/release...
+func (this *Actions) SelectStart() Result {
+	if this.last != "SelectEnd" {
+		log.Println("NEW SELECTION")
+		this.SelectMotion = "select"
+		if this.Lines.Lines[this.Lines.Index+this.Lines.RowOffset].Selected {
+			this.SelectMotion = "deselect" } }
+	log.Println("SELECTION", this.SelectMotion)
+	this.Action()
+	this.SelectMotionStart = this.Lines.Index + this.Lines.RowOffset
+	return OK }
+// XXX need to handle shift release...
+func (this *Actions) SelectEnd(rows ...int) Result {
+	this.Action()
+	var start, end int
+	if len(rows) >= 2 {
+		start, end = rows[0], rows[1] 
+	} else if len(rows) == 1 {
+		start, end = this.SelectMotionStart, rows[0]
+	} else {
+		start = this.SelectMotionStart
+		end = this.Lines.Index + this.Lines.RowOffset 
+		/* XXX
+		// toggle selection mode when on first/last row...
+		// XXX HACK? this should be done on shift release...
+		if start == end && 
+				(end == 0 || 
+				end == len(this.Lines.Lines)-1) {
+			if this.Lines.Lines[end].Selected && 
+					this.SelectMotion == "select" {
+				this.SelectMotion = "deselect"
+			} else if ! this.Lines.Lines[end].Selected && 
+					this.SelectMotion == "deselect" {
+				this.SelectMotion = "select" } }
+		//*/
+		// do not select the current item unless we start on it...
+		if end < start {
+			end++
+		} else if end > start {
+			end-- } }
+	// normalize direction...
+	if this.SelectMotionStart > end {
+		start, end = end, start }
+	lines := []int{}
+	for i := start ; i <= end; i++ {
+		lines = append(lines, i) }
+	if this.SelectMotion == "select" {
+		this.Select(lines...)
+	} else if this.SelectMotion == "deselect" {
+		this.Deselect(lines...)
+	} else {
+		this.SelectToggle(lines...) }
+	this.Action()
+	return OK }
+func (this *Actions) SelectEndCurrent() Result {
+	return this.SelectEnd(this.Lines.Index + this.Lines.RowOffset) }
+
+// utility...
+/* XXX
+// XXX revise behaviour of reupdates on pipe...
+func (this *Actions) Update() Result {
+	selection := this.Lines.Selected()
+	res := OK
+	// file...
+	if INPUT_FILE != "" {
+		file, err := os.Open(INPUT_FILE)
+		if err != nil {
+			fmt.Println(err)
+			return Fail }
+		defer file.Close()
+		this.Lines.Write(file) 
+	// command...
+	} else if LIST_CMD != "" {
+		res = callAction("<"+ LIST_CMD)
+	// pipe...
+	// XXX how should this behave on re-update???
+	//		...should we replace, append or simply redraw cache???
+	} else {
+		stat, err := os.Stdin.Stat()
+		if err != nil {
+			log.Fatalf("%+v", err) }
+		if stat.Mode() & os.ModeNamedPipe != 0 {
+			// XXX do we need to close this??
+			//defer os.Stdin.Close()
+			this.Lines.Write(os.Stdin) } }
+	this.Lines.Select(selection)
+	if FOCUS_CMD != "" {
+		// XXX generate FOCUS
+	}
+	//this.Refresh()
+	return res }
+func (this *Actions) Refresh() Result {
+	//SCREEN.Sync()
+	drawScreen(SCREEN, THEME)
+	SCREEN.Show()
+	return OK }
+//*/
+
+func (this *Actions) Fail() Result {
+	return Fail }
+func (this *Actions) Exit() Result {
+	return Exit }
+
+
+
+
+// Drawer...
+//
+// XXX renmae...
 type TcellDrawer struct {
 	tcell.Screen
 
 	Lines *Lines
-	// XXX
+
+	Actions Actions
+
+	Keybindings Keybindings
+	KeyAliases KeyAliases
 
 	// Geometry
 	//
@@ -189,17 +597,28 @@ type TcellDrawer struct {
 	Left string
 
 	// Format:
-	//		
+	//		<value> ::= {<left>, <top>}	
+	//		<left> ::= "left" | "center" | "right" | "42"
+	//		<top> ::= "top" | "center" | "bottom" | "42"
 	Align []string
 
+	MouseRow int
+	ScrollThreshold int
 
 	// caches...
+	// NOTE: in normal use-cases the stuff cached here is static and 
+	//		there should never be any leakage, if there is then something 
+	//		odd is going on.
 	__style_cache map[string]tcell.Style
-	__int_cache map[string]int
 	__float_cache map[string]float64
+	//__int_cache map[string]int
 }
+
 func (this *TcellDrawer) Setup(lines Lines) *TcellDrawer {
 	this.Lines = &lines
+	// XXX revise...
+	//this.Actions = Actions{Drawer: this}
+	this.Actions = NewActions(this)
 	lines.CellsDrawer = this
 	screen, err := tcell.NewScreen()
 	if err != nil {
@@ -209,12 +628,6 @@ func (this *TcellDrawer) Setup(lines Lines) *TcellDrawer {
 		log.Panic(err) }
 	this.EnableMouse()
 	this.EnablePaste()
-
-	// XXX
-
-	return this }
-func (this *TcellDrawer) UpdateTheme() *TcellDrawer {
-	this.__style_cache = nil
 	return this }
 
 func (this *TcellDrawer) updateGeometry() *TcellDrawer {
@@ -223,11 +636,13 @@ func (this *TcellDrawer) updateGeometry() *TcellDrawer {
 	Width, Height := this.Width, this.Height
 	Align := this.Align
 	if len(Align) == 0 {
-		Align = []string{"top", "left"} }
+		Align = []string{"left", "top"} }
 
 	// XXX should this be more generic???
 	// XXX revise the error case...
 	cachedFloat := func(str string) float64 {
+		if this.__float_cache == nil {
+			this.__float_cache = map[string]float64{} }
 		v, ok := this.__float_cache[str]
 		if ! ok {
 			var err error
@@ -271,7 +686,8 @@ func (this *TcellDrawer) updateGeometry() *TcellDrawer {
 	} else if slices.Contains(Align, "right") {
 		left_set = false
 		this.Lines.Left = W - this.Lines.Width
-	} else if Align[0] != "center" {
+	} else if len(Align) > 0 &&
+			Align[0] != "center" {
 		left_set = false
 		// XXX revise the error case + cache???
 		this.Lines.Left, err = strconv.Atoi(Align[0])
@@ -285,7 +701,8 @@ func (this *TcellDrawer) updateGeometry() *TcellDrawer {
 	} else if slices.Contains(Align, "bottom") {
 		top_set = false
 		this.Lines.Top = H - this.Lines.Height
-	} else if Align[1] != "center" {
+	} else if len(Align) > 1 && 
+			Align[1] != "center" {
 		top_set = false
 		// XXX revise the error case + cache???
 		this.Lines.Top, err = strconv.Atoi(Align[1]) 
@@ -295,13 +712,15 @@ func (this *TcellDrawer) updateGeometry() *TcellDrawer {
 	if ! left_set {
 		if top_set && 
 				slices.Contains(Align, "center") || 
-				Align[0] == "center" {
+				(len(Align) > 0 && 
+					Align[0] == "center") {
 			this.Lines.Left = int(float64(W - this.Lines.Width) / 2) } }
 	// Top (center)
 	if ! top_set {
 		if top_set && 
 				slices.Contains(Align, "center") || 
-				Align[0] == "center" {
+				(len(Align) > 0 && 
+					Align[0] == "center") {
 			this.Lines.Top = int(float64(H - this.Lines.Height) / 2) } }
 	return this }
 // keep the selection in the same spot...
@@ -309,12 +728,33 @@ func (this *TcellDrawer) handleScrollLimits() *TcellDrawer {
 	// XXX
 	return this}
 
+func (this *TcellDrawer) ResetCache() *TcellDrawer {
+	this.__style_cache = nil
+	this.__float_cache = nil
+	//this.__int_cache = nil
+	return this }
+
+// XXX can we detect mod key press???
+//		...need to detect release of shift in selection...
+// XXX add background fill...
+// XXX might be fun to indirect this, i.e. add a global workspace manager
+//		that would pass events to clients/windows and handle their draw 
+//		order...
 func (this *TcellDrawer) Loop() Result {
 	defer this.Finalize()
 
+	draw := func(){
+		//this.updateGeometry()
+		this.handleScrollLimits()
+		// XXX do this separately...
+		this.Fill()
+		this.Lines.Draw() }
+
+	// initial state...
 	this.updateGeometry()
+	draw()
+
 	for {
-		this.Lines.Draw()
 		this.Show()
 
 		evt := this.PollEvent()
@@ -322,11 +762,23 @@ func (this *TcellDrawer) Loop() Result {
 		switch evt := evt.(type) {
 			case *tcell.EventResize:
 				this.updateGeometry()
-				this.handleScrollLimits()
-			// XXX STUB exit on keypress...
+				draw()
 			case *tcell.EventKey:
-				log.Println("---", evt)
-				return OK
+				for _, key := range evt2keys(*evt) {
+					res := this.HandleKey(key)
+					if res == Missing {
+						log.Println("Key Unhandled:", key)
+						continue }
+					if res != OK {
+						return res } 
+					// XXX should this be done here or in the action???
+					draw()
+					break }
+				//log.Println("KEY:", evt.Name())
+				// defaults...
+				if evt.Key() == tcell.KeyEscape || evt.Key() == tcell.KeyCtrlC {
+					return OK }
+			// XXX mouse...
 		} }
 	return OK }
 // handle panics and cleanup...
@@ -339,15 +791,25 @@ func (this *TcellDrawer) Finalize() {
 // XXX might be nice to be able to set flags like underline, bold, italic, ...etc.
 // XXX BUG: "background"/"foreground" do not work as we can't yet get 
 // 		the actual default colors...
-func Style2TcellStyle(style Style) tcell.Style {
+func (this *TcellDrawer) Style2TcellStyle(style_name string, style Style) tcell.Style {
+	// cache...
+	cache := func(s tcell.Style) tcell.Style {
+		this.__style_cache[style_name] = s 
+		return s }
+	if this.__style_cache == nil {
+		this.__style_cache = map[string]tcell.Style{} }
+	s, ok := this.__style_cache[style_name]
+	if ok {
+		return s }
+
 	// full style...
 	if len(style) == 1 {
 		switch style[0] {
 			case "reverse":
-				return tcell.StyleDefault.
-					Reverse(true)
+				return cache(tcell.StyleDefault.
+					Reverse(true))
 			default:
-				return tcell.StyleDefault } }
+				return cache(tcell.StyleDefault) } }
 	// componnt style...
 	res := tcell.StyleDefault
 	// XXX this returns "default" "default" -- very usefull...
@@ -370,20 +832,191 @@ func Style2TcellStyle(style Style) tcell.Style {
 				res = res.Background(fg)
 			default:
 				res = res.Background(tcell.GetColor(style[1])) } }
-	return res }
+	return cache(res) }
 func (this *TcellDrawer) drawCells(col, row int, str string, style_name string, style Style) {
 	if style_name == "EOL" {
 		return }
-	// get style (cached)...
-	if this.__style_cache == nil {
-		this.__style_cache = map[string]tcell.Style{} }
-	s, ok := this.__style_cache[style_name]
-	if ! ok {
-		s := Style2TcellStyle(style)
-		this.__style_cache[style_name] = s }
-	// draw...
+	s := this.Style2TcellStyle(style_name, style)
 	for i, r := range []rune(str) {
 		this.SetContent(col+i, row, r, nil, s) } }
+func (this *TcellDrawer) Fill() *TcellDrawer {
+	_, s := this.Lines.Theme.getStyle("background")
+	this.Screen.Fill(' ', this.Style2TcellStyle("background", s))
+	return this }
+
+// XXX should this be HandleAction or CallAction???
+func (this *TcellDrawer) HandleAction(actions string) Result {
+	// XXX make split here a bit more cleaver:
+	//		- support ";"
+	//		- support quoting of separators, i.e. ".. \\\n .." and ".. \; .." -- DONE
+	//		- ignore string literal content...
+	parts := strings.Split(actions, "\n") 
+	// merge back escaped "\n"'s...
+	for i := 0 ; i < len(parts) ; i++ {
+		part := parts[i]
+		trimmed_part := strings.TrimSpace(part)
+		if trimmed_part != "" && 
+				trimmed_part[len(trimmed_part)-1] == '\\' {
+			parts[i] += "\n"+ parts[i+1]
+			if i < len(parts) + 1 {
+				parts = append(parts[:i+1], parts[i+2:]...) } 
+			i-- } }
+	for _, action := range parts {
+		action = strings.TrimSpace(action)
+		if len(action) == 0 {
+			continue }
+
+		// shell commands:
+		//		<NAME>=<CMD>	- command stdout read into env variable
+		//		@ <CMD>			- simple/interactive command
+		//		   					NOTE: this uses os.Stdout...
+		//		! <CMD>			- stdout treated as env variables, one per line
+		//		< <CMD>			- stdout read into buffer
+		//		> <CMD>			- stdout printed to lines stdout
+		//		| <CMD>			- current line passed to stdin
+		//		XXX & <CMD>		- async command (XXX not implemented...)
+		// NOTE: commands can be combined.
+		// NOTE: if prefix combined with <NAME>=<CMD> it must come after "="
+		/* XXX
+		prefixes := "@!<>|"
+		prefix := []rune{}
+		code := action
+		name := ""
+		// <NAME>=<CMD>...
+		if isVarCommand.Match([]byte(action)) {
+			parts := regexp.MustCompile("=").Split(action, 2)
+			name, action = parts[0], parts[1] 
+			// <NAME>= -> remove from env...
+			action = strings.TrimSpace(action)
+			if name != "" && 
+					(action == "" ||
+						// prevent "<NAME>=<PREFIX>" with empty command 
+						// from messing going through the whole call dance...
+						(len(action) == 1 &&
+							strings.ContainsRune(prefixes, rune(action[0])))){
+				delete(ENV, name) 
+				continue } }
+		// <PREFIX><CMD>...
+		for strings.ContainsRune(prefixes, rune(code[0])) {
+			prefix = append(prefix, rune(code[0]))
+			code = strings.TrimSpace(string(code[1:])) }
+		if name != "" || 
+				len(prefix) > 0 {
+			var stdin bytes.Buffer
+			if slices.Contains(prefix, '|') {
+				stdin.Write([]byte(this.Lines.Lines[this.Lines.Index].text)) }
+
+			// call the command...
+			var err error
+			var stdout *io.ReadCloser//bytes.Buffer
+			lines := []string{}
+			if slices.Contains(prefix, '@') {
+				// XXX make this async...
+				err = callAtCommand(code, stdin)
+			} else {
+				cmd := goCallCommand(code, &stdin)
+				err = cmd.Error
+				stdout = cmd.Stdout }
+			if err != nil {
+				log.Println("Error:", err)
+				return Fail }
+
+			// list output...
+			// XXX keep selection and current item and screen position 
+			//		relative to current..
+			if slices.Contains(prefix, '<') {
+				scanner := bufio.NewScanner(*stdout)
+				// XXX should this be a goroutine/async???
+				// XXX do the spinner....
+				//this.Lines = LinesBuffer{}
+				this.Lines.Lock()
+				this.Lines.Clear()
+				for scanner.Scan() {
+					//// update screen as soon as we reach selection and 
+					//// just after we fill the screen...
+					//if len(this.Lines.Lines) == this.Lines.Index || 
+					//		len(this.Lines.Lines) == CURRENT_ROW + this.Lines.RowOffset {
+					//	this.Lines.Unlock() }
+					line := scanner.Text()
+					lines = append(lines, line)
+					this.Lines.Push(line) } 
+				if len(this.Lines.Lines) == 0 {
+					this.Lines.Push("") } 
+				this.Lines.Unlock()
+				if FOCUS_CMD != "" {
+					// XXX set focus...
+				}
+			// collect output data...
+			} else if(stdout != nil) {
+				scanner := bufio.NewScanner(*stdout)
+				for scanner.Scan() {
+					lines = append(lines, scanner.Text()) } }
+			// output to stdout...
+			if slices.Contains(prefix, '>') {
+				STDOUT += strings.Join(lines, "\n") + "\n" }
+			// output to env...
+			if slices.Contains(prefix, '!') {
+				for _, str := range lines {
+					if strings.TrimSpace(str) == "" ||
+							! isVarCommand.Match([]byte(str)) {
+						continue }
+					res := strings.SplitN(str, "=", 1)
+					if len(res) != 2 {
+						continue }
+					ENV[strings.TrimSpace(res[0])] = strings.TrimSpace(res[1]) } }
+
+			// handle env...
+			if name != "" {
+				if name == "STDOUT" {
+					if ! slices.Contains(prefix, '>') {
+						STDOUT += strings.Join(lines, "\n") + "\n" }
+				} else {
+					ENV[name] = strings.Join(lines, "\n") } }
+
+		// ACTION...
+		} else {
+		//*/
+			method := reflect.ValueOf(&this.Actions).MethodByName(action)
+			// test if action exists....
+			if ! method.IsValid() {
+				log.Println("Error: Unknown action:", action) 
+				continue }
+			res := method.Call([]reflect.Value{}) 
+			// exit if action returns false...
+			value, ok := res[0].Interface().(Result)
+			if ! ok {
+				// XXX
+			}
+			if value != OK {
+				return value } } //}
+	return OK }
+func (this *TcellDrawer) HandleKey(key string) Result {
+	keybindings := this.Keybindings
+	if keybindings == nil {
+		keybindings = KEYBINDINGS }
+	aliases := this.KeyAliases
+	if aliases == nil {
+		aliases = KEY_ALIASES }
+	// expand aliases...
+	seen := []string{ key }
+	if action, exists := keybindings[key] ; exists {
+		_action := action
+		for exists && ! slices.Contains(seen, _action) {
+			if _action, exists = keybindings[_action] ; exists {
+				action = _action } }
+		return this.HandleAction(action) }
+	// call key alias...
+	parts := strings.Split(key, "+")
+	if aliases, exists := aliases[parts[len(parts)-1]] ; exists {
+		for _, key := range aliases {
+			res := this.HandleKey(
+				strings.Join(append(parts[:len(parts)-1], key), "+"))
+			if res == Missing {
+				log.Println("Key Unhandled:",
+					strings.Join(append(parts[:len(parts)-1], key), "+"))
+				continue }
+			return res } }
+	return Missing }
 
 // XXX should this take Lines ot Settings???
 func NewTcellLines(l ...Lines) TcellDrawer {
@@ -412,8 +1045,12 @@ func main(){
 		"Some text",
 		"Current%SPAN",
 		"Some%SPANColumns")
+	for i := 0; i < 10; i++ {
+		lines.Lines.Append(fmt.Sprint("bam%SPAN", i)) }
 	lines.Lines.Index = 1
 	lines.Lines.Lines[0].Selected = true
+	//lines.Width = "50%"
+	//lines.Align = []string{"right"}
 	/*/
 	lines := NewTcellLines()
 

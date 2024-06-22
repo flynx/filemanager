@@ -254,6 +254,55 @@ func (this *LinesBuffer) Selected() []string {
 		if row.Selected {
 			res = append(res, row.Text) } }
 	return res }
+// XXX this is not correct...
+func (this *LinesBuffer) Select(selection []any) *LinesBuffer {
+	// deselect...
+	this.SelectNone()
+	if len(selection) == 0 {
+		return this }
+	switch selection[0].(type) {
+		// rows...
+		case Row:
+			for i, _ := range selection {
+				row := selection[i].(Row)
+				row.Selected = true }
+		// indexes...
+		case int:
+			for _, v := range selection {
+				i := v.(int)
+				this.Lines[i].Selected = true }
+		// strings...
+		case string:
+			var i = 0
+			for _, v := range selection {
+				line := v.(string)
+				for i < len(this.Lines) {
+					if line == this.Lines[i].Text {
+						this.Lines[i].Selected = true } 
+					i++ }
+				// loop over .Lines in case we've got the selection out of 
+				// order...
+				if i >= len(this.Lines) - 1 {
+					i = 0 } } }
+	return this }
+// XXX
+func (this *LinesBuffer) SelectToggle(selection []any) *LinesBuffer {
+	// XXX
+	return this }
+func (this *LinesBuffer) SelectAll() *LinesBuffer {
+	for i := range this.Lines {
+		// XXX HACK? we are not iterating over values as there seems to
+		//		be no way to get the item by reference rather than by 
+		//		value (i.e. a copy)
+		this.Lines[i].Selected = true }
+	return this }
+func (this *LinesBuffer) SelectNone() *LinesBuffer {
+	for i := range this.Lines {
+		// XXX HACK? we are not iterating over values as there seems to
+		//		be no way to get the item by reference rather than by 
+		//		value (i.e. a copy)
+		this.Lines[i].Selected = false }
+	return this }
 func (this *LinesBuffer) ActiveRows() []Row {
 	sel := this.SelectedRows()
 	if len(sel) == 0 &&
@@ -337,9 +386,9 @@ type Lines struct {
 
 	// chrome...
 	Title string
-	HideTitle bool
+	TitleDisabled bool
 	Status string
-	HideStatus bool
+	StatusDisabled bool
 
 	TabSize int
 
@@ -380,6 +429,26 @@ var LinesDefaults = Lines {
 	Title: "",
 	Status: "%CMD%SPAN $LINE/$LINES ",
 }
+
+func (this *Lines) Rows() int {
+	h := this.Height
+	if ! this.TitleDisabled || 
+			this.Border != "" {
+		h-- }
+	if ! this.StatusDisabled || 
+			this.Border != "" {
+		h-- }
+	return h }
+func (this *Lines) Cols() int {
+	w := this.Width
+	// borders...
+	if this.Border != "" {
+		w -= 2
+	// no borders + scrollbar...
+	} else if ! this.ScrollbarDisabled && 
+			this.Rows() < len(this.Lines) {
+		w-- }
+	return w }
 
 // XXX add support for escape sequences...
 func (this *Lines) makeSection(str string, width int, rest ...string) (string, bool) {
@@ -848,11 +917,7 @@ func (this *Lines) Draw() *Lines {
 	overflow := string(OVERFLOW_INDICATOR)
 	if this.OverflowIndicator != 0 {
 		overflow = string(this.OverflowIndicator) }
-	rows := this.Height
-	if ! this.HideTitle {
-		rows-- }
-	if ! this.HideStatus {
-		rows-- }
+	rows := this.Rows()
 	row := 0
 	col := 0
 
@@ -863,7 +928,7 @@ func (this *Lines) Draw() *Lines {
 	corner_r := ""
 	border_h := " "
 	top_line := 0
-	if ! this.HideTitle || 
+	if ! this.TitleDisabled || 
 			this.Border != "" {
 		top_line = 1
 		env = this.makeEnv()
@@ -962,7 +1027,7 @@ func (this *Lines) Draw() *Lines {
 		row++ }
 
 	// status...
-	if ! this.HideStatus {
+	if ! this.StatusDisabled {
 		if len(env) == 0 {
 			env = this.makeEnv() }
 		if this.Border != "" {
