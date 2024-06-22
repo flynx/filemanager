@@ -603,8 +603,8 @@ type TcellDrawer struct {
 
 	// Format:
 	//
-	Top string
-	Left string
+	//Top string
+	//Left string
 
 	// Format:
 	//		<value> ::= {<left>, <top>}	
