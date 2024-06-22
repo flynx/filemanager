@@ -55,6 +55,7 @@ var THEME = Theme {
 	},
 	"current-separator": {
 		"reverse",
+		// color placeholder -- use color "as-is"...
 		"as-is",
 		"gray", 
 	},

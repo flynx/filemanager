@@ -7,6 +7,7 @@
 *			- config
 *			- cli
 *			- key/click handlers
+*		- actions (???)
 */
 package main
 
@@ -34,6 +35,8 @@ import (
 
 
 
+// Keyboard...
+//
 type KeyAliases = map[string][]string
 var KEY_ALIASES = KeyAliases {
 	/* XXX is this correct??
@@ -105,6 +108,9 @@ var KEYBINDINGS = Keybindings {
 	"Click": "Focus",
 
 	// Selection...
+	// XXX shift is not detected on most terminals...
+	//"shift": `
+	//	SelectStart`,
 	"ctrl+Click": `
 		Focus
 		SelectToggle`,
@@ -153,8 +159,6 @@ var KEYBINDINGS = Keybindings {
 	"ctrl+l": "Refresh",
 }
 
-
-
 func key2keys(mods []string, key string, rest ...string) []string {
 	key_seq := []string{}
 	Key := ""
@@ -174,6 +178,7 @@ func key2keys(mods []string, key string, rest ...string) []string {
 	key_seq = append(key_seq, key)
 
 	return key_seq }
+// XXX tcell-specific...
 func evt2keys(evt tcell.EventKey) []string {
 	mods := []string{}
 	shifted := false
@@ -227,6 +232,8 @@ func evt2keys(evt tcell.EventKey) []string {
 
 
 
+// Result...
+//
 type Result int
 const (
 	// Normal action return value.
@@ -581,8 +588,8 @@ type TcellDrawer struct {
 
 	Actions Actions
 
-	Keybindings Keybindings
 	KeyAliases KeyAliases
+	Keybindings Keybindings
 
 	// Geometry
 	//
@@ -613,23 +620,6 @@ type TcellDrawer struct {
 	__float_cache map[string]float64
 	//__int_cache map[string]int
 }
-
-func (this *TcellDrawer) Setup(lines Lines) *TcellDrawer {
-	this.Lines = &lines
-	// XXX revise...
-	//this.Actions = Actions{Drawer: this}
-	this.Actions = NewActions(this)
-	lines.CellsDrawer = this
-	screen, err := tcell.NewScreen()
-	if err != nil {
-		log.Panic(err) }
-	this.Screen = screen
-	if err := this.Screen.Init(); err != nil {
-		log.Panic(err) }
-	this.EnableMouse()
-	this.EnablePaste()
-
-	return this }
 
 func (this *TcellDrawer) updateGeometry() *TcellDrawer {
 	var err error
@@ -772,64 +762,6 @@ func (this *TcellDrawer) ResetCache() *TcellDrawer {
 	//this.__int_cache = nil
 	return this }
 
-// XXX can we detect mod key press???
-//		...need to detect release of shift in selection...
-// XXX add background fill...
-// XXX might be fun to indirect this, i.e. add a global workspace manager
-//		that would pass events to clients/windows and handle their draw 
-//		order...
-func (this *TcellDrawer) Loop() Result {
-	defer this.Finalize()
-
-	draw := func(){
-		//this.updateGeometry()
-		this.handleScrollLimits()
-		// XXX do this separately...
-		this.Fill()
-		this.Lines.Draw() }
-
-	// initial state...
-	this.updateGeometry()
-	draw()
-
-	for {
-		this.Show()
-
-		evt := this.PollEvent()
-
-		switch evt := evt.(type) {
-			case *tcell.EventResize:
-				this.updateGeometry()
-				draw()
-			case *tcell.EventKey:
-				for _, key := range evt2keys(*evt) {
-					res := this.HandleKey(key)
-					if res == Missing {
-						log.Println("Key Unhandled:", key)
-						continue }
-					if res != OK {
-						return res } 
-					// XXX should this be done here or in the action???
-					draw()
-					break }
-				//log.Println("KEY:", evt.Name())
-				// defaults...
-				// XXX BUG??? should we do this iff no key was handled???
-				//		...at this point this is tested event if a relevant 
-				//		key was handled successfully...
-				if evt.Key() == tcell.KeyEscape || 
-						evt.Key() == tcell.KeyCtrlC {
-					return OK }
-			// XXX mouse...
-			// XXX
-		} }
-	return OK }
-// handle panics and cleanup...
-func (this *TcellDrawer) Finalize() {
-	maybePanic := recover()
-	this.Screen.Fini()
-	if maybePanic != nil {
-		panic(maybePanic) } }
 
 // XXX URLS are supported but not usable yet as there is no way to set 
 //		the url...
@@ -1083,6 +1015,83 @@ func (this *TcellDrawer) HandleKey(key string) Result {
 				continue }
 			return res } }
 	return Missing }
+
+
+func (this *TcellDrawer) Setup(lines Lines) *TcellDrawer {
+	this.Lines = &lines
+	// XXX revise...
+	//this.Actions = Actions{Drawer: this}
+	this.Actions = NewActions(this)
+	lines.CellsDrawer = this
+	screen, err := tcell.NewScreen()
+	if err != nil {
+		log.Panic(err) }
+	this.Screen = screen
+	if err := this.Screen.Init(); err != nil {
+		log.Panic(err) }
+	this.EnableMouse()
+	this.EnablePaste()
+
+	return this }
+// XXX can we detect mod key press???
+//		...need to detect release of shift in selection...
+// XXX add background fill...
+// XXX might be fun to indirect this, i.e. add a global workspace manager
+//		that would pass events to clients/windows and handle their draw 
+//		order...
+func (this *TcellDrawer) Loop() Result {
+	defer this.Finalize()
+
+	draw := func(){
+		//this.updateGeometry()
+		this.handleScrollLimits()
+		// XXX do this separately...
+		this.Fill()
+		this.Lines.Draw() }
+
+	// initial state...
+	this.updateGeometry()
+	draw()
+
+	for {
+		this.Show()
+
+		evt := this.PollEvent()
+
+		switch evt := evt.(type) {
+			case *tcell.EventResize:
+				this.updateGeometry()
+				draw()
+			case *tcell.EventKey:
+				for _, key := range evt2keys(*evt) {
+					res := this.HandleKey(key)
+					if res == Missing {
+						log.Println("Key Unhandled:", key)
+						continue }
+					if res != OK {
+						return res } 
+					// XXX should this be done here or in the action???
+					draw()
+					break }
+				//log.Println("KEY:", evt.Name())
+				// defaults...
+				// XXX BUG??? should we do this iff no key was handled???
+				//		...at this point this is tested event if a relevant 
+				//		key was handled successfully...
+				if evt.Key() == tcell.KeyEscape || 
+						evt.Key() == tcell.KeyCtrlC {
+					return OK }
+			// XXX mouse...
+			// XXX
+		} }
+	return OK }
+// handle panics and cleanup...
+func (this *TcellDrawer) Finalize() {
+	maybePanic := recover()
+	this.Screen.Fini()
+	if maybePanic != nil {
+		panic(maybePanic) } }
+
 
 // XXX should this take Lines ot Settings???
 func NewTcellLines(l ...Lines) TcellDrawer {
