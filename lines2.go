@@ -17,8 +17,17 @@ import (
 
 
 
-// Toggle...
+// Togglers...
 //
+type Toggler interface {
+	Toggle(bool) bool
+}
+type Togglable interface {
+	Next(Toggle)
+	On()
+	Off()
+}
+
 // XXX add a multi toggle...
 type Toggle int
 const (
@@ -34,21 +43,20 @@ func (this Toggle) Toggle(in bool) bool {
 	return false }
 
 
-
-// Togglable...
+// BoolToggle...
 //
-type Togglable bool
-func (this Togglable) Toggle(mode Toggle) Togglable {
+type BoolToggle bool
+func (this BoolToggle) Toggle(mode Toggle) BoolToggle {
 	if mode == Next {
 		return this.Next()
 	} else if mode == On {
 		return true }
 	return false }
-func (this Togglable) Next() Togglable {
+func (this BoolToggle) Next() BoolToggle {
 	return ! this }
-func (this Togglable) On() Togglable {
+func (this BoolToggle) On() BoolToggle {
 	return true }
-func (this Togglable) Off() Togglable {
+func (this BoolToggle) Off() BoolToggle {
 	return false }
 
 
@@ -193,7 +201,7 @@ type Env map[string]string
 // Row
 //
 type Row struct {
-	Selected Togglable
+	Selected BoolToggle
 	Transformed bool
 	Populated bool
 	Text string
