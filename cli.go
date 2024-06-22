@@ -564,12 +564,13 @@ func (this *Actions) Update() Result {
 	}
 	//this.Refresh()
 	return res }
-func (this *Actions) Refresh() Result {
-	//SCREEN.Sync()
-	drawScreen(SCREEN, THEME)
-	SCREEN.Show()
-	return OK }
 //*/
+func (this *Actions) Refresh() Result {
+	this.
+		updateGeometry().
+		Draw().
+		Screen.Show()
+	return OK }
 
 func (this *Actions) Fail() Result {
 	return Fail }
@@ -842,6 +843,14 @@ func (this *TcellDrawer) Fill() *TcellDrawer {
 	_, s := this.Lines.GetStyle("background")
 	this.Screen.Fill(' ', this.Style2TcellStyle("background", s))
 	return this }
+func (this *TcellDrawer) Draw() *TcellDrawer {
+	this.
+		handleScrollLimits().
+		// XXX do this separately...
+		Fill().
+		Lines.Draw()
+	return this }
+
 
 func (this *TcellDrawer) HandleAction(actions string) Result {
 	// XXX make split here a bit more cleaver:
@@ -1016,7 +1025,6 @@ func (this *TcellDrawer) HandleKey(key string) Result {
 			return res } }
 	return Missing }
 
-
 func (this *TcellDrawer) Setup(lines Lines) *TcellDrawer {
 	this.Lines = &lines
 	// XXX revise...
@@ -1042,16 +1050,10 @@ func (this *TcellDrawer) Setup(lines Lines) *TcellDrawer {
 func (this *TcellDrawer) Loop() Result {
 	defer this.Finalize()
 
-	draw := func(){
-		//this.updateGeometry()
-		this.handleScrollLimits()
-		// XXX do this separately...
-		this.Fill()
-		this.Lines.Draw() }
-
 	// initial state...
-	this.updateGeometry()
-	draw()
+	this.
+		updateGeometry().
+		Draw()
 
 	for {
 		this.Show()
@@ -1060,8 +1062,9 @@ func (this *TcellDrawer) Loop() Result {
 
 		switch evt := evt.(type) {
 			case *tcell.EventResize:
-				this.updateGeometry()
-				draw()
+				this.
+					updateGeometry().
+					Draw()
 			case *tcell.EventKey:
 				for _, key := range evt2keys(*evt) {
 					res := this.HandleKey(key)
@@ -1071,7 +1074,7 @@ func (this *TcellDrawer) Loop() Result {
 					if res != OK {
 						return res } 
 					// XXX should this be done here or in the action???
-					draw()
+					this.Draw()
 					break }
 				//log.Println("KEY:", evt.Name())
 				// defaults...
