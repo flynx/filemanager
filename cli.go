@@ -873,7 +873,7 @@ func (this *TcellDrawer) Style2TcellStyle(style_name string, style Style) tcell.
 			default:
 				// urls...
 				if string(s[:len("url")]) == "url" {
-					p := strings.SplitN(s, ":", 1)
+					p := strings.SplitN(s, ":", 2)
 					url := ""
 					if len(p) > 1 {
 						url = p[1] }
