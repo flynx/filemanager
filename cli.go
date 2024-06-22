@@ -292,6 +292,7 @@ func (this *Actions) LOG() Result {
 	log.Println("ACTION: LOG")
 	return OK }
 
+// General...
 func (this *Actions) Focus() Result {
 	// second click on same row...
 	if this.MouseRow == this.Lines.Index {
@@ -304,8 +305,7 @@ func (this *Actions) Focus() Result {
 	this.Lines.Index = this.MouseRow
 	return OK }
 
-//* XXX
-// vertical navigation...
+// Vertical navigation...
 func (this *Actions) Up() Result {
 	this.Action()
 	if this.Lines.Index > 0 && 
@@ -396,7 +396,7 @@ func (this *Actions) Bottom() Result {
 	return OK }
 //*/
 
-/*// XXX horizontal navigation...
+/*// XXX Horizontal navigation...
 func (this *Actions) Left() Result {
 	this.Action()
 	// XXX
@@ -425,7 +425,7 @@ func (this *Actions) RightEdge() Result {
 	return OK }
 //*/
 
-// selection...
+// Selection...
 // NOTE: the selection is expected to mostly be in order.
 // XXX would be nice to be able to match only left/right side of span...
 //		...not sure how to configure this...
@@ -530,7 +530,7 @@ func (this *Actions) SelectEnd(rows ...int) Result {
 func (this *Actions) SelectEndCurrent() Result {
 	return this.SelectEnd(this.Lines.Index + this.Lines.RowOffset) }
 
-// utility...
+// Utility...
 /* XXX
 // XXX revise behaviour of reupdates on pipe...
 func (this *Actions) Update() Result {
@@ -589,6 +589,8 @@ type TcellDrawer struct {
 
 	Actions Actions
 
+	// Keyboard..
+	//
 	KeyAliases KeyAliases
 	Keybindings Keybindings
 
@@ -610,8 +612,11 @@ type TcellDrawer struct {
 	//		<top> ::= "top" | "center" | "bottom" | "42"
 	Align []string
 
+
+	// state...
 	MouseRow int
 	ScrollThreshold int
+
 
 	// caches...
 	// NOTE: in normal use-cases the stuff cached here is static and 
@@ -756,13 +761,11 @@ func (this *TcellDrawer) handleScrollLimits() *TcellDrawer {
 		this.Lines.Index += delta }
 
 	return this }
-
 func (this *TcellDrawer) ResetCache() *TcellDrawer {
 	this.__style_cache = nil
 	this.__float_cache = nil
 	//this.__int_cache = nil
 	return this }
-
 
 // XXX URLS are supported but not usable yet as there is no way to set 
 //		the url...
@@ -850,7 +853,6 @@ func (this *TcellDrawer) Draw() *TcellDrawer {
 		Fill().
 		Lines.Draw()
 	return this }
-
 
 func (this *TcellDrawer) HandleAction(actions string) Result {
 	// XXX make split here a bit more cleaver:
