@@ -628,6 +628,7 @@ func (this *TcellDrawer) Setup(lines Lines) *TcellDrawer {
 		log.Panic(err) }
 	this.EnableMouse()
 	this.EnablePaste()
+
 	return this }
 
 func (this *TcellDrawer) updateGeometry() *TcellDrawer {
@@ -848,47 +849,57 @@ func (this *TcellDrawer) Style2TcellStyle(style_name string, style Style) tcell.
 		this.__style_cache[style_name] = s 
 		return s }
 
-	// componnt style...
-	res := tcell.StyleDefault
-	// set flags...
-	colors := []string{}
-	for _, s := range style {
-		switch s {
-			case "blink":
-				res = res.Blink(true)
-			case "bold":
-				res = res.Bold(true)
-			case "dim":
-				res = res.Dim(true)
-			case "italic":
-				res = res.Italic(true)
-			case "normal":
-				res = res.Normal()
-			case "reverse":
-				res = res.Reverse(true)
-			case "strike-through":
-				res = res.StrikeThrough(true)
-			case "underline":
-				res = res.Underline(true)
-			default:
-				// urls...
-				if string(s[:len("url")]) == "url" {
-					p := strings.SplitN(s, ":", 2)
-					url := ""
-					if len(p) > 1 {
-						url = p[1] }
-					res = res.Url(url)
-				// colors...
-				} else {
-					colors = append(colors, s) } } }
-	// set the colors...
-	if len(colors) > 0 {
-		res = res.Foreground(
-			tcell.GetColor(colors[0])) }
-	if len(colors) > 1 {
-		res = res.Background(
-			tcell.GetColor(colors[1])) }
-	return cache(res) }
+	style2style := func(base tcell.Style, style Style) tcell.Style {
+		// set flags...
+		colors := []string{}
+		for _, s := range style {
+			switch s {
+				case "blink":
+					base = base.Blink(true)
+				case "bold":
+					base = base.Bold(true)
+				case "dim":
+					base = base.Dim(true)
+				case "italic":
+					base = base.Italic(true)
+				case "normal":
+					base = base.Normal()
+				case "reverse":
+					base = base.Reverse(true)
+				case "strike-through":
+					base = base.StrikeThrough(true)
+				case "underline":
+					base = base.Underline(true)
+				default:
+					// urls...
+					if string(s[:len("url")]) == "url" {
+						p := strings.SplitN(s, ":", 2)
+						url := ""
+						if len(p) > 1 {
+							url = p[1] }
+						base = base.Url(url)
+					// colors...
+					} else {
+						colors = append(colors, s) } } }
+		// set the colors...
+		if len(colors) > 0 && 
+				colors[0] != "as-is" {
+			base = base.Foreground(
+				tcell.GetColor(colors[0])) }
+		if len(colors) > 1 &&
+				colors[1] != "as-is" {
+			base = base.Background(
+				tcell.GetColor(colors[1])) }
+		return base }
+
+	// base style...
+	base, ok := this.__style_cache["default"]
+	if ! ok {
+		_, s := this.Lines.GetStyle("default")
+		base = style2style(tcell.StyleDefault, s) 
+		this.__style_cache["default"] = base } 
+
+	return cache( style2style(base, style) ) }
 func (this *TcellDrawer) drawCells(col, row int, str string, style_name string, style Style) {
 	if style_name == "EOL" {
 		return }
@@ -896,7 +907,7 @@ func (this *TcellDrawer) drawCells(col, row int, str string, style_name string, 
 	for i, r := range []rune(str) {
 		this.SetContent(col+i, row, r, nil, s) } }
 func (this *TcellDrawer) Fill() *TcellDrawer {
-	_, s := this.Lines.Theme.getStyle("background")
+	_, s := this.Lines.GetStyle("background")
 	this.Screen.Fill(' ', this.Style2TcellStyle("background", s))
 	return this }
 

@@ -21,24 +21,32 @@ import (
 type Style []string
 type Theme map[string]Style
 var THEME = Theme {
+	// NOTE: this is used as basis for all other styles.
 	"default": {},
+	/*/
+	"default": {
+		"white",
+		"darkblue",
+	},
+	//*/
 
 	"normal-text": {},
 	"normal-separator": {
 		"gray", 
 	},
 	"normal-overflow": {
-		"gray", 
+		"lightgray", 
 	},
 
 	"selected-text": {
+		"bold",
 		"yellow", 
 	},
 	"selected-separator": {
 		"gray", 
 	},
 	"selected-overflow": {
-		"gray", 
+		"lightgray", 
 	},
 
 	"current-text": {
@@ -47,12 +55,12 @@ var THEME = Theme {
 	},
 	"current-separator": {
 		"reverse",
-		"default",
+		"as-is",
 		"gray", 
 	},
 	"current-overflow": {
 		"reverse",
-		"default",
+		"as-is",
 		"gray", 
 	},
 
@@ -92,7 +100,7 @@ var THEME = Theme {
 // Get best matching theme...
 //
 // Search example:
-//		theme.getStyle("current-selected-text")
+//		theme.GetStyle("current-selected-text")
 //			-> theme["current-selected-text"]?
 //			-> theme["current-selected"]?
 //			-> theme["current-text"]?
@@ -101,8 +109,8 @@ var THEME = Theme {
 //			-> theme["selected"]?
 //			-> theme["default-text"]?
 //			-> theme["default"]?
-//			-> {"default"}
-func (this Theme) getStyle(style string) (string, Style) {
+//			-> {}
+func (this Theme) GetStyle(style string) (string, Style) {
 	// special case...
 	if style == "EOL" {
 		return "EOL", []string{"EOL"} }
@@ -136,7 +144,7 @@ func (this Theme) getStyle(style string) (string, Style) {
 	res, ok = this["default"]
 	if ok {
 		return "default", res }
-	return "default", []string{ "default" } }
+	return "default", []string{} }
 
 
 
@@ -841,13 +849,15 @@ func (this *Lines) expandTemplate(str string, env Env) string {
 			return match }))
 	return str }
 
+func (this *Lines) GetStyle(style string) (string, Style) {
+	theme := this.Theme
+	if theme == nil {
+		theme = THEME }
+	return theme.GetStyle(style) }
 // XXX return/handle errors???
 func (this *Lines) drawCells(col, row int, str string, style string) {
 	if this.CellsDrawer != nil {
-		theme := this.Theme
-		if theme == nil {
-			theme = THEME }
-		n, s := theme.getStyle(style)
+		n, s := this.GetStyle(style)
 		this.CellsDrawer.drawCells(col, row, str, n, s)
 	} else {
 		fmt.Print(str) } }
