@@ -725,8 +725,45 @@ func (this *TcellDrawer) updateGeometry() *TcellDrawer {
 	return this }
 // keep the selection in the same spot...
 func (this *TcellDrawer) handleScrollLimits() *TcellDrawer {
-	// XXX
-	return this}
+	delta := 0
+
+	rows := this.Lines.Rows()
+	top_threshold := this.ScrollThreshold
+	bottom_threshold := rows - this.ScrollThreshold - 1 
+	if rows < this.ScrollThreshold + this.ScrollThreshold {
+		top_threshold = rows / 2
+		bottom_threshold = rows - top_threshold }
+	
+	// buffer smaller than screen -- keep at top...
+	if rows > len(this.Lines.Lines) {
+		this.Lines.RowOffset = 0
+		// XXX this is odd -- see above line...
+		this.Lines.Index -= this.Lines.RowOffset
+		return this }
+
+	// keep from scrolling past the bottom of the screen...
+	if this.Lines.RowOffset + rows > len(this.Lines.Lines) {
+		delta = this.Lines.RowOffset - (len(this.Lines.Lines) - rows)
+	// scroll to top threshold...
+	} else if this.Lines.Index < top_threshold && 
+			this.Lines.RowOffset > 0 {
+		delta = top_threshold - this.Lines.Index
+		if delta > this.Lines.RowOffset {
+			delta = this.Lines.RowOffset }
+	// keep current row on screen...
+	} else if this.Lines.Index > bottom_threshold && 
+			this.Lines.Index > top_threshold {
+		delta = bottom_threshold - this.Lines.Index
+		// saturate delta...
+		if delta < (this.Lines.RowOffset + rows) - len(this.Lines.Lines) {
+			delta = (this.Lines.RowOffset + rows) - len(this.Lines.Lines) } } 
+
+	// do the update...
+	if delta != 0 {
+		this.Lines.RowOffset -= delta 
+		this.Lines.Index += delta }
+
+	return this }
 
 func (this *TcellDrawer) ResetCache() *TcellDrawer {
 	this.__style_cache = nil
@@ -776,9 +813,14 @@ func (this *TcellDrawer) Loop() Result {
 					break }
 				//log.Println("KEY:", evt.Name())
 				// defaults...
-				if evt.Key() == tcell.KeyEscape || evt.Key() == tcell.KeyCtrlC {
+				// XXX BUG??? should we do this iff no key was handled???
+				//		...at this point this is tested event if a relevant 
+				//		key was handled successfully...
+				if evt.Key() == tcell.KeyEscape || 
+						evt.Key() == tcell.KeyCtrlC {
 					return OK }
 			// XXX mouse...
+			// XXX
 		} }
 	return OK }
 // handle panics and cleanup...

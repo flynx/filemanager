@@ -1741,6 +1741,7 @@ func handleScrollLimits(){
 	// buffer smaller than screen -- keep at top...
 	if ROWS > len(TEXT_BUFFER.Lines) {
 		ROW_OFFSET = 0
+		// XXX this is odd -- see above line...
 		CURRENT_ROW -= ROW_OFFSET
 		return }
 
