@@ -19,16 +19,25 @@ import (
 
 // Togglers...
 //
+// XXX add a multi toggle...
 type Toggler interface {
 	Toggle(bool) bool
 }
 type Togglable interface {
-	Next(Toggle)
+	Next()
 	On()
 	Off()
 }
+type BoolTogglable interface {
+	Togglable
+	Toggle(Toggle)
+}
+type MultiTogglable interface {
+	Togglable
+	Prev()
+}
 
-// XXX add a multi toggle...
+
 type Toggle int
 const (
 	Next Toggle = iota
@@ -43,8 +52,6 @@ func (this Toggle) Toggle(in bool) bool {
 	return false }
 
 
-// BoolToggle...
-//
 type BoolToggle bool
 func (this BoolToggle) Toggle(mode Toggle) BoolToggle {
 	if mode == Next {
