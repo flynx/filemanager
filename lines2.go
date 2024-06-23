@@ -484,6 +484,8 @@ func (this *Lines) Cols() int {
 			this.Rows() < len(this.Lines) {
 		w-- }
 	return w }
+func (this *Lines) Scrollable() bool {
+	return len(this.Lines) > this.Rows() }
 
 func (this *Lines) GetStyle(style string) (string, Style) {
 	theme := this.Theme

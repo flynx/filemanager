@@ -273,8 +273,8 @@ type Actions struct {
 	SelectMotionStart int
 }
 
-func NewActions(d *TcellDrawer) Actions {
-	return Actions{
+func NewActions(d *TcellDrawer) *Actions {
+	return &Actions{
 		TcellDrawer: d,
 	} }
 
@@ -588,7 +588,7 @@ type TcellDrawer struct {
 
 	Lines *Lines
 
-	Actions Actions
+	Actions *Actions
 
 	// Keyboard..
 	//
@@ -611,7 +611,11 @@ type TcellDrawer struct {
 
 	// state...
 	MouseRow int
+	MouseCol int
 	ScrollThreshold int
+	// Format:
+	//		"" | "active"
+	EmptySpace string
 
 
 	// caches...
@@ -850,6 +854,7 @@ func (this *TcellDrawer) Draw() *TcellDrawer {
 		Lines.Draw()
 	return this }
 
+// XXX not done yet...
 func (this *TcellDrawer) HandleAction(actions string) Result {
 	// XXX make split here a bit more cleaver:
 	//		- support ";"
@@ -981,7 +986,7 @@ func (this *TcellDrawer) HandleAction(actions string) Result {
 		// ACTION...
 		} else {
 		//*/
-			method := reflect.ValueOf(&this.Actions).MethodByName(action)
+			method := reflect.ValueOf(this.Actions).MethodByName(action)
 			// test if action exists....
 			if ! method.IsValid() {
 				log.Println("Error: Unknown action:", action) 
@@ -1026,8 +1031,6 @@ func (this *TcellDrawer) HandleKey(key string) Result {
 
 func (this *TcellDrawer) Setup(lines Lines) *TcellDrawer {
 	this.Lines = &lines
-	// XXX revise...
-	//this.Actions = Actions{Drawer: this}
 	this.Actions = NewActions(this)
 	lines.CellsDrawer = this
 	screen, err := tcell.NewScreen()
@@ -1038,7 +1041,6 @@ func (this *TcellDrawer) Setup(lines Lines) *TcellDrawer {
 		log.Panic(err) }
 	this.EnableMouse()
 	this.EnablePaste()
-
 	return this }
 // XXX can we detect mod key press???
 //		...need to detect release of shift in selection...
@@ -1060,15 +1062,16 @@ func (this *TcellDrawer) Loop() Result {
 		evt := this.PollEvent()
 
 		switch evt := evt.(type) {
+			// geometry...
 			case *tcell.EventResize:
 				this.
 					updateGeometry().
 					Draw()
+			// keys...
 			case *tcell.EventKey:
 				key_handled := false
 				for _, key := range evt2keys(*evt) {
 					res := this.HandleKey(key)
-					log.Println("---", key, res)
 					if res == Missing {
 						log.Println("Key Unhandled:", key)
 						continue }
@@ -1084,9 +1087,117 @@ func (this *TcellDrawer) Loop() Result {
 				if evt.Key() == tcell.KeyEscape || 
 						evt.Key() == tcell.KeyCtrlC {
 					return OK }
-			// XXX mouse...
+			// mouse...
 			case *tcell.EventMouse:
-				// XXX
+				buttons := evt.Buttons()
+				// get modifiers...
+				// XXX this is almost the same as in evt2keys(..) can we generalize???
+				mod := evt.Modifiers()
+				mods := []string{}
+				if mod & tcell.ModCtrl != 0 {
+					mods = append(mods, "ctrl") }
+				if mod & tcell.ModAlt != 0 {
+					mods = append(mods, "alt") }
+				if mod & tcell.ModMeta != 0 {
+					mods = append(mods, "meta") }
+				if mod & tcell.ModShift != 0 {
+					mods = append(mods, "shift") }
+				// XXX handle double click...
+				// XXX handle modifiers...
+				if buttons & tcell.Button1 != 0 || 
+						buttons & tcell.Button2 != 0 {
+					//log.Println("CLICK:", mods)
+					col, row := evt.Position()
+					// ignore clicks outside the list...
+					if col < this.Lines.Left || 
+								col >= this.Lines.Left + this.Lines.Width || 
+							row < this.Lines.Top || 
+								row >= this.Lines.Top + this.Lines.Height {
+						//log.Println("    OUT OF BOUNDS")
+						continue }
+					// title/status bars and borders...
+					top_offset := 0
+					if ! this.Lines.TitleDisabled {
+						top_offset = 1
+						if row == this.Lines.Top {
+							// XXX handle titlebar click???
+							//log.Println("    TITLE_LINE")
+							continue } }
+					if ! this.Lines.StatusDisabled {
+						if row - this.Lines.Top == this.Lines.Rows() + 1 {
+							// XXX handle statusbar click???
+							//log.Println("    STATUS_LINE")
+							continue } }
+					if this.Lines.Border != "" {
+						if col == this.Lines.Left ||
+								(! this.Lines.Scrollable() && 
+									col == this.Lines.Left + this.Lines.Width - 1) {
+							//log.Println("    BORDER")
+							continue } }
+					// scrollbar...
+					// XXX sould be nice if we started in the scrollbar 
+					//		to keep handling the drag untill released...
+					//		...for this to work need to either detect 
+					//		drag or release...
+					if this.Lines.Scrollable() && 
+							col == this.Lines.Left + this.Lines.Width - 1 {
+						//log.Println("    SCROLLBAR")
+						this.Lines.RowOffset = 
+							int((float64(row - this.Lines.Top - top_offset) / float64(this.Lines.Rows() - 1)) * 
+							float64(len(this.Lines.Lines) - this.Lines.Rows()))
+						this.Draw()
+					// call click handler...
+					} else {
+						border := 0
+						if this.Lines.Border != "" {
+							border = 1 }
+						this.MouseCol = col - this.Lines.Left - border
+						this.MouseRow = row - this.Lines.Top
+						if ! this.Lines.TitleDisabled {
+							this.MouseRow-- }
+
+						// empty space below rows...
+						if this.MouseRow >= len(this.Lines.Lines) {
+							if this.EmptySpace != "active" {
+								//log.Println("    EMPTY SPACE")
+								this.Lines.Index = len(this.Lines.Lines) - 1 }
+							continue }
+
+						button := ""
+						// normalize buttons...
+						if buttons & tcell.Button1 != 0 {
+							button = "MouseLeft" }
+						if buttons & tcell.Button2 != 0 {
+							button = "MouseRight" }
+						if buttons & tcell.Button3 != 0 {
+							button = "MouseMiddle" }
+						for _, key := range key2keys(mods, button) {
+							res := this.HandleKey(key) 
+							if res == Missing {
+								continue }
+							if res != OK {
+								return res } 
+							this.Draw()
+							break } }
+					this.handleScrollLimits()
+
+				} else if buttons & tcell.WheelUp != 0 {
+					// XXX add mods...
+					res := this.HandleKey("WheelUp")
+					if res == Missing {
+						res = OK }
+					if res != OK {
+						return res }
+					this.Draw()
+
+				} else if buttons & tcell.WheelDown != 0 {
+					// XXX add mods...
+					res := this.HandleKey("WheelDown")
+					if res == Missing {
+						res = OK }
+					if res != OK {
+						return res } 
+					this.Draw() } 
 		} }
 	return OK }
 // handle panics and cleanup...
@@ -1098,7 +1209,7 @@ func (this *TcellDrawer) Finalize() {
 
 
 // XXX should this take Lines ot Settings???
-func NewTcellLines(l ...Lines) TcellDrawer {
+func NewTcellLines(l ...Lines) *TcellDrawer {
 	var lines Lines
 	if len(l) == 0 {
 		lines = Lines{}
@@ -1108,7 +1219,7 @@ func NewTcellLines(l ...Lines) TcellDrawer {
 	drawer := TcellDrawer{}
 	drawer.Setup(lines)
 
-	return drawer }
+	return &drawer }
 
 
 
@@ -1128,7 +1239,7 @@ func main(){
 		lines.Lines.Append(fmt.Sprint("bam%SPAN", i)) }
 	lines.Lines.Index = 1
 	lines.Lines.Lines[0].Selected = true
-	//lines.Width = "50%"
+	lines.Width = "50%"
 	//lines.Align = []string{"right"}
 	/*/
 	lines := NewTcellLines()
