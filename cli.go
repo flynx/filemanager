@@ -1007,6 +1007,7 @@ func (this *TcellDrawer) HandleKey(key string) Result {
 		_action := action
 		for exists && ! slices.Contains(seen, _action) {
 			if _action, exists = keybindings[_action] ; exists {
+				seen = append(seen, _action)
 				action = _action } }
 		return this.HandleAction(action) }
 	// call key alias...
@@ -1063,17 +1064,20 @@ func (this *TcellDrawer) Loop() Result {
 					updateGeometry().
 					Draw()
 			case *tcell.EventKey:
+				key_handled := false
 				for _, key := range evt2keys(*evt) {
 					res := this.HandleKey(key)
+					log.Println("---", key, res)
 					if res == Missing {
 						log.Println("Key Unhandled:", key)
 						continue }
 					if res != OK {
 						return res } 
-					// XXX should this be done here or in the action???
+					key_handled = true
 					this.Draw()
 					break }
-				//log.Println("KEY:", evt.Name())
+				if key_handled {
+					continue }
 				// defaults...
 				// XXX BUG??? should we do this iff no key was handled???
 				//		...at this point this is tested event if a relevant 
