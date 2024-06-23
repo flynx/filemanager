@@ -234,6 +234,9 @@ func TestParseSizes(t *testing.T){
 	test("*,9", 4, 0, []int{4, -1})
 
 	test("*,10", 9, 0, []int{5, 4}) 
+
+	test("*,5", 18, 0, []int{13, 5}) 
+	test("*,5", 18, 1, []int{12, 5}) 
 }
 
 

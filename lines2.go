@@ -447,9 +447,10 @@ type Lines struct {
 	// column spanning...
 	SpanMode string
 	// cache...
-	__SpanMode struct {
+	__SpanMode_cache struct {
 		text string
 		width int
+		sep int
 		value []int
 	}
 	SpanMarker string
@@ -724,20 +725,22 @@ func (this *Lines) makeSections(str string, width int, sep_size int, rest ...str
 		sizes := []int{}
 		if this.SpanMode == "" || this.SpanMode == "fit-right" {
 			section := doSection(sections[len(sections)-1], 0)
-			l := len(section[0])
+			l := len([]rune(section[0]))
 			sizes = this.parseSizes("*,"+ fmt.Sprint(l), width, sep_size)
 		// sizing: manual (cached)...
 		} else {
 			// cached result -- the same for each line, no need to recalculate...
-			if this.SpanMode == this.__SpanMode.text && 
-					this.__SpanMode.width == width {
-				sizes = this.__SpanMode.value
+			if this.SpanMode == this.__SpanMode_cache.text && 
+					this.__SpanMode_cache.sep == sep_size &&
+					this.__SpanMode_cache.width == width {
+				sizes = this.__SpanMode_cache.value
 			// generate/cache...
 			} else {
 				sizes = this.parseSizes(this.SpanMode, width, sep_size)
-				this.__SpanMode.text = this.SpanMode
-				this.__SpanMode.width = width
-				this.__SpanMode.value = sizes } } 
+				this.__SpanMode_cache.text = this.SpanMode
+				this.__SpanMode_cache.width = width
+				this.__SpanMode_cache.sep = sep_size
+				this.__SpanMode_cache.value = sizes } } 
 			//*/
 		// build the sections...
 		var i int
@@ -764,7 +767,7 @@ func (this *Lines) makeSections(str string, width int, sep_size int, rest ...str
 			res = append(res, doSection(getSection(i), sizes[i])...) } }
 	return res }
 //
-//	.makeSectionChrome(<str>, <width>[<span_separator>[, <left_border>, <right_border>[, <filler>]]])
+//	.makeSectionChrome(<str>, <width>[, <span_separator>[, <left_border>, <right_border>[, <filler>]]])
 //		-> <line>
 //
 // Format:
@@ -804,6 +807,7 @@ func (this *Lines) makeSectionChrome(str string, width int, rest ...string) []st
 		border_l = string([]rune(this.Border)[0])
 		border_r = string([]rune(this.Border)[4])
 		width -= 2 }
+	// XXX BUG: looks like this yiels the same results with sep_size of 0 an 1...
 	sections := this.makeSections(str, width, len([]rune(separator)), rest...)
 	// NOTE: we are skipping the last section as it already places the
 	//		overflow symbol in the right spot...
@@ -952,6 +956,7 @@ func (this *Lines) drawLine(col, row int, sections []string, style string) *Line
 	this.drawCells(col, row, "\n", "EOL")
 	return this }
 
+// XXX BUG: title/status are aligned via .SpanMode -- need to align separately...
 func (this *Lines) Draw() *Lines {
 	overflow := string(OVERFLOW_INDICATOR)
 	if this.OverflowIndicator != 0 {
@@ -1097,6 +1102,24 @@ func main(){
 	fmt.Println(">"+
 		makeSectionChrome("moo%SPANfoo", 20) + "<")
 	fmt.Println(">"+
+		makeSectionChrome("moo%SPANfoo", 20, "|") + "<")
+	fmt.Println(">"+
+		makeSectionChrome("moo%SPANfoo", 20, "|", "[", "]") + "<")
+	fmt.Println(">"+
+		makeSectionChrome("moo%SPANfoo", 20, "", "[", "]") + "<")
+	fmt.Println(">"+
+		makeSectionChrome("moo%SPANfoo", 20, "", "[", "]", "-") + "<")
+	fmt.Println(">"+
+		makeSectionChrome("", 20, "", "[", "]", "-") + "<")
+	fmt.Println(">"+
+		makeSectionChrome("", 20, []string{"", "┌", "┐", "─"}...) + "<")
+	fmt.Println(">"+
+		makeSectionChrome("A%SPANB", 20, []string{"", "└", "┘", "─"}...) + "<")
+	fmt.Println(">"+
+		makeSectionChrome("%SPAN", 20, "", "[", "]", "-") + "<")
+	fmt.Println(">>"+
+		makeSectionChrome("moo%SPANfoo", 20-2, "", "", "", "-") + "<<")
+	fmt.Println(">"+
 		makeSectionChrome("overflow overflow overflow overflow overflow overflow", 20) + "<")
 	fmt.Println(">"+
 		makeSectionChrome("moo%SPANfoo", 20, "[[", "]]") + "<")
@@ -1223,6 +1246,11 @@ func main(){
 
 	fmt.Println("")
 	lines.Write("a single%SPANline")
+	lines.Draw()
+
+	fmt.Println("")
+	lines.Title = "A%SPANB"
+	lines.Status = "A%SPANB"
 	lines.Draw()
 }
 //*/
