@@ -81,7 +81,8 @@ var KEYBINDINGS = Keybindings {
 	"Reject": "Exit",
 
 	// keys...
-	"Esc": "Reject",
+	//"Esc": "Reject",
+	"Esc": "Down",
 	"q": "Reject",
 
 	"Up": "Up",
@@ -1076,12 +1077,10 @@ func (this *TcellDrawer) Loop() Result {
 					key_handled = true
 					this.Draw()
 					break }
+				// do not check for deafults on keys we handled...
 				if key_handled {
 					continue }
 				// defaults...
-				// XXX BUG??? should we do this iff no key was handled???
-				//		...at this point this is tested event if a relevant 
-				//		key was handled successfully...
 				if evt.Key() == tcell.KeyEscape || 
 						evt.Key() == tcell.KeyCtrlC {
 					return OK }
