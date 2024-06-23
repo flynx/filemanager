@@ -1197,8 +1197,7 @@ func (this *TcellDrawer) Loop() Result {
 						res = OK }
 					if res != OK {
 						return res } 
-					this.Draw() } 
-		} }
+					this.Draw() } } }
 	return OK }
 // handle panics and cleanup...
 func (this *TcellDrawer) Finalize() {
