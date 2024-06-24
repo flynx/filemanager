@@ -1229,12 +1229,7 @@ func main(){
 		SpanMode: "*,5",
 		SpanSeparator: "│",
 		Border: "│┌─┐│└─┘",
-		Title: " Moo ",
-		// XXX BUG: these are drawn via the normal .SpanMode...
-		// XXX BUG: this draws wrong width -- span marker width???
-		//		...and this affects the next line w/o %SPAN
-		//Title: "%SPAN Moo ",
-		// XXX BUG: this draws wrong width -- span marker width???
+		Title: " Moo %SPAN/",
 		Status: "%SPAN $LINE/$LINES ",
 	})
 	lines.Lines.Append(

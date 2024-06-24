@@ -390,7 +390,7 @@ var OVERFLOW_INDICATOR = '}'
 var SPAN_MARKER = "%SPAN"
 // XXX this would require us to support escaping...
 //var SPAN_MARKER = "|"
-var SPAN_MIN_WIDTH = 5
+var SPAN_MIN_WIDTH = 3
 
 //var SCROLLBAR = "█░"
 var SCROLLBAR = "┃│"
