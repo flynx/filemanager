@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"syscall"
 	//"io"
 	"runtime"
 	//"bytes"
@@ -84,6 +85,7 @@ var KEYBINDINGS = Keybindings {
 	//"Esc": "Reject",
 	"Esc": "Down",
 	"q": "Reject",
+	"ctrl+z": "Stop",
 
 	"Up": "Up",
 	"Down": "Down",
@@ -573,6 +575,29 @@ func (this *Actions) Refresh() Result {
 		Screen.Show()
 	return OK }
 
+// XXX revise...
+func (this *Actions) Stop() Result {
+	screen := this.TcellDrawer.Screen
+	_, ok := screen.Tty()
+	if ! ok {
+		return OK }
+
+	// XXX can we go around all of this and simple pass ctrl-z to parent???
+	screen.Suspend()
+
+	pid := syscall.Getppid()
+	// ask parent to detach us from io...
+	err := syscall.Kill(pid, syscall.SIGSTOP)
+	if err != nil {
+		log.Panic(err) }
+	// stop...
+	err = syscall.Kill(syscall.Getpid(), syscall.SIGSTOP)
+	if err != nil {
+		log.Panic(err) }
+
+	screen.Resume()
+
+	return OK }
 func (this *Actions) Fail() Result {
 	return Fail }
 func (this *Actions) Exit() Result {
@@ -1041,6 +1066,7 @@ func (this *TcellDrawer) Setup(lines Lines) *TcellDrawer {
 		log.Panic(err) }
 	this.EnableMouse()
 	this.EnablePaste()
+	this.EnableFocus()
 	return this }
 // XXX can we detect mod key press???
 //		...need to detect release of shift in selection...
