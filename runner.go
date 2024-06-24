@@ -160,4 +160,4 @@ func (this *Cmd) WriteString(str string) *Cmd {
 	return this }
 
 
-
+// vim:set ts=4 sw=4 nowrap :
