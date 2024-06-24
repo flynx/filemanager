@@ -446,7 +446,10 @@ type Lines struct {
 
 	// column spanning...
 	SpanMode string
+	SpanModeTitle string
+	SpanModeStatus string
 	// cache...
+	// XXX do we need to cache multiple values???
 	__SpanMode_cache struct {
 		text string
 		width int
@@ -691,8 +694,10 @@ func (this *Lines) parseSizes(str string, width int, sep int) []int {
 			size += width - total }
 		sizes[i] = size }
 	return sizes }
-func (this *Lines) makeSections(str string, width int, sep_size int, rest ...string) []string {
+func (this *Lines) makeSections(str, span string, width int, sep_size int, rest ...string) []string {
 	// defaults...
+	if span == "default" {
+		span = this.SpanMode }
 	marker := this.SpanMarker
 	if marker == "" {
 		marker = SPAN_MARKER }
@@ -723,21 +728,21 @@ func (this *Lines) makeSections(str string, width int, sep_size int, rest ...str
 		// sizing: automatic (uncached)...
 		// NOTE: we do not cache this because the output depends on sections...
 		sizes := []int{}
-		if this.SpanMode == "" || this.SpanMode == "fit-right" {
+		if span == "" || span == "fit-right" {
 			section := doSection(sections[len(sections)-1], 0)
 			l := len([]rune(section[0]))
 			sizes = this.parseSizes("*,"+ fmt.Sprint(l), width, sep_size)
 		// sizing: manual (cached)...
 		} else {
 			// cached result -- the same for each line, no need to recalculate...
-			if this.SpanMode == this.__SpanMode_cache.text && 
+			if span == this.__SpanMode_cache.text && 
 					this.__SpanMode_cache.sep == sep_size &&
 					this.__SpanMode_cache.width == width {
 				sizes = this.__SpanMode_cache.value
 			// generate/cache...
 			} else {
-				sizes = this.parseSizes(this.SpanMode, width, sep_size)
-				this.__SpanMode_cache.text = this.SpanMode
+				sizes = this.parseSizes(span, width, sep_size)
+				this.__SpanMode_cache.text = span
 				this.__SpanMode_cache.width = width
 				this.__SpanMode_cache.sep = sep_size
 				this.__SpanMode_cache.value = sizes } } 
@@ -791,7 +796,7 @@ func (this *Lines) makeSections(str string, width int, sep_size int, rest ...str
 //		...currently it is not possible to do so...
 // XXX make sure to handle/trim lines ending in escape sequences correctly 
 //		when embedding overflow indicator...
-func (this *Lines) makeSectionChrome(str string, width int, rest ...string) []string {
+func (this *Lines) makeSectionChrome(str, span string, width int, rest ...string) []string {
 	separator := this.SpanSeparator
 	if len(rest) >= 1 {
 		separator = rest[0]
@@ -808,7 +813,7 @@ func (this *Lines) makeSectionChrome(str string, width int, rest ...string) []st
 		border_r = string([]rune(this.Border)[4])
 		width -= 2 }
 	// XXX BUG: looks like this yiels the same results with sep_size of 0 an 1...
-	sections := this.makeSections(str, width, len([]rune(separator)), rest...)
+	sections := this.makeSections(str, span, width, len([]rune(separator)), rest...)
 	// NOTE: we are skipping the last section as it already places the
 	//		overflow symbol in the right spot...
 	for i := 0; i < len(sections)-2; i += 2 {
@@ -956,7 +961,6 @@ func (this *Lines) drawLine(col, row int, sections []string, style string) *Line
 	this.drawCells(col, row, "\n", "EOL")
 	return this }
 
-// XXX BUG: title/status are aligned via .SpanMode -- need to align separately...
 func (this *Lines) Draw() *Lines {
 	overflow := string(OVERFLOW_INDICATOR)
 	if this.OverflowIndicator != 0 {
@@ -982,6 +986,7 @@ func (this *Lines) Draw() *Lines {
 			border_h = string([]rune(this.Border)[2]) }
 		sections := this.makeSectionChrome(
 			this.expandTemplate(this.Title, env), 
+			this.SpanModeTitle,
 			this.Width, 
 			"", corner_l, corner_r, border_h)
 		this.drawLine(col, row, sections, "title") 
@@ -1038,6 +1043,7 @@ func (this *Lines) Draw() *Lines {
 					s = scrollbar_bg } }
 			sections = this.makeSectionChrome(
 				text, 
+				"default",
 				this.Width - len([]rune(border_l)) - len([]rune(s)),
 				this.SpanSeparator, "", "")
 			sections[0] = border_l
@@ -1056,6 +1062,7 @@ func (this *Lines) Draw() *Lines {
 		} else {
 			sections = this.makeSectionChrome(
 				text, 
+				"default",
 				this.Width, 
 				this.SpanSeparator, border_l, border_r) }
 		// style...
@@ -1080,6 +1087,7 @@ func (this *Lines) Draw() *Lines {
 			border_h = string([]rune(this.Border)[6]) }
 		sections := this.makeSectionChrome(
 			this.expandTemplate(this.Status, env), 
+			this.SpanModeStatus,
 			this.Width, 
 			"", corner_l, corner_r, border_h)
 		this.drawLine(col, row, sections, "status") }
@@ -1094,7 +1102,7 @@ func main(){
 	lines := Lines{}
 
 	makeSectionChrome := func(s string, w int, r ...string) string {
-		return strings.Join(lines.makeSectionChrome(s, w, r...), "") }
+		return strings.Join(lines.makeSectionChrome(s, "default", w, r...), "") }
 
 	fmt.Println("")
 	fmt.Println(">"+
@@ -1216,7 +1224,7 @@ func main(){
 			fmt.Printf("\tparseSizes: %#v\n",
 				lines.parseSizes(lines.SpanMode, w-c, 1))
 			fmt.Printf("\tmakeSections: %#v\n",
-				lines.makeSections(str, w-c, 1))
+				lines.makeSections(str, "default", w-c, 1))
 			fmt.Println("    -> ERR") 
 		} else {
 			fmt.Println("    -> OK") } }
