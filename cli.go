@@ -16,6 +16,8 @@ import (
 	"log"
 	"os"
 	"syscall"
+	"reflect"
+	"time"
 	//"io"
 	"runtime"
 	//"bytes"
@@ -25,7 +27,6 @@ import (
 	"strconv"
 	"slices"
 	//"regexp"
-	"reflect"
 
 	"github.com/gdamore/tcell/v2"
 	//"github.com/jessevdk/go-flags"
@@ -575,16 +576,13 @@ func (this *Actions) Refresh() Result {
 		Screen.Show()
 	return OK }
 
-// XXX revise...
 func (this *Actions) Stop() Result {
 	screen := this.TcellDrawer.Screen
 	_, ok := screen.Tty()
 	if ! ok {
 		return OK }
-
 	// XXX can we go around all of this and simple pass ctrl-z to parent???
 	screen.Suspend()
-
 	pid := syscall.Getppid()
 	// ask parent to detach us from io...
 	err := syscall.Kill(pid, syscall.SIGSTOP)
@@ -594,9 +592,8 @@ func (this *Actions) Stop() Result {
 	err = syscall.Kill(syscall.Getpid(), syscall.SIGSTOP)
 	if err != nil {
 		log.Panic(err) }
-
+	time.Sleep(time.Millisecond*50)
 	screen.Resume()
-
 	return OK }
 func (this *Actions) Fail() Result {
 	return Fail }
