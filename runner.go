@@ -75,7 +75,7 @@ func (this *Cmd) HandleLine(handler LineHandler) (*Cmd, error) {
 		for scanner.Scan() {
 			handler(scanner.Text()) } }() 
 	return this, nil }
-// XXX
+// XXX this is implemented in lines2.go...
 func (this *Cmd) makeEnv(){
 	// XXX
 }

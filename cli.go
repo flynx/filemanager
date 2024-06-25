@@ -1263,15 +1263,15 @@ func main(){
 		SpanMode: "*,5",
 		SpanSeparator: "│",
 		Border: "│┌─┐│└─┘",
-		Title: " Moo %SPAN/",
-		Status: "%SPAN${SELECTED:+ ($SELECTED)} $LINE/$LINES ",
+		Title: " Moo |/",
+		Status: "|${SELECTED:+ ($SELECTED)} $LINE/$LINES ",
 	})
 	lines.Lines.Append(
 		"Some text",
-		"Current%SPAN",
-		"Some%SPANColumns")
+		"Current|",
+		"Some|Columns")
 	for i := 0; i < 10; i++ {
-		lines.Lines.Append(fmt.Sprint("bam%SPAN", i)) }
+		lines.Lines.Append(fmt.Sprint("bam|", i)) }
 	lines.Lines.Index = 1
 	lines.Lines.Lines[0].Selected = true
 

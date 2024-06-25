@@ -372,7 +372,7 @@ var TAB_SIZE = 8
 
 var OVERFLOW_INDICATOR = '}'
 
-var SPAN_MARKER = "%SPAN"
+var SPAN_MARKER = "|"
 // XXX this would require us to support escaping...
 //var SPAN_MARKER = "|"
 var SPAN_MIN_SIZE = 3
@@ -452,7 +452,7 @@ type Lines struct {
 // XXX can we integrate this transparently???
 var LinesDefaults = Lines {
 	Title: "",
-	Status: "%CMD%SPAN $LINE/$LINES ",
+	Status: "%CMD| $LINE/$LINES ",
 }
 
 func (this *Lines) Rows() int {
@@ -905,6 +905,7 @@ var varPattern = regexp.MustCompile(
 		`|\}`+
 		`|[^$%}]*)`)
 // XXX better error handling...
+// XXX should we abstract out os.Getenv(..) ???
 func (this *Lines) expandTemplate(str string, env Env) string {
 	marker := this.SpanMarker
 	if marker == "" {
@@ -1199,56 +1200,56 @@ func main(){
 	fmt.Println(">"+
 		makeSectionChrome("1234567890", 10) + "<")
 	fmt.Println(">"+
-		makeSectionChrome("moo%SPANfoo", 20) + "<")
+		makeSectionChrome("moo|foo", 20) + "<")
 	fmt.Println(">"+
-		makeSectionChrome("moo%SPANfoo", 20, "|") + "<")
+		makeSectionChrome("moo|foo", 20, "|") + "<")
 	fmt.Println(">"+
-		makeSectionChrome("moo%SPANfoo", 20, "|", "[", "]") + "<")
+		makeSectionChrome("moo|foo", 20, "|", "[", "]") + "<")
 	fmt.Println(">"+
-		makeSectionChrome("moo%SPANfoo", 20, "", "[", "]") + "<")
+		makeSectionChrome("moo|foo", 20, "", "[", "]") + "<")
 	fmt.Println(">"+
-		makeSectionChrome("moo%SPANfoo", 20, "", "[", "]", "-") + "<")
+		makeSectionChrome("moo|foo", 20, "", "[", "]", "-") + "<")
 	fmt.Println(">"+
 		makeSectionChrome("", 20, "", "[", "]", "-") + "<")
 	fmt.Println(">"+
 		makeSectionChrome("", 20, []string{"", "┌", "┐", "─"}...) + "<")
 	fmt.Println(">"+
-		makeSectionChrome("A%SPANB", 20, []string{"", "└", "┘", "─"}...) + "<")
+		makeSectionChrome("A|B", 20, []string{"", "└", "┘", "─"}...) + "<")
 	fmt.Println(">"+
-		makeSectionChrome("%SPAN", 20, "", "[", "]", "-") + "<")
+		makeSectionChrome("|", 20, "", "[", "]", "-") + "<")
 	fmt.Println(">>"+
-		makeSectionChrome("moo%SPANfoo", 20-2, "", "", "", "-") + "<<")
+		makeSectionChrome("moo|foo", 20-2, "", "", "", "-") + "<<")
 	fmt.Println(">"+
 		makeSectionChrome("overflow overflow overflow overflow overflow overflow", 20) + "<")
 	fmt.Println(">"+
-		makeSectionChrome("moo%SPANfoo", 20, "[[", "]]") + "<")
+		makeSectionChrome("moo|foo", 20, "[[", "]]") + "<")
 	fmt.Println(">"+
-		makeSectionChrome("moo%SPANfoo", 20) + "<")
+		makeSectionChrome("moo|foo", 20) + "<")
 	//lines.SpanSeparator = "|"
 	lines.SpanSeparator = "│"
 	fmt.Println(">"+
-		makeSectionChrome("moo%SPANfoo", 20) + "<")
+		makeSectionChrome("moo|foo", 20) + "<")
 	fmt.Println(">"+
-		makeSectionChrome("overflow overflow overflow overflow%SPANfoo", 20) + "<")
+		makeSectionChrome("overflow overflow overflow overflow|foo", 20) + "<")
 	lines.SpanMode = "50%"
 	fmt.Println(">"+
-		makeSectionChrome("moo%SPANfoo", 20) + "<")
+		makeSectionChrome("moo|foo", 20) + "<")
 	fmt.Println(">"+
-		makeSectionChrome("overflow overflow overflow overflow%SPANfoo", 20) + "<")
+		makeSectionChrome("overflow overflow overflow overflow|foo", 20) + "<")
 	lines.SpanMode = "*,*,*"
 	fmt.Println(">"+
-		makeSectionChrome("moo%SPANfoo%SPANboo", 20) + "<")
+		makeSectionChrome("moo|foo|boo", 20) + "<")
 	fmt.Println(">"+
-		makeSectionChrome("over%SPANflow%SPANover%SPANflow", 20) + "<")
+		makeSectionChrome("over|flow|over|flow", 20) + "<")
 	fmt.Println(">"+
-		makeSectionChrome("0123456789%SPAN0123456789%SPAN0123456789", 20) + "<")
+		makeSectionChrome("0123456789|0123456789|0123456789", 20) + "<")
 	fmt.Println(">"+
-		makeSectionChrome("under%SPANflow", 20) + "<")
+		makeSectionChrome("under|flow", 20) + "<")
 	lines.SpanMode = "*,*,*,*,*,*,*,*,*,*"
 	fmt.Println(">"+
 		makeSectionChrome("", 20) + "<")
 	fmt.Println(">"+
-		makeSectionChrome("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 20) + "<")
+		makeSectionChrome("o|v|e|r|f|l|o|w", 20) + "<")
 
 
 	testLineSizes := func(str string, r ...string){
@@ -1273,25 +1274,25 @@ func main(){
 	fmt.Println("")
 	lines.SpanMode = ""
 	testLineSizes("moo")
-	testLineSizes("moo%SPANfoo")
+	testLineSizes("moo|foo")
 	lines.SpanMode = "*,*,*,*,*,*,*,*,*,*"
-	testLineSizes("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw")
+	testLineSizes("o|v|e|r|f|l|o|w")
 	
 
 	fmt.Println("")
 	lines.SpanMode = ""
 	fmt.Println(">"+
-		makeSectionChrome("moo%SPANfoo", 20) +"<")
+		makeSectionChrome("moo|foo", 20) +"<")
 	fmt.Println(">"+
 		makeSectionChrome("overflow overflow overflow overflow overflow overflow", 20) +"<")
 	lines.Border = "│┌─┐│└─┘"
 	fmt.Println(
-		makeSectionChrome("moo%SPANfoo", 22))
+		makeSectionChrome("moo|foo", 22))
 	fmt.Println(
 		makeSectionChrome("overflow overflow overflow overflow overflow overflow", 22))
 	lines.SpanMode = "*,*,*,*,*,*,*,*,*,*"
 	fmt.Println(
-		makeSectionChrome("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 22))
+		makeSectionChrome("o|v|e|r|f|l|o|w", 22))
 
 	testSizes := func(s string, w int, p int){
 		fmt.Println("w:", w, "sep:", p, "s: \""+ s +"\" ->", 
@@ -1321,10 +1322,10 @@ func main(){
 			fmt.Println("    -> OK") } }
 	lines.SpanMode = "*,*,*,*,*,*,*,*,*,*"
 	lines.Border = "│┌─┐│└─┘"
-	testBorderedSize("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 20)
-	testBorderedSize("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 21)
-	testBorderedSize("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 22)
-	testBorderedSize("o%SPANv%SPANe%SPANr%SPANf%SPANl%SPANo%SPANw", 23)
+	testBorderedSize("o|v|e|r|f|l|o|w", 20)
+	testBorderedSize("o|v|e|r|f|l|o|w", 21)
+	testBorderedSize("o|v|e|r|f|l|o|w", 22)
+	testBorderedSize("o|v|e|r|f|l|o|w", 23)
 
 
 	fmt.Println("")
@@ -1333,23 +1334,23 @@ func main(){
 	lines.Height = 6
 	lines.Border = "│┌─┐│└─┘"
 	lines.Write(
-		"This%SPANis\n"+
+		"This|is\n"+
 		"some text\n"+
 		"\n"+
 		"This is also\n"+
-		"some%SPANmore text\n"+
+		"some|more text\n"+
 		// XXX need to extend the separator from the above line...
 		"\n"+
 		"\n")
 	lines.Draw()
 
 	fmt.Println("")
-	lines.Write("a single%SPANline")
+	lines.Write("a single|line")
 	lines.Draw()
 
 	fmt.Println("")
-	lines.Title = "A%SPANB"
-	lines.Status = "A%SPANB"
+	lines.Title = "A|B"
+	lines.Status = "A|B"
 	lines.Draw()
 }
 //*/

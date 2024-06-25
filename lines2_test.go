@@ -307,7 +307,7 @@ func TestDraw(t *testing.T){
 		lines.Append(
 			"Some text",
 			"Current",
-			"Selected%SPANColumn")
+			"Selected|Column")
 		lines.Index = 1
 		lines.Lines[2].Selected = true
 		lines.Border = "│┌─┐│└─┘"
