@@ -87,13 +87,26 @@ func TestTeplateExpansion(t *testing.T){
 
 	env := lines.makeEnv()
 
+	test("Moo", env, "Moo")
+
 	// escaping...
 	test("$$", env, "$")
 	test("%%", env, "%")
 	test("$$MOO", env, "$MOO")
 
+	marker := lines.SpanMarker
+	if marker == "" {
+		marker = SPAN_MARKER }
+	test(marker, env, marker)
+	test("AAA"+ marker +"BBB", env, "AAA"+ marker +"BBB")
+	test("$AAA"+ marker +"$BBB", env, marker)
+	test("$AAA"+ marker +"${BBB}", env, marker)
+	test("${AAA}"+ marker +"${BBB}", env, marker)
+
 	// default undefined values...
 	test("$MOO", env, "")
+	test("FOO$MOO", env, "FOO")
+	test("FOO${MOO}", env, "FOO")
 	test("%MOO", env, "%MOO")
 
 	// index...
@@ -123,6 +136,14 @@ func TestTeplateExpansion(t *testing.T){
 	test("$TEST", env, "3") 
 	env["TEST"] = "0"
 	test("$TEST", env, "0") 
+
+	env["TEST"] = ""
+	test("${TEST:-MOO} (unset)", env, "MOO (unset)") 
+	test("${TEST:+MOO} (unset)", env, " (unset)") 
+
+	env["TEST"] = "FOO"
+	test("${TEST:-MOO} (set)", env, "FOO (set)") 
+	test("${TEST:+MOO} (set)", env, "MOO (set)") 
 }
 
 func TestTeplateCMD(t *testing.T){
@@ -130,7 +151,9 @@ func TestTeplateCMD(t *testing.T){
 }
 
 func TestParseSizes(t *testing.T){
-	lines := Lines{}
+	lines := Lines{
+		SpanMinSize: 5,
+	}
 
 	n := 0
 	test := func(s string, w int, p int, expected []int){
@@ -303,5 +326,26 @@ func TestDraw(t *testing.T){
 	draw()
 
 }
+
+
+/* XXX
+func TestRaw(t *testing.T){
+	L := []*AST{
+		&AST{
+			Head: "moo",
+		},
+	}
+
+	fmt.Println("<<<", L[0].Head)
+
+	a := L[0]
+	a.Head += " moo"
+
+	fmt.Println(">>>", L[0].Head)
+
+}
+//*/
+
+
 
 

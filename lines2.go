@@ -353,21 +353,6 @@ func (this *LinesBuffer) Active() []string {
 
 
 
-// Placeholders
-//
-type Placeholders map[string] func(*Lines, Env) string
-var PLACEHOLDERS = Placeholders {
-	"CMD": func(this *Lines, env Env) string {
-		cmd, ok := env["CMD"]
-		if ! ok {
-			return "" }
-		res := ""
-		// XXX call the command...
-		fmt.Println("---", cmd)
-		return res },
-}
-
-
 
 // CellsDrawer
 //
@@ -390,7 +375,7 @@ var OVERFLOW_INDICATOR = '}'
 var SPAN_MARKER = "%SPAN"
 // XXX this would require us to support escaping...
 //var SPAN_MARKER = "|"
-var SPAN_MIN_WIDTH = 3
+var SPAN_MIN_SIZE = 3
 
 //var SCROLLBAR = "█░"
 var SCROLLBAR = "┃│"
@@ -458,6 +443,7 @@ type Lines struct {
 	}
 	SpanMarker string
 	SpanSeparator string
+	// defaults to: SPAN_MIN_SIZE
 	SpanMinSize int
 	SpanNoExtend bool
 
@@ -573,7 +559,7 @@ func (this *Lines) parseSizes(str string, width int, sep int) []int {
 	str = strings.TrimSpace(str)
 	min_size := this.SpanMinSize
 	if min_size == 0 {
-		min_size = SPAN_MIN_WIDTH }
+		min_size = SPAN_MIN_SIZE }
 	spec := []string{}
 
 	// special case: single col...
@@ -862,6 +848,11 @@ func (this *Lines) makeEnv() Env {
 		if len(sections) > 1 {
 			text_right = sections[len(sections)-1] } }
 
+	selection := this.LinesBuffer.Selected()
+	selected := ""
+	if l := len(selection); l > 0 {
+		selected = fmt.Sprint(l) }
+
 	env := Env {
 		"INDEX": fmt.Sprint(i),
 		"LINE": fmt.Sprint(i + 1),
@@ -869,55 +860,155 @@ func (this *Lines) makeEnv() Env {
 		"TEXT": text,
 		"TEXT_LEFT": text_left,
 		"TEXT_RIGHT": text_right,
+		"SELECTION": strings.Join(selection, "\n"),
+		"SELECTED": selected,
 		// XXX ACTIVE -- selection or current...
-		// XXX SELECTION
-		// XXX SELECTED
 	}
 	for k, v := range this.Env {
 		env[k] = v }
 
 	return env }
 
-var isTemplatePattern = regexp.MustCompile(`([%$]{2}|[$%][a-zA-Z_]+|[$%]\{[a-zA-Z_]+\})`)
+type AST struct {
+	Type rune
+	Head string
+	Tail []AST
+}
+type Placeholders map[string] func(*Lines, Env) string
+var PLACEHOLDERS = Placeholders {
+	"CMD": func(this *Lines, env Env) string {
+		cmd, ok := env["CMD"]
+		if ! ok {
+			return "" }
+		res := ""
+		// XXX call the command...
+		fmt.Println("---", cmd)
+		return res },
+}
+type Expander func([]AST) string
+type Expanders map[string]func(string, []AST, Expander) string
+var EXPRESSION_HANDLERS = Expanders {
+	":-": func(value string, ast []AST, expand Expander) string {
+		if value == "" {
+			return expand(ast) }
+		return value },
+	":+": func(value string, ast []AST, expand Expander) string {
+		if value != "" {
+			return expand(ast) }
+		return value },
+} 
+var varPattern = regexp.MustCompile(
+	`([%$]{2}`+
+		`|[$%][A-z_][A-z0-9_]*`+
+		`|[$%]\{[A-z_][A-z0-9_]*`+
+		`|\\\}`+
+		`|\}`+
+		`|[^$%}]*)`)
+// XXX better error handling...
 func (this *Lines) expandTemplate(str string, env Env) string {
-	// handle placeholders...
 	marker := this.SpanMarker
 	if marker == "" {
 		marker = SPAN_MARKER }
 	placeholders := PLACEHOLDERS 
 	if this.Placeholders != nil {
 		placeholders = *this.Placeholders }
-	str = string(isTemplatePattern.ReplaceAllFunc(
-		[]byte(str), 
-		func(match []byte) []byte {
-			// normalize...
-			name := string(match[1:])
-			// $NAME
-			if match[0] == "$"[0] {
-				if name[0] == '{' {
-					name = string(name[1:len(name)-1]) }
-				if name == "$" {
-					return []byte(name) }
-				// get the value...
-				if val, ok := env[name] ; ok {
-					return []byte(val)
-				} else {
-					return []byte(os.Getenv(name)) }
-				return []byte{}
-			// %NAME
-			} else if match[0] == "%"[0] {
-				if name[0] == '{' {
-					name = string(name[1:len(name)-1]) }
-				if name == "%" {
-					return []byte(name) }
-				if f, ok := placeholders[name]; ok {
-					return []byte(f(this, env)) }
-				// XXX should undefined placeholders get returned as-is (current) 
-				//		or be blank???
-				//return []byte{} }))
-				return match }
-			return match }))
-	return str }
+	expressionHandlers := EXPRESSION_HANDLERS
+
+	// Lex stage...
+	//
+	lex := []string{}
+	varPattern.ReplaceAllStringFunc(
+		str,
+		func(match string) string {
+			lex = append(lex, match) 
+			return "" })
+
+	// Parse stage...
+	//
+	var parseVar func(string, []string) (AST, []string)
+	group := func(lex []string) ([]AST, []string) {
+		res := []AST{}
+		for len(lex) > 0 {
+			cur := lex[0]
+			lex = lex[1:]
+			if cur == "" {
+				continue }
+			// special cases...
+			if cur == "$$" || cur == "%%" {
+				res = append(res, AST{ Head: string(cur[0]) })
+				continue }
+			switch cur[0] {
+				case '}':
+					// XXX GO: ^*&^#*$: can't use break here because in 
+					//		Go a break at end of a case is automatic but
+					//		it still is a switch keyword...
+					return res, lex
+				case '%', '$':
+					var v AST
+					v, lex = parseVar(cur, lex)
+					res = append(res, v) 
+				default:
+					res = append(res, AST{ Head: cur }) } }
+		return res, lex }
+	parseVar = func(head string, lex []string) (AST, []string) {
+		res := AST{
+			Type: rune(head[0]),
+		}
+		if head[1] == '{' {
+			res.Head = string(head[2:])
+			res.Tail, lex = group(lex)
+		} else {
+			res.Head = string(head[1:]) }
+		return res, lex }
+	ast, rest := group(lex)
+	if len(rest) > 0 {
+		if rest[0] == "}" {
+			log.Panicf("ExpandTemplate(..): Unexpected \"}\": %#v", str) }
+		log.Panicf("ExpandTemplate(..): Unexpected end of input while parsing: %#v", str) }
+
+	// Expand stage...
+	//
+	var expand Expander
+	handleExpression := func(value string, ast []AST) string {
+		if len(ast) == 0 {
+			return value }
+		next := ast[0].Head
+		for prefix, f := range expressionHandlers {
+			if prefix == string(next[:len(prefix)]) {
+				ast[0].Head = string(next[len(prefix):])
+				return f(value, ast, expand) } } 
+		return value }
+	expand = func(ast []AST) string {
+		res := []string{}
+		for _, a := range ast {
+			// strings...
+			if a.Type == 0 {
+				res = append(res, a.Head, expand(a.Tail)) 
+				continue }
+			// $NAME / %NAME
+			switch a.Type {
+				case '$':
+					value := ""
+					if val, ok := env[a.Head] ; ok {
+						value = val
+					} else {
+						value = os.Getenv(a.Head) }
+					res = append(res, 
+						handleExpression(
+							value, 
+							a.Tail))
+				case '%':
+					if f, ok := placeholders[a.Head]; ok {
+						res = append(res, 
+							handleExpression(
+								f(this, env),
+								a.Tail)) 
+					} else {
+						// XXX include .Tail???
+						res = append(res, "%"+ a.Head) } } }
+		return strings.Join(res, "") }
+
+	return expand(ast) }
 
 func (this *Lines) drawCells(col, row int, str string, style string) {
 	if this.CellsDrawer != nil {

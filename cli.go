@@ -35,6 +35,104 @@ import (
 )
 
 
+// Tcell-specific helpers...
+//
+func Style2TcellStyle(style Style, base_style ...tcell.Style) tcell.Style {
+	base := tcell.StyleDefault
+	if len(base_style) != 0 {
+		base = base_style[0] } 
+	// set flags...
+	colors := []string{}
+	for _, s := range style {
+		switch s {
+			case "blink":
+				base = base.Blink(true)
+			case "bold":
+				base = base.Bold(true)
+			case "dim":
+				base = base.Dim(true)
+			case "italic":
+				base = base.Italic(true)
+			case "normal":
+				base = base.Normal()
+			case "reverse":
+				base = base.Reverse(true)
+			case "strike-through":
+				base = base.StrikeThrough(true)
+			case "underline":
+				base = base.Underline(true)
+			default:
+				// urls...
+				if string(s[:len("url")]) == "url" {
+					p := strings.SplitN(s, ":", 2)
+					url := ""
+					if len(p) > 1 {
+						url = p[1] }
+					base = base.Url(url)
+				// colors...
+				} else {
+					colors = append(colors, s) } } }
+	// set the colors...
+	if len(colors) > 0 && 
+			colors[0] != "as-is" {
+		base = base.Foreground(
+			tcell.GetColor(colors[0])) }
+	if len(colors) > 1 &&
+			colors[1] != "as-is" {
+		base = base.Background(
+			tcell.GetColor(colors[1])) }
+	return base }
+func TcellEvent2Keys(evt tcell.EventKey) []string {
+	mods := []string{}
+	shifted := false
+
+	var key, Key string
+
+	mod, k, r := evt.Modifiers(), evt.Key(), evt.Rune()
+
+	// handle key and shift state...
+	if k == tcell.KeyRune {
+		if unicode.IsUpper(r) {
+			shifted = true
+			Key = string(r)
+			mods = append(mods, "shift") }
+		key = string(unicode.ToLower(r))
+	// special keys...
+	} else if k > tcell.KeyRune || k <= tcell.KeyDEL {
+		key = evt.Name()
+	// ascii...
+	} else {
+		if unicode.IsUpper(rune(k)) {
+			shifted = true 
+			Key = string(k)
+			mods = append(mods, "shift") } 
+		key = strings.ToLower(string(k)) } 
+
+	// split out mods and normalize...
+	key_mods := strings.Split(key, "+")
+	key = key_mods[len(key_mods)-1]
+	if k := []rune(key) ; len(k) == 1 && unicode.IsUpper(k[0]) {
+		key = strings.ToLower(key) }
+	key_mods = key_mods[:len(key_mods)-1]
+
+	// basic translation...
+	if key == " " {
+		key = "Space" }
+
+	if slices.Contains(key_mods, "Ctrl") || 
+			mod & tcell.ModCtrl != 0 {
+		mods = append(mods, "ctrl") }
+	if slices.Contains(key_mods, "Alt") || 
+			mod & tcell.ModAlt != 0 {
+		mods = append(mods, "alt") }
+	if slices.Contains(key_mods, "Meta") || 
+			mod & tcell.ModMeta != 0 {
+		mods = append(mods, "meta") }
+	if !shifted && mod & tcell.ModShift != 0 {
+		mods = append(mods, "shift") }
+
+	return key2keys(mods, key, Key) }
+
 
 
 // Keyboard...
@@ -182,58 +280,6 @@ func key2keys(mods []string, key string, rest ...string) []string {
 	key_seq = append(key_seq, key)
 
 	return key_seq }
-// XXX tcell-specific...
-func evt2keys(evt tcell.EventKey) []string {
-	mods := []string{}
-	shifted := false
-
-	var key, Key string
-
-	mod, k, r := evt.Modifiers(), evt.Key(), evt.Rune()
-
-	// handle key and shift state...
-	if k == tcell.KeyRune {
-		if unicode.IsUpper(r) {
-			shifted = true
-			Key = string(r)
-			mods = append(mods, "shift") }
-		key = string(unicode.ToLower(r))
-	// special keys...
-	} else if k > tcell.KeyRune || k <= tcell.KeyDEL {
-		key = evt.Name()
-	// ascii...
-	} else {
-		if unicode.IsUpper(rune(k)) {
-			shifted = true 
-			Key = string(k)
-			mods = append(mods, "shift") } 
-		key = strings.ToLower(string(k)) } 
-
-	// split out mods and normalize...
-	key_mods := strings.Split(key, "+")
-	key = key_mods[len(key_mods)-1]
-	if k := []rune(key) ; len(k) == 1 && unicode.IsUpper(k[0]) {
-		key = strings.ToLower(key) }
-	key_mods = key_mods[:len(key_mods)-1]
-
-	// basic translation...
-	if key == " " {
-		key = "Space" }
-
-	if slices.Contains(key_mods, "Ctrl") || 
-			mod & tcell.ModCtrl != 0 {
-		mods = append(mods, "ctrl") }
-	if slices.Contains(key_mods, "Alt") || 
-			mod & tcell.ModAlt != 0 {
-		mods = append(mods, "alt") }
-	if slices.Contains(key_mods, "Meta") || 
-			mod & tcell.ModMeta != 0 {
-		mods = append(mods, "meta") }
-	if !shifted && mod & tcell.ModShift != 0 {
-		mods = append(mods, "shift") }
-
-	return key2keys(mods, key, Key) }
-
 
 
 // Result...
@@ -576,6 +622,9 @@ func (this *Actions) Refresh() Result {
 		Screen.Show()
 	return OK }
 
+// XXX will this stop goroutines?? (TEST)
+// XXX will this work on windows / windows version / disable on windows???
+//		...how do we deal with things like cygwin/MinGW/..???
 func (this *Actions) Stop() Result {
 	screen := this.TcellDrawer.Screen
 	_, ok := screen.Tty()
@@ -783,12 +832,16 @@ func (this *TcellDrawer) handleScrollLimits() *TcellDrawer {
 		this.Lines.Index += delta }
 
 	return this }
+
 func (this *TcellDrawer) ResetCache() *TcellDrawer {
 	this.__style_cache = nil
 	this.__float_cache = nil
 	//this.__int_cache = nil
 	return this }
 
+// Extends Style2TcellStyle(..) by adding cache...
+//
+// XXX do we need this public???
 // XXX URLS are supported but not usable yet as there is no way to set 
 //		the url...
 //		use: "url:<url>"
@@ -796,7 +849,7 @@ func (this *TcellDrawer) ResetCache() *TcellDrawer {
 //		colors in a predictable manner -- currently they reference curent 
 //		colors
 //		...i.e. {"yellow", "foreground"} will set both colors to yellow...
-func (this *TcellDrawer) Style2TcellStyle(style_name string, style Style) tcell.Style {
+func (this *TcellDrawer) style2TcellStyle(style_name string, style Style) tcell.Style {
 	// cache...
 	if this.__style_cache == nil {
 		this.__style_cache = map[string]tcell.Style{} }
@@ -807,66 +860,24 @@ func (this *TcellDrawer) Style2TcellStyle(style_name string, style Style) tcell.
 		this.__style_cache[style_name] = s 
 		return s }
 
-	style2style := func(base tcell.Style, style Style) tcell.Style {
-		// set flags...
-		colors := []string{}
-		for _, s := range style {
-			switch s {
-				case "blink":
-					base = base.Blink(true)
-				case "bold":
-					base = base.Bold(true)
-				case "dim":
-					base = base.Dim(true)
-				case "italic":
-					base = base.Italic(true)
-				case "normal":
-					base = base.Normal()
-				case "reverse":
-					base = base.Reverse(true)
-				case "strike-through":
-					base = base.StrikeThrough(true)
-				case "underline":
-					base = base.Underline(true)
-				default:
-					// urls...
-					if string(s[:len("url")]) == "url" {
-						p := strings.SplitN(s, ":", 2)
-						url := ""
-						if len(p) > 1 {
-							url = p[1] }
-						base = base.Url(url)
-					// colors...
-					} else {
-						colors = append(colors, s) } } }
-		// set the colors...
-		if len(colors) > 0 && 
-				colors[0] != "as-is" {
-			base = base.Foreground(
-				tcell.GetColor(colors[0])) }
-		if len(colors) > 1 &&
-				colors[1] != "as-is" {
-			base = base.Background(
-				tcell.GetColor(colors[1])) }
-		return base }
-
-	// base style...
+	// base style (cached manually)...
 	base, ok := this.__style_cache["default"]
 	if ! ok {
 		_, s := this.Lines.GetStyle("default")
-		base = style2style(tcell.StyleDefault, s) 
+		base = Style2TcellStyle(s) 
 		this.__style_cache["default"] = base } 
 
-	return cache( style2style(base, style) ) }
+	return cache(
+		Style2TcellStyle(style, base)) }
 func (this *TcellDrawer) drawCells(col, row int, str string, style_name string, style Style) {
 	if style_name == "EOL" {
 		return }
-	s := this.Style2TcellStyle(style_name, style)
+	s := this.style2TcellStyle(style_name, style)
 	for i, r := range []rune(str) {
 		this.SetContent(col+i, row, r, nil, s) } }
 func (this *TcellDrawer) Fill() *TcellDrawer {
 	_, s := this.Lines.GetStyle("background")
-	this.Screen.Fill(' ', this.Style2TcellStyle("background", s))
+	this.Screen.Fill(' ', this.style2TcellStyle("background", s))
 	return this }
 func (this *TcellDrawer) Draw() *TcellDrawer {
 	this.
@@ -1093,7 +1104,7 @@ func (this *TcellDrawer) Loop() Result {
 			// keys...
 			case *tcell.EventKey:
 				key_handled := false
-				for _, key := range evt2keys(*evt) {
+				for _, key := range TcellEvent2Keys(*evt) {
 					res := this.HandleKey(key)
 					if res == Missing {
 						log.Println("Key Unhandled:", key)
@@ -1114,7 +1125,7 @@ func (this *TcellDrawer) Loop() Result {
 			case *tcell.EventMouse:
 				buttons := evt.Buttons()
 				// get modifiers...
-				// XXX this is almost the same as in evt2keys(..) can we generalize???
+				// XXX this is almost the same as in TcellEvent2Keys(..) can we generalize???
 				mod := evt.Modifiers()
 				mods := []string{}
 				if mod & tcell.ModCtrl != 0 {
@@ -1253,7 +1264,7 @@ func main(){
 		SpanSeparator: "│",
 		Border: "│┌─┐│└─┘",
 		Title: " Moo %SPAN/",
-		Status: "%SPAN $LINE/$LINES ",
+		Status: "%SPAN${SELECTED:+ ($SELECTED)} $LINE/$LINES ",
 	})
 	lines.Lines.Append(
 		"Some text",
@@ -1263,7 +1274,9 @@ func main(){
 		lines.Lines.Append(fmt.Sprint("bam%SPAN", i)) }
 	lines.Lines.Index = 1
 	lines.Lines.Lines[0].Selected = true
-	lines.Width = "50%"
+
+	log.Println("####", lines.Lines.expandTemplate(lines.Lines.Status, lines.Lines.makeEnv()))
+	//lines.Width = "50%"
 	//lines.Align = []string{"right"}
 	/*/
 	lines := NewTcellLines()
