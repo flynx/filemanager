@@ -1264,7 +1264,9 @@ func main(){
 		SpanSeparator: "│",
 		Border: "│┌─┐│└─┘",
 		Title: " Moo |/",
-		Status: "|${SELECTED:+ ($SELECTED)} $LINE/$LINES ",
+		//Status: "|${SELECTED:!*$F}${SELECTED:+ ($SELECTED)} $LINE/$LINES ",
+		Status: "|${SELECTED:!*}${SELECTED:+($SELECTED)}$F $LINE/$LINES ",
+		//Status: "|${SELECTED:+ ($SELECTED)} $LINE/$LINES ",
 	})
 	lines.Lines.Append(
 		"Some text",

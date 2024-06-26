@@ -869,6 +869,19 @@ func (this *Lines) makeEnv() Env {
 
 	return env }
 
+// Template parsing...
+//
+//	Environment variables
+//		$NAME
+//		${NAME}
+//		${NAME:- .. }
+//		${NAME:+ .. }
+//		${NAME:! .. }
+//
+//	Placeholders
+//		These support the same syntax as the Environment variables with 
+//		the "$" replaced with "%".
+//
 type AST struct {
 	Type rune
 	Head string
@@ -895,14 +908,24 @@ var EXPRESSION_HANDLERS = Expanders {
 	":+": func(value string, ast []AST, expand Expander) string {
 		if value != "" {
 			return expand(ast) }
-		return value },
+		return "" },
+	":!": func(value string, ast []AST, expand Expander) string {
+		if value == "" {
+			return expand(ast) }
+		return "" },
 } 
 var varPattern = regexp.MustCompile(
+	// $$ / %%
 	`([%$]{2}`+
+		// $NAME / %NAME
 		`|[$%][A-z_][A-z0-9_]*`+
+		// ${NAME .. } / %{NAME .. }
 		`|[$%]\{[A-z_][A-z0-9_]*`+
+		// "\}"
 		`|\\\}`+
+		// "}"
 		`|\}`+
+		// normal text...
 		`|[^$%}]*)`)
 // XXX better error handling...
 // XXX should we abstract out os.Getenv(..) ???
@@ -1053,6 +1076,7 @@ func (this *Lines) drawLine(col, row int, sections []string, style string) *Line
 	this.drawCells(col, row, "\n", "EOL")
 	return this }
 
+// NOTE: this adds $F to the env containing the current fill character.
 func (this *Lines) Draw() *Lines {
 	overflow := string(OVERFLOW_INDICATOR)
 	if this.OverflowIndicator != 0 {
@@ -1076,6 +1100,8 @@ func (this *Lines) Draw() *Lines {
 			corner_l = string([]rune(this.Border)[1])
 			corner_r = string([]rune(this.Border)[3]) 
 			border_h = string([]rune(this.Border)[2]) }
+		if _, ok := env["F"]; ! ok {
+			env["F"] = border_h }
 		sections := this.makeSectionChrome(
 			this.expandTemplate(this.Title, env), 
 			this.SpanModeTitle,
@@ -1177,6 +1203,8 @@ func (this *Lines) Draw() *Lines {
 			corner_l = string([]rune(this.Border)[5])
 			corner_r = string([]rune(this.Border)[7])
 			border_h = string([]rune(this.Border)[6]) }
+		if _, ok := env["F"]; ! ok {
+			env["F"] = border_h }
 		sections := this.makeSectionChrome(
 			this.expandTemplate(this.Status, env), 
 			this.SpanModeStatus,
