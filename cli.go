@@ -282,6 +282,7 @@ func key2keys(mods []string, key string, rest ...string) []string {
 	return key_seq }
 
 
+
 // Result...
 //
 type Result int
@@ -619,7 +620,8 @@ func (this *Actions) Refresh() Result {
 	this.
 		updateGeometry().
 		Draw().
-		Screen.Show()
+		Screen.Sync()
+	this.Screen.Show()
 	return OK }
 
 // XXX will this stop goroutines?? (TEST)
@@ -1257,6 +1259,8 @@ func NewTcellLines(l ...Lines) *TcellDrawer {
 
 
 
+// XXX need to separate out stderr to the original tty as it messes up 
+//		ui + keep it redirectable... 
 func main(){
 	//* XXX stub...
 	lines := NewTcellLines(Lines{
