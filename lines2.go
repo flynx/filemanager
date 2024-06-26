@@ -833,6 +833,10 @@ func (this *Lines) makeSectionChrome(str, span string, width int, rest ...string
 	return append([]string{ border_l }, sections...) }
 
 func (this *Lines) makeEnv() Env {
+	fill := " "
+	if this.Filler != 0 {
+		fill = string(this.Filler) }
+	// positioning...
 	l := len(this.Lines)
 	i := this.RowOffset + this.Index
 	// test and friends...
@@ -854,6 +858,8 @@ func (this *Lines) makeEnv() Env {
 		selected = fmt.Sprint(l) }
 
 	env := Env {
+		// XXX revise name...
+		"F": fill,
 		"INDEX": fmt.Sprint(i),
 		"LINE": fmt.Sprint(i + 1),
 		"LINES": fmt.Sprint(l),
@@ -1100,8 +1106,7 @@ func (this *Lines) Draw() *Lines {
 			corner_l = string([]rune(this.Border)[1])
 			corner_r = string([]rune(this.Border)[3]) 
 			border_h = string([]rune(this.Border)[2]) }
-		if _, ok := env["F"]; ! ok {
-			env["F"] = border_h }
+		env["F"] = border_h
 		sections := this.makeSectionChrome(
 			this.expandTemplate(this.Title, env), 
 			this.SpanModeTitle,
@@ -1203,8 +1208,7 @@ func (this *Lines) Draw() *Lines {
 			corner_l = string([]rune(this.Border)[5])
 			corner_r = string([]rune(this.Border)[7])
 			border_h = string([]rune(this.Border)[6]) }
-		if _, ok := env["F"]; ! ok {
-			env["F"] = border_h }
+		env["F"] = border_h
 		sections := this.makeSectionChrome(
 			this.expandTemplate(this.Status, env), 
 			this.SpanModeStatus,
