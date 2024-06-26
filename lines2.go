@@ -7,7 +7,7 @@ import (
 	"io"
 	"strings"
 	"strconv"
-	//"slices"
+	"slices"
 	"bufio"
 	"sync"
 	"regexp"
@@ -907,14 +907,35 @@ var PLACEHOLDERS = Placeholders {
 type Expander func([]AST) string
 type Expanders map[string]func(string, []AST, Expander) string
 var EXPRESSION_HANDLERS = Expanders {
+	// ${NAME?A:B}
+	"?": func(value string, ast []AST, expand Expander) string {
+		// split the ast at ":"...
+		A := ast
+		B := []AST{}
+		for i, e := range ast {
+			if e.Type == 0 {
+				parts := strings.SplitN(e.Head, ":", 2)
+				// we have a hit...
+				if len(parts) > 1 {
+					B = slices.Clone(ast[i:])
+					A = ast[:i]
+					A = append(A, AST{ Head: parts[0] })
+					B[i].Head = parts[1]
+					break } } }
+		if value != "" {
+			return expand(A) } 
+		return expand(B) },
+	// ${NAME:-DEFAULT}
 	":-": func(value string, ast []AST, expand Expander) string {
 		if value == "" {
 			return expand(ast) }
 		return value },
+	// ${NAME:+ALTERNATIVE}
 	":+": func(value string, ast []AST, expand Expander) string {
 		if value != "" {
 			return expand(ast) }
 		return "" },
+	// ${NAME:!IF_UNSET}
 	":!": func(value string, ast []AST, expand Expander) string {
 		if value == "" {
 			return expand(ast) }

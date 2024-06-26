@@ -144,6 +144,22 @@ func TestTeplateExpansion(t *testing.T){
 	env["TEST"] = "FOO"
 	test("${TEST:-MOO} (set)", env, "FOO (set)") 
 	test("${TEST:+MOO} (set)", env, "MOO (set)") 
+
+	env["TEST"] = ""
+	test("${TEST:!MOO} (unset)", env, "MOO (unset)") 
+	env["TEST"] = "moo"
+	test("${TEST:!MOO} (set)", env, " (set)") 
+
+	env["TEST"] = ""
+	test("${TEST?A:B} (unset)", env, "B (unset)") 
+	test("${TEST?:B} (unset)", env, "B (unset)") 
+	test("${TEST?A:} (unset)", env, " (unset)") 
+	test("${TEST?A} (unset)", env, " (unset)") 
+	env["TEST"] = "moo"
+	test("${TEST?A:B} (set)", env, "A (set)") 
+	test("${TEST?A:} (set)", env, "A (set)") 
+	test("${TEST?A} (set)", env, "A (set)") 
+	test("${TEST?:B} (set)", env, " (set)") 
 }
 
 func TestTeplateCMD(t *testing.T){
