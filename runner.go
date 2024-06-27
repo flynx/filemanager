@@ -154,10 +154,10 @@ func (this *Cmd) Kill() *Cmd {
 func (this *Cmd) Write(data []byte) *Cmd {
 	this.Stdin.Write(data) 
 	return this }
-func (this *Cmd) WriteString(str string) *Cmd {
+func (this *Cmd) WriteString(str string) (int, error) {
 	// XXX how do we handle errors (.Stdin can be nil/closed/..)???
-	io.WriteString(this.Stdin, str) 
-	return this }
+	return io.WriteString(this.Stdin, str) }
+
 
 
 // vim:set ts=4 sw=4 nowrap :

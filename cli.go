@@ -19,11 +19,11 @@ import (
 	"reflect"
 	"time"
 	//"io"
+	"bufio"
 	"runtime"
 	//"bytes"
 	"strings"
 	"unicode"
-	//"bufio"
 	"strconv"
 	"slices"
 	//"regexp"
@@ -617,11 +617,7 @@ func (this *Actions) Update() Result {
 	return res }
 //*/
 func (this *Actions) Refresh() Result {
-	this.
-		updateGeometry().
-		Draw().
-		Screen.Sync()
-	this.Screen.Show()
+	this.TcellDrawer.Refresh()
 	return OK }
 
 // XXX will this stop goroutines?? (TEST)
@@ -690,6 +686,8 @@ type TcellDrawer struct {
 	//		"" | "active"
 	EmptySpace string
 
+
+	Transformer *Cmd
 
 	// caches...
 	// NOTE: in normal use-cases the stuff cached here is static and 
@@ -887,6 +885,13 @@ func (this *TcellDrawer) Draw() *TcellDrawer {
 		// XXX do this separately...
 		Fill().
 		Lines.Draw()
+	return this }
+func (this *TcellDrawer) Refresh() *TcellDrawer {
+	this.
+		updateGeometry().
+		Draw().
+		Screen.Sync()
+	this.Screen.Show()
 	return this }
 
 // XXX not done yet...
@@ -1258,6 +1263,59 @@ func NewTcellLines(l ...Lines) *TcellDrawer {
 
 
 
+/* XXX not sure about the API yet...
+func (this *TcellDrawer) Append(str string) *TcellDrawer {
+	this.Lines.Append(str)
+	// XXX do transform...
+	return this }
+//*/
+// XXX BUG: this sometimes produces an empty list...
+func (this *TcellDrawer) ReadFromCmd(cmd string) chan bool {
+	this.Lines.Clear()
+	running := make(chan bool)
+	c, err := Run(cmd, nil)
+	if err != nil {
+		log.Panic(err) }
+	go func(){
+		// update...
+		done := false
+		go func(){
+			for {
+				time.Sleep(time.Millisecond*20)
+				this.Refresh()
+				if done {
+					return } } }()
+		// load...
+		scanner := bufio.NewScanner(c.Stdout)
+		for scanner.Scan() {
+			this.Append(scanner.Text()) } 
+		done = true 
+		close(running) }()
+	return running }
+// XXX EXPERIMENTAL...
+// XXX should we transform the existing lines???
+func (this *TcellDrawer) TransformCmd(cmd string) *TcellDrawer {
+	c, _, err := RunFilter(
+		cmd, 
+		func(str string){
+			log.Println("<<<", str)
+			this.Lines.Append(str) })
+	if err != nil {
+		log.Panic(err) }
+	this.Transformer = c
+	return this }
+func (this *TcellDrawer) Append(str string) *TcellDrawer {
+	if this.Transformer != nil {
+		log.Println(">>>", str)
+		_, err := this.Transformer.WriteString(str +"\n")
+		if err != nil {
+			log.Panic(err) }
+	} else {
+		this.Lines.Append(str) }
+	return this }
+
+
+
 
 // XXX need to separate out stderr to the original tty as it messes up 
 //		ui + keep it redirectable... 
@@ -1267,11 +1325,10 @@ func main(){
 		SpanMode: "*,5",
 		SpanSeparator: "│",
 		Border: "│┌─┐│└─┘",
-		Title: " Moo |/",
-		//Status: "|${SELECTED:!*$F}${SELECTED:+ ($SELECTED)} $LINE/$LINES ",
+		Title: " $TEXT |/",
 		Status: "|${SELECTED:!*}${SELECTED:+($SELECTED)}$F $LINE/$LINES ",
-		//Status: "|${SELECTED:+ ($SELECTED)} $LINE/$LINES ",
 	})
+	/* XXX
 	lines.Lines.Append(
 		"Some text",
 		"Current|",
@@ -1280,8 +1337,15 @@ func main(){
 		lines.Lines.Append(fmt.Sprint("bam|", i)) }
 	lines.Lines.Index = 1
 	lines.Lines.Lines[0].Selected = true
+	/*/
+	fmt.Println("start")
+	// XXX for some reason cat works but grep does not...
+	lines.TransformCmd("grep go")
+	//lines.TransformCmd("sed 's/.*/moo/'")
+	//lines.TransformCmd("cat")
+	lines.ReadFromCmd("ls")
+	//*/
 
-	log.Println("####", lines.Lines.expandTemplate(lines.Lines.Status, lines.Lines.makeEnv()))
 	//lines.Width = "50%"
 	//lines.Align = []string{"right"}
 	/*/

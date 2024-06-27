@@ -84,7 +84,8 @@ func TestBasics(t *testing.T){
 // XXX this can sometimes truncate output -- sync error??
 func TestRun(t *testing.T){
 	cmd, in, err := RunFilter(
-		"cat", 
+		//"cat", 
+		"grep moo", 
 		func(line string){
 			fmt.Println("    >>", line) })
 	if err != nil {

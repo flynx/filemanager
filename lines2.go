@@ -243,6 +243,7 @@ func (this *LinesBuffer) Push(lines ...string) *LinesBuffer {
 			this.Width = l } }
 	return this }
 // like .Push(..) but can accept io.Reader's...
+// XXX should this return indexes???
 func (this *LinesBuffer) Append(strs ...any) *LinesBuffer {
 	for _, in := range strs {
 		switch in.(type) {
@@ -868,7 +869,7 @@ func (this *Lines) makeEnv() Env {
 		"TEXT_RIGHT": text_right,
 		"SELECTION": strings.Join(selection, "\n"),
 		"SELECTED": selected,
-		// XXX ACTIVE -- selection or current...
+		//"ACTIVE": strings.Join(this.Active(), "\n"),
 	}
 	for k, v := range this.Env {
 		env[k] = v }
@@ -1174,9 +1175,13 @@ func (this *Lines) Draw() *Lines {
 			s := this.SpanMarker
 			if s == "" {
 				s = SPAN_MARKER }
-			n := int(float64(len(sections) - 3) / 2)
-			// XXX we can directly generate a slice instead of parsing this...
-			text = strings.Repeat(s, n) }
+			// no lines in buffer or last line was empty...
+			if len(sections) == 0 {
+				text = ""
+			} else {
+				n := int(float64(len(sections) - 3) / 2)
+				// XXX we can directly generate a slice instead of parsing this...
+				text = strings.Repeat(s, n) } }
 		// line...
 		if scrollbar || 
 				! this.OverflowOverBorder {
