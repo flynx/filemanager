@@ -59,9 +59,9 @@ func RunFilter(code string, handler LineHandler) (*Cmd, io.WriteCloser, error) {
 	cmd, err := Run(code, out)
 	if err != nil {
 		return cmd, in, err }
+	cmd.Stdin = in
 	if cmd, err = cmd.HandleLine(handler); err != nil {
 		return cmd, in, err }
-	cmd.Stdin = in
 	return cmd, in, nil }
 
 

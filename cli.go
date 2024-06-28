@@ -104,9 +104,9 @@ func TcellEvent2Keys(evt tcell.EventKey) []string {
 	} else {
 		if unicode.IsUpper(rune(k)) {
 			shifted = true 
-			Key = string(k)
+			Key = string(rune(k))
 			mods = append(mods, "shift") } 
-		key = strings.ToLower(string(k)) } 
+		key = strings.ToLower(string(rune(k))) } 
 
 	// split out mods and normalize...
 	key_mods := strings.Split(key, "+")
@@ -1340,9 +1340,9 @@ func main(){
 	/*/
 	fmt.Println("start")
 	// XXX for some reason cat works but grep does not...
-	lines.TransformCmd("grep go")
+	//lines.TransformCmd("grep go")
 	//lines.TransformCmd("sed 's/.*/moo/'")
-	//lines.TransformCmd("cat")
+	lines.TransformCmd("cat")
 	lines.ReadFromCmd("ls")
 	//*/
 

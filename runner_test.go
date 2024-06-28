@@ -104,4 +104,31 @@ func TestRun(t *testing.T){
 	<-cmd.Done
 }
 
+func TestFilter(t *testing.T){
+	filter, _, err := RunFilter(
+		// XXX MAGIC: cat works, grep does not for some reason...
+		//"sed 's/go/GO/g'",
+		"grep go", 
+		//"cat", 
+		func(line string){
+			fmt.Println("    <<", line) })
+	if err != nil {
+		t.Fatal(err) }
+
+	runner, _ := Run("ls", nil) 
+	scanner := bufio.NewScanner(runner.Stdout)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		fmt.Println("    >>", line)
+		filter.WriteString(line +"\n") }
+
+	filter.WriteString("moo\n")
+	filter.WriteString("go\n")
+
+	time.Sleep(time.Second)
+
+	fmt.Println("done.")
+}
+
 
