@@ -65,8 +65,12 @@ func TestRawPipe(t *testing.T){
 	done := make(chan bool)
 
 	// NOTE  grep/sed/awk seem to be buffering output in non tty pipes...
-	filter := exec.Command("bash", "-c", "grep --line-buffered go")
-	//filter := exec.Command("bash", "-c", "stdbuf -i0 -o0 -e0 grep go")
+	//		see: 
+	//			command buffer options, stdbuf, script and socat as ways around this...
+	//		also see:
+	//			https://unix.stackexchange.com/questions/25372/how-to-turn-off-stdout-buffering-in-a-pipe
+	//filter := exec.Command("bash", "-c", "grep --line-buffered go")
+	filter := exec.Command("bash", "-c", "stdbuf -i0 -o0 -e0 grep go")
 	in, _ := filter.StdinPipe()
 	out, _ := filter.StdoutPipe()
 	go func(){
@@ -167,3 +171,4 @@ func TestFilter(t *testing.T){
 }
 
 
+// vim:set ts=4 sw=4 nowrap :
