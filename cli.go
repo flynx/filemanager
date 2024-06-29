@@ -1295,7 +1295,7 @@ func (this *TcellDrawer) ReadFromCmd(cmd string) chan bool {
 // XXX EXPERIMENTAL...
 // XXX should we transform the existing lines???
 func (this *TcellDrawer) TransformCmd(cmd string) *TcellDrawer {
-	c, _, err := RunFilter(
+	c, err := RunFilter(
 		cmd, 
 		func(str string){
 			log.Println("<<<", str)

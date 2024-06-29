@@ -61,6 +61,39 @@ func TestRaw(t *testing.T){
 	fmt.Println("done.")
 }
 
+func TestRawPipe(t *testing.T){
+
+	done := make(chan bool)
+
+	// XXX for some reason grep waits for pipe to close here but cat does not...
+	filter := exec.Command("bash", "-c", "grep go")
+	//filter := exec.Command("bash", "-c", "cat")
+	in, _ := filter.StdinPipe()
+	out, _ := filter.StdoutPipe()
+	go func(){
+		defer close(done) 
+		defer out.Close()
+		scanner := bufio.NewScanner(out)
+		for scanner.Scan() {
+			fmt.Println("  out:", scanner.Text()) } }()
+	filter.Start()
+
+	source := exec.Command("bash", "-c", "ls")
+	src, _ := source.StdoutPipe()
+	go func(){
+		defer in.Close() 
+		scanner := bufio.NewScanner(src)
+		for scanner.Scan() {
+			time.Sleep(time.Millisecond*50)
+			line := scanner.Text()
+			fmt.Println("src:", line)
+			io.WriteString(in, line +"\n") } }()
+	source.Start()
+
+	<-done
+	fmt.Println("done.")
+}
+
 // XXX this can sometimes truncate output -- sync error??
 func TestBasics(t *testing.T){
 	c := Cmd{}
@@ -83,7 +116,7 @@ func TestBasics(t *testing.T){
 
 // XXX this can sometimes truncate output -- sync error??
 func TestRun(t *testing.T){
-	cmd, in, err := RunFilter(
+	cmd, err := RunFilter(
 		//"cat", 
 		"grep moo", 
 		func(line string){
@@ -92,20 +125,20 @@ func TestRun(t *testing.T){
 		t.Fatal(err) }
 
 	//time.Sleep(time.Second)
-	io.WriteString(in, "foo\n")
+	io.WriteString(cmd.Stdin, "foo\n")
 	cmd.WriteString("moo\n")
 	time.Sleep(time.Second)
 	cmd.WriteString("boo\n")
 	cmd.WriteString("moo\n")
 
 	fmt.Println("async")
-	in.Close()
+	cmd.Stdin.Close()
 
 	<-cmd.Done
 }
 
 func TestFilter(t *testing.T){
-	filter, _, err := RunFilter(
+	filter, err := RunFilter(
 		// XXX MAGIC: cat works, grep does not for some reason...
 		//"sed 's/go/GO/g'",
 		"grep go", 
@@ -127,6 +160,8 @@ func TestFilter(t *testing.T){
 	filter.WriteString("go\n")
 
 	time.Sleep(time.Second)
+
+	filter.Stdin.Close()
 
 	fmt.Println("done.")
 }

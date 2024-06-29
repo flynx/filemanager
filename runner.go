@@ -53,16 +53,14 @@ func Run(code string, stdin io.Reader) (*Cmd, error) {
 	if c, err := cmd.Run(code, stdin) ; err != nil {
 		return c, err }
 	return &cmd, nil }
-func RunFilter(code string, handler LineHandler) (*Cmd, io.WriteCloser, error) {
-	out, in := io.Pipe()
+func RunFilter(code string, handler LineHandler) (*Cmd, error) {
 	// XXX error handling makes this code quite ugly, is there a clearer way to do this???
-	cmd, err := Run(code, out)
+	cmd, err := Run(code, nil)
 	if err != nil {
-		return cmd, in, err }
-	cmd.Stdin = in
+		return cmd, err }
 	if cmd, err = cmd.HandleLine(handler); err != nil {
-		return cmd, in, err }
-	return cmd, in, nil }
+		return cmd, err }
+	return cmd, nil }
 
 
 type LineHandler func(string)
