@@ -62,12 +62,11 @@ func TestRaw(t *testing.T){
 }
 
 func TestRawPipe(t *testing.T){
-
 	done := make(chan bool)
 
-	// XXX for some reason grep waits for pipe to close here but cat does not...
-	filter := exec.Command("bash", "-c", "grep go")
-	//filter := exec.Command("bash", "-c", "cat")
+	// NOTE  grep/sed/awk seem to be buffering output in non tty pipes...
+	filter := exec.Command("bash", "-c", "grep --line-buffered go")
+	//filter := exec.Command("bash", "-c", "stdbuf -i0 -o0 -e0 grep go")
 	in, _ := filter.StdinPipe()
 	out, _ := filter.StdoutPipe()
 	go func(){
@@ -84,7 +83,8 @@ func TestRawPipe(t *testing.T){
 		defer in.Close() 
 		scanner := bufio.NewScanner(src)
 		for scanner.Scan() {
-			time.Sleep(time.Millisecond*50)
+			// allow time for grep to do its thing...
+			time.Sleep(time.Millisecond*5)
 			line := scanner.Text()
 			fmt.Println("src:", line)
 			io.WriteString(in, line +"\n") } }()
