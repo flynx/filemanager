@@ -22,11 +22,13 @@ import (
 
 
 var SHELL = "bash -c"
+var PREFIX = "stdbuf -i0 -oL -eL"
 
 type Cmd struct {
 	*exec.Cmd
 
 	Shell string
+	Prefix string
 	Code string
 
 	State string
@@ -53,9 +55,19 @@ func Run(code string, stdin io.Reader) (*Cmd, error) {
 	if c, err := cmd.Run(code, stdin) ; err != nil {
 		return c, err }
 	return &cmd, nil }
+func Piped(code string) (*Cmd, error) {
+	cmd := Cmd{
+		Code: code,
+	}
+	r, w := io.Pipe()
+	if c, err := cmd.Run(code, r) ; err != nil {
+		return c, err }
+	cmd.Stdin = w
+	return &cmd, nil }
+// XXX do we need this...
 func RunFilter(code string, handler LineHandler) (*Cmd, error) {
 	// XXX error handling makes this code quite ugly, is there a clearer way to do this???
-	cmd, err := Run(code, nil)
+	cmd, err := Piped(code)
 	if err != nil {
 		return cmd, err }
 	if cmd, err = cmd.HandleLine(handler); err != nil {
@@ -63,6 +75,7 @@ func RunFilter(code string, handler LineHandler) (*Cmd, error) {
 	return cmd, nil }
 
 
+// XXX list of function???
 type LineHandler func(string)
 func (this *Cmd) HandleLine(handler LineHandler) (*Cmd, error) {
 	if this.LineHandler != nil {
@@ -88,9 +101,12 @@ func (this *Cmd) Run(code string, stdin io.Reader) (*Cmd, error) {
 	shell := this.Shell
 	if shell == "" {
 		shell = SHELL }
+	prefix := this.Prefix
+	if prefix == "" {
+		prefix = PREFIX }
 	s := strings.Fields(shell)
 	// setup the command...
-	cmd := exec.Command(s[0], append(s[1:], code)...)
+	cmd := exec.Command(s[0], append(s[1:], prefix +" "+ code)...)
 	this.Cmd = cmd
 	//cmd.Env = this.makeEnv()
 	this.State = "ready"
@@ -140,6 +156,9 @@ func (this *Cmd) Run(code string, stdin io.Reader) (*Cmd, error) {
 		done <- done_state }()
 
 	return this, nil }
+// XXX revise return value...
+func (this *Cmd) Pipe(code string) (*Cmd, error) {
+	return Run(code, this.Stdout) }
 func (this *Cmd) Kill() *Cmd {
 	if this.Cmd != nil {
 		this.Process.Kill() }

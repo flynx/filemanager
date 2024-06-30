@@ -69,8 +69,9 @@ func TestRawPipe(t *testing.T){
 	//			command buffer options, stdbuf, script and socat as ways around this...
 	//		also see:
 	//			https://unix.stackexchange.com/questions/25372/how-to-turn-off-stdout-buffering-in-a-pipe
+	// XXX should stdbuf be prefixed by default???
 	//filter := exec.Command("bash", "-c", "grep --line-buffered go")
-	filter := exec.Command("bash", "-c", "stdbuf -i0 -o0 -e0 grep go")
+	filter := exec.Command("bash", "-c", "stdbuf -i0 -oL -eL grep go")
 	in, _ := filter.StdinPipe()
 	out, _ := filter.StdoutPipe()
 	go func(){
@@ -120,9 +121,10 @@ func TestBasics(t *testing.T){
 
 // XXX this can sometimes truncate output -- sync error??
 func TestRun(t *testing.T){
-	cmd, err := RunFilter(
-		//"cat", 
-		"grep moo", 
+	cmd, err := Piped("grep moo")
+	if err != nil {
+		t.Fatal(err) }
+	_, err = cmd.HandleLine(
 		func(line string){
 			fmt.Println("    >>", line) })
 	if err != nil {
@@ -141,12 +143,10 @@ func TestRun(t *testing.T){
 	<-cmd.Done
 }
 
+/* XXX
 func TestFilter(t *testing.T){
 	filter, err := RunFilter(
-		// XXX MAGIC: cat works, grep does not for some reason...
-		//"sed 's/go/GO/g'",
-		"grep go", 
-		//"cat", 
+		"sed 's/go/GO/g'",
 		func(line string){
 			fmt.Println("    <<", line) })
 	if err != nil {
@@ -168,6 +168,36 @@ func TestFilter(t *testing.T){
 	filter.Stdin.Close()
 
 	fmt.Println("done.")
+}
+//*/
+
+
+func TestPipe(t *testing.T){
+	a, _ := Run("ls", nil)
+	b, _ := a.Pipe("grep go")
+
+	scanner := bufio.NewScanner(b.Stdout)
+	for scanner.Scan() {
+		line := scanner.Text()
+		fmt.Println("    >>", line) }
+}
+
+// XXX BUG: this does not stop...
+func TestPipeManual(t *testing.T){
+	piped, _ := Piped("grep go")
+
+	source, _ := Run("ls", nil)
+	source.HandleLine(func(line string){
+		fmt.Println("src:", line)
+		io.WriteString(piped.Stdin, line +"\n") })
+
+	scanner := bufio.NewScanner(piped.Stdout)
+	for scanner.Scan() {
+		line := scanner.Text()
+		fmt.Println("  out:", line) }
+
+	<-source.Done
+	fmt.Println("done")
 }
 
 
