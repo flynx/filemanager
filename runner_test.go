@@ -175,8 +175,10 @@ func TestFilter(t *testing.T){
 func TestPipe(t *testing.T){
 	a, _ := Run("ls", nil)
 	b, _ := a.Pipe("grep go")
+	c, _ := b.Pipe("sed 's/$/ moo!!/'")
 
-	scanner := bufio.NewScanner(b.Stdout)
+
+	scanner := bufio.NewScanner(c.Stdout)
 	for scanner.Scan() {
 		line := scanner.Text()
 		fmt.Println("    >>", line) }
