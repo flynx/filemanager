@@ -177,11 +177,13 @@ func TestPipe(t *testing.T){
 	b, _ := a.Pipe("grep go")
 	c, _ := b.Pipe("sed 's/$/ moo!!/'")
 
-
 	scanner := bufio.NewScanner(c.Stdout)
 	for scanner.Scan() {
 		line := scanner.Text()
 		fmt.Println("    >>", line) }
+
+	<-a.Done
+	fmt.Println("done")
 }
 
 // XXX BUG: this does not stop...
@@ -193,6 +195,8 @@ func TestPipeManual(t *testing.T){
 		fmt.Println("src:", line)
 		io.WriteString(piped.Stdin, line +"\n") })
 
+	// XXX for some reason this does not stop...
+	//		...is piped.Stdout closing...
 	scanner := bufio.NewScanner(piped.Stdout)
 	for scanner.Scan() {
 		line := scanner.Text()

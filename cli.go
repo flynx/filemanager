@@ -1295,8 +1295,8 @@ func (this *TcellDrawer) ReadFromCmd(cmd string) chan bool {
 // XXX EXPERIMENTAL...
 // XXX should we transform the existing lines???
 func (this *TcellDrawer) TransformCmd(cmd string) *TcellDrawer {
-	c, err := RunFilter(
-		cmd, 
+	c, err := Piped(cmd)
+	c.HandleLine(
 		func(str string){
 			log.Println("<<<", str)
 			this.Lines.Append(str) })
@@ -1339,10 +1339,11 @@ func main(){
 	lines.Lines.Lines[0].Selected = true
 	/*/
 	fmt.Println("start")
-	// XXX for some reason cat works but grep does not...
-	//lines.TransformCmd("grep go")
-	//lines.TransformCmd("sed 's/.*/moo/'")
-	lines.TransformCmd("cat")
+	// XXX BUG: sometimes the list is rendered partially...
+	//			...this could either be because of a "hang" or something
+	//			breaking...
+	//			...seems stable without the filter...
+	lines.TransformCmd("sed 's/$/|/'")
 	lines.ReadFromCmd("ls")
 	//*/
 

@@ -55,6 +55,8 @@ func Run(code string, stdin io.Reader) (*Cmd, error) {
 	if c, err := cmd.Run(code, stdin) ; err != nil {
 		return c, err }
 	return &cmd, nil }
+
+
 func Piped(code string) (*Cmd, error) {
 	cmd := Cmd{
 		Code: code,
@@ -64,6 +66,8 @@ func Piped(code string) (*Cmd, error) {
 		return c, err }
 	cmd.Stdin = w
 	return &cmd, nil }
+
+
 // XXX do we need this...
 func RunFilter(code string, handler LineHandler) (*Cmd, error) {
 	// XXX error handling makes this code quite ugly, is there a clearer way to do this???
