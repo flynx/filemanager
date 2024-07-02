@@ -1269,7 +1269,8 @@ func (this *TcellDrawer) Append(str string) *TcellDrawer {
 	// XXX do transform...
 	return this }
 //*/
-// XXX BUG: this sometimes produces an empty list...
+// XXX BUG: this sometimes does not go through the whole list...
+//		...does Run(..) close .Stdout too early???
 func (this *TcellDrawer) ReadFromCmd(cmd string) chan bool {
 	this.Lines.Clear()
 	running := make(chan bool)
@@ -1277,7 +1278,7 @@ func (this *TcellDrawer) ReadFromCmd(cmd string) chan bool {
 	if err != nil {
 		log.Panic(err) }
 	go func(){
-		// update...
+		// update periodically untill we are done...
 		done := false
 		go func(){
 			for {
@@ -1288,7 +1289,10 @@ func (this *TcellDrawer) ReadFromCmd(cmd string) chan bool {
 		// load...
 		scanner := bufio.NewScanner(c.Stdout)
 		for scanner.Scan() {
-			this.Append(scanner.Text()) } 
+			txt := scanner.Text()
+			log.Println("read:", txt)
+			this.Append(txt) } 
+			//this.Append(scanner.Text()) } 
 		done = true 
 		close(running) }()
 	return running }
@@ -1298,7 +1302,7 @@ func (this *TcellDrawer) TransformCmd(cmd string) *TcellDrawer {
 	c, err := Piped(cmd)
 	c.HandleLine(
 		func(str string){
-			log.Println("<<<", str)
+			log.Println("    updated:", str)
 			this.Lines.Append(str) })
 	if err != nil {
 		log.Panic(err) }
@@ -1306,7 +1310,7 @@ func (this *TcellDrawer) TransformCmd(cmd string) *TcellDrawer {
 	return this }
 func (this *TcellDrawer) Append(str string) *TcellDrawer {
 	if this.Transformer != nil {
-		log.Println(">>>", str)
+		log.Println("  append:", str)
 		_, err := this.Transformer.WriteString(str +"\n")
 		if err != nil {
 			log.Panic(err) }
@@ -1339,11 +1343,8 @@ func main(){
 	lines.Lines.Lines[0].Selected = true
 	/*/
 	fmt.Println("start")
-	// XXX BUG: sometimes the list is rendered partially...
-	//			...this could either be because of a "hang" or something
-	//			breaking...
-	//			...seems stable without the filter...
 	lines.TransformCmd("sed 's/$/|/'")
+	// XXX BUG: sometimes the list is rendered partially...
 	lines.ReadFromCmd("ls")
 	//*/
 

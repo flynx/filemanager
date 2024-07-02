@@ -61,6 +61,83 @@ func TestRaw(t *testing.T){
 	fmt.Println("done.")
 }
 
+// XXX both of these sometimes do not do the full list...
+//		...no errors...
+//		...seems to either be a Go broblem or something else we're not 
+//		handling here...
+var TestRawFull_Count = 10000
+func TestRawFull(t *testing.T){
+	start := true
+	prev := 0
+	s := 0
+	for i := 0; i < TestRawFull_Count; i++ {
+		n := 0
+		done := make(chan bool)
+		done_output := make(chan bool)
+		started := false
+		c := exec.Command("bash", "-c", "ls")
+		out, _ := c.StdoutPipe()
+		go func(){
+			scanner := bufio.NewScanner(out)
+			for scanner.Scan() {
+				if ! started {
+					close(done_output) 
+					started = true }
+				scanner.Text() 
+				n++ } }()
+		if err := c.Start(); err != nil {
+			fmt.Println("!!! START:", err) }
+		go func(){
+			// XXX this seems to fix the issue...
+			//		...the problem seems to be in that calling .Wait() 
+			//		too early breaks something -- `<-done_output` after 
+			//		wait has no effect...
+			// XXX the issue still preceists but quite rarely...
+			<-done_output
+			if err := c.Wait(); err != nil {
+				fmt.Println("!!! WAIT:", err) }
+			if start {
+				fmt.Print("->", n)
+				start = false
+				prev = n
+			} else if n != prev {
+				fmt.Print("\n->", n)
+				prev = n
+				s++
+			} else {
+				fmt.Print(".") }
+			close(done) }()
+		<-done }
+	fmt.Println("") 
+	if s > 0 {
+		t.Errorf("Skipped part of the output %v times of %v", s, TestRawFull_Count) } }
+func TestRunFull(t *testing.T){
+	start := true
+	prev := 0
+	for i := 0; i < TestRawFull_Count; i++ {
+		n := 0
+		c, _ := Run("ls", nil)
+		out := c.Stdout
+		go func(){
+			scanner := bufio.NewScanner(out)
+			for scanner.Scan() {
+				scanner.Text() 
+				//txt := scanner.Text() 
+				//fmt.Println("  ", txt)
+				n++ } }()
+		<-c.Done
+		if start {
+			fmt.Print("->", n)
+			start = false
+			prev = n
+		} else if n != prev {
+			fmt.Print("\n->", n)
+			prev = n
+		} else {
+			fmt.Print(".") } }
+	fmt.Println("") }
+
+
 func TestRawPipe(t *testing.T){
 	done := make(chan bool)
 
