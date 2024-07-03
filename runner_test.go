@@ -4,6 +4,7 @@ package main
 import (
 	"testing"
 	//"bytes"
+	"os"
 	"io"
 	"bufio"
 	//"strconv"
@@ -65,26 +66,21 @@ func TestRaw(t *testing.T){
 //		...no errors...
 //		...seems to either be a Go broblem or something else we're not 
 //		handling here...
-var TestRawFull_Count = 100
+var TestRawFull_Count = 1000
 func TestError(t *testing.T){
-	start := true
-	prev := 0
+	files, _ := os.ReadDir(".")
+	c := len(files) + 2
 	s := 0
 	report := func(n int) {
-		if start {
-			fmt.Print("->", n)
-			start = false
-			prev = n
-		} else if n != prev {
-			fmt.Print("\n->", n)
-			prev = n
+		if n != c {
+			fmt.Printf("\nListed: %v of %v (no errors)\n", n, c)
 			s++
 		} else {
 			fmt.Print(".") } }
 	for i := 0; i < TestRawFull_Count; i++ {
 		n := 0
 		done := make(chan bool)
-		c := exec.Command("ls")
+		c := exec.Command("ls", "-a")
 		out, _ := c.StdoutPipe()
 		go func(){
 			scanner := bufio.NewScanner(out)
