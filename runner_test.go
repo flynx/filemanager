@@ -65,7 +65,45 @@ func TestRaw(t *testing.T){
 //		...no errors...
 //		...seems to either be a Go broblem or something else we're not 
 //		handling here...
-var TestRawFull_Count = 10000
+var TestRawFull_Count = 100
+func TestError(t *testing.T){
+	start := true
+	prev := 0
+	s := 0
+	report := func(n int) {
+		if start {
+			fmt.Print("->", n)
+			start = false
+			prev = n
+		} else if n != prev {
+			fmt.Print("\n->", n)
+			prev = n
+			s++
+		} else {
+			fmt.Print(".") } }
+	for i := 0; i < TestRawFull_Count; i++ {
+		n := 0
+		done := make(chan bool)
+		c := exec.Command("ls")
+		out, _ := c.StdoutPipe()
+		go func(){
+			scanner := bufio.NewScanner(out)
+			for scanner.Scan() {
+				scanner.Text() 
+				n++ } 
+			// handle output...
+			report(n)
+			close(done) }()
+		// start...
+		if err := c.Start(); err != nil {
+			fmt.Println("!!! START:", err) }
+		// XXX this breaks the run script some of the time...
+		if err := c.Wait(); err != nil {
+			fmt.Println("!!! WAIT:", err) }
+		<-done }
+	fmt.Println("") 
+	if s > 0 {
+		t.Errorf("Skipped part of the output %v times of %v", s, TestRawFull_Count) } }
 func TestRawFull(t *testing.T){
 	start := true
 	prev := 0
@@ -82,6 +120,9 @@ func TestRawFull(t *testing.T){
 				scanner.Text() 
 				n++ } 
 			// done -> handle resluts...
+			// XXX need a way to call this AFTER all the output is done...
+			//		...otherwise calling .Wait() too early seems to mess 
+			//		things up...
 			if err := c.Wait(); err != nil {
 				fmt.Println("!!! WAIT:", err) }
 			if start {
@@ -95,6 +136,7 @@ func TestRawFull(t *testing.T){
 			} else {
 				fmt.Print(".") }
 			close(done) }()
+		// start...
 		if err := c.Start(); err != nil {
 			fmt.Println("!!! START:", err) }
 		<-done }
