@@ -73,27 +73,15 @@ func TestRawFull(t *testing.T){
 	for i := 0; i < TestRawFull_Count; i++ {
 		n := 0
 		done := make(chan bool)
-		done_output := make(chan bool)
-		started := false
 		c := exec.Command("bash", "-c", "ls")
 		out, _ := c.StdoutPipe()
 		go func(){
 			scanner := bufio.NewScanner(out)
+			// handle output...
 			for scanner.Scan() {
-				if ! started {
-					close(done_output) 
-					started = true }
 				scanner.Text() 
-				n++ } }()
-		if err := c.Start(); err != nil {
-			fmt.Println("!!! START:", err) }
-		go func(){
-			// XXX this seems to fix the issue...
-			//		...the problem seems to be in that calling .Wait() 
-			//		too early breaks something -- `<-done_output` after 
-			//		wait has no effect...
-			// XXX the issue still preceists but quite rarely...
-			<-done_output
+				n++ } 
+			// done -> handle resluts...
 			if err := c.Wait(); err != nil {
 				fmt.Println("!!! WAIT:", err) }
 			if start {
@@ -107,6 +95,8 @@ func TestRawFull(t *testing.T){
 			} else {
 				fmt.Print(".") }
 			close(done) }()
+		if err := c.Start(); err != nil {
+			fmt.Println("!!! START:", err) }
 		<-done }
 	fmt.Println("") 
 	if s > 0 {
