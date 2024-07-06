@@ -42,6 +42,19 @@ func main() {
 			fmt.Println("!!! START:", err)
 		}
 		// XXX this breaks the run script some of the time...
+		// NOTE: there is an unpatched race in .Wait() so it mist either 
+		//		be called when the command is done with it's output or
+		//		the cleanup should be done manually...
+		//		...doing this would force one of two architectural 
+		//		approaches:
+		//			- existing Go approach
+		//				this would involve hooking into .Std***Pipe(..)
+		//				and all the related mechanics either by 
+		//				overloading or by re-writing...
+		//				...this is very error prone...
+		//			- callback
+		//				...this can completely abstract the broblem away
+		//				but will make things a bit less flexible...
 		if err := c.Wait(); err != nil {
 			fmt.Println("!!! WAIT:", err)
 		}

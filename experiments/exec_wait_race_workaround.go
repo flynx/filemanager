@@ -44,7 +44,6 @@ func main() {
 		}
 
 		<-done
-
 		if err := c.Wait(); err != nil {
 			fmt.Println("!!! WAIT:", err)
 		}
