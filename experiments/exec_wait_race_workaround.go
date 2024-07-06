@@ -6,11 +6,10 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	//"time"
 )
 
-var RunCount = 100000
 
+var RunCount = 100
 func main() {
 	files, _ := os.ReadDir(".")
 	c := len(files) + 2
