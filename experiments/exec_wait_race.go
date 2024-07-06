@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 )
 
 var RunCount = 1000
@@ -26,6 +27,7 @@ func main() {
 		n := 0
 		done := make(chan bool)
 		c := exec.Command("ls", "-a")
+		//c := exec.Command(strings.Fields("ls -a"))
 		out, _ := c.StdoutPipe()
 		go func() {
 			scanner := bufio.NewScanner(out)

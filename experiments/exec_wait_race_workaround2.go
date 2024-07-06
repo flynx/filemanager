@@ -74,12 +74,21 @@ func (this *Cmd) Run(stdin ...io.Reader) error {
 			this.Handler(scanner.Text()) }
 		this.Cmd.Wait()
 		this.Cmd = nil 
+		this.Stdin = nil
 		close(done) }()
 
 	return this.Cmd.Start() }
 func (this *Cmd) Wait() error {
 	<-this.Done
 	return nil }
+
+// XXX revise name...
+func (this *Cmd) Write(s string) (int, error) {
+	if this.Stdin == nil {
+		return 0, errors.New(fmt.Sprint(".Write(..): can not write to .Stdin:", this.Stdin)) }
+	return io.WriteString(this.Stdin, s) }
+func (this *Cmd) Writeln(s string) (int, error) {
+	return this.Write(s +"\n") }
 
 
 func Run(code string, handler LineHandler) (*Cmd, error) {
@@ -98,6 +107,9 @@ func Pipe(code string, handler LineHandler) (*Cmd, error) {
 	this.Stdin = w
 	if err := this.Run(r); err != nil {
 		return &this, err }
+	go func(){
+		this.Wait()
+		w.Close() }()
 	return &this, nil }
 
 
@@ -105,8 +117,10 @@ func Pipe(code string, handler LineHandler) (*Cmd, error) {
 var RunCount = 100
 func main() {
 
-	// XXX make this comparable to ./exec_wait_race_workaround.go in speed...
+	// XXX make this comparable to ./exec_wait_race_workaround.go in 
+	//		speed -- as both of these add a significant overhead...
 	SHELL = ""
+	PREFIX = ""
 
 	files, _ := os.ReadDir(".")
 	c := len(files) + 2
