@@ -76,8 +76,40 @@ func TestPipeManual(t *testing.T) {
 		t.Errorf("Skipped part of grep output, expected: %v got: %v\n", c, n) } 
 }
 
-/* XXX still need to figure this out...
-func TestPipe(t *testing.T) {
+func TestPipeChainPassive(t *testing.T) {
+	n := 0
+	c := 0
+	files, _ := os.ReadDir(".")
+	for _, e := range files {
+		if strings.Contains(e.Name(), ".go") {
+			c++ } }
+
+	var err error
+
+	// ls...
+	var ls *Cmd
+	ls, err = Run("ls -a")
+	if err != nil {
+		t.Error(err) }
+
+	// grep...
+	//var grep *PipedCmd
+	//grep, err = ls.PipeTo("grep '.go'", 
+	_, err = ls.PipeTo("grep '.go'", 
+		func(s string){
+			fmt.Println("  grep:", s)
+			n++ })
+
+	ls.Wait()
+	//grep.Stdin.Close()
+	//grep.Wait()
+
+	if c != n {
+		t.Errorf("Skipped part of grep output, expected: %v got: %v\n", c, n) } 
+}
+
+//* XXX this still fails... 
+func TestPipeChainActive(t *testing.T) {
 	n := 0
 	c := 0
 	files, _ := os.ReadDir(".")
@@ -90,22 +122,23 @@ func TestPipe(t *testing.T) {
 	// ls...
 	var ls *Cmd
 	ls, err = Run("ls -a", 
-		// XXX ERR: this will consume .Stdout...
+		// XXX might be a good idea to buffer the results returned by this...
 		func(s string){ 
 			fmt.Println("ls:", s) })
 	if err != nil {
 		t.Error(err) }
 
 	// grep...
-	var grep *PipedCmd
-	grep, err = ls.PipeTo("grep '.go'", 
+	//var grep *PipedCmd
+	//grep, err = ls.PipeTo("grep '.go'", 
+	_, err = ls.PipeTo("grep '.go'", 
 		func(s string){
 			fmt.Println("  grep:", s)
 			n++ })
 
 	ls.Wait()
-	grep.Stdin.Close()
-	grep.Wait()
+	//grep.Stdin.Close()
+	//grep.Wait()
 
 	if c != n {
 		t.Errorf("Skipped part of grep output, expected: %v got: %v\n", c, n) } 

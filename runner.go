@@ -32,6 +32,8 @@ type Cmd struct {
 	Stdout io.Reader
 	Stderr io.Reader
 
+	//Next PipedCmd
+
 	Done <- chan bool
 	__done chan bool
 }
@@ -78,13 +80,24 @@ func (this *Cmd) Run(stdin ...io.Reader) error {
 	} else {
 		return err }
 
-	go func(){
-		// XXX make this optional...
-		scanner := bufio.NewScanner(this.Stdout)
-		for scanner.Scan() {
-			this.Handler(scanner.Text()) }
-		this.Cmd.Wait()
-		this.__reset() }()
+	if this.Handler != nil {
+		go func(){
+			handler := this.Handler
+			scanner := bufio.NewScanner(this.Stdout)
+			// XXX pipe or buffer???
+			//r, w := io.Pipe()
+			//this.Stdout = r
+			for scanner.Scan() {
+				// XXX might be a good idea to buffer the results returned by this...
+				//		...i.e. use the .Stdout as output rom here and use .Cmd.Stdout as input...
+				txt := scanner.Text()
+				//io.WriteString(w, txt +"\n")
+				handler(txt) }
+			this.Cmd.Wait()
+			this.__reset() }() 
+	} else {
+		// XXX need a way to stop / call .Cmd.Wait()
+	}
 
 	return this.Cmd.Start() }
 func (this *Cmd) Wait() error {
@@ -102,12 +115,32 @@ func (this *Cmd) Restart(stdin ...io.Reader) error {
 	return this.Run(stdin...) }
 
 // XXX TEST...
-func (this *Cmd) PipeTo(code string, handler LineHandler) (*PipedCmd, error) {
+func (this *Cmd) PipeTo(code string, handler ...LineHandler) (*PipedCmd, error) {
 	piped := PipedCmd{}
 	piped.Code = code
-	piped.Handler = handler
-	if err := piped.Run(this.Stdout); err != nil {
-		return &piped, err }
+	if len(handler) > 0 {
+		piped.Handler = handler[0] }
+	// transfer output to piped (passive)...
+	if this.Handler == nil {
+		this.Handler = func(s string){
+			piped.Writeln(s) }
+		if err := piped.Run(this.Stdout); err != nil {
+			return &piped, err }
+		go func(){
+			<-piped.Done
+			this.Cmd.Wait()
+			this.__reset() }()
+	// tee output to local handler and piped...
+	// XXX this will not work as by this time this can be already running 
+	//		and using the old handler...
+	} else {
+		local_handler := this.Handler
+		// XXX need to do this BEFORE this starts, or to save the output someplace...
+		this.Handler = func(s string){
+			local_handler(s)
+			piped.Writeln(s) } 
+		if err := piped.Run(); err != nil {
+			return &piped, err } }
 	return &piped, nil }
 
 
@@ -128,8 +161,6 @@ func Run(code string, handler ...LineHandler) (*Cmd, error) {
 type PipedCmd struct {
 	Cmd
 }
-func (this *PipedCmd) Run(stdin io.Reader) error {
-	return this.Cmd.Run(stdin) }
 // XXX revise name -- should be both Go-ey and at the same time obvious, 
 //		this does not fit the expectation from .Write(..) / io.Writer...
 func (this *PipedCmd) Write(s string) (int, error) {
