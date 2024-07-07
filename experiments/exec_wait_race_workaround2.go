@@ -12,6 +12,9 @@ import (
 	"errors"
 )
 
+
+
+
 var SHELL = "bash -c"
 var PREFIX = "stdbuf -i0 -oL -eL"
 
@@ -170,7 +173,10 @@ func main() {
 	fmt.Println("")
 
 	if s > 0 {
-		fmt.Printf("Skipped part of the output %v times of %v\n", s, RunCount) } }
+		fmt.Printf("Skipped part of the output %v times of %v\n", s, RunCount) } 
+
+	// XXX test Pipe(..)
+}
 
 
 
