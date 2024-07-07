@@ -30,12 +30,19 @@ type Cmd struct {
 	Stderr io.Reader
 
 	Done <- chan bool
+	__done chan bool
 }
+func (this *Cmd) __reset(){
+	this.Cmd = nil 
+	this.Stdin = nil 
+	close(this.__done) }
+
 func (this *Cmd) Run(stdin ...io.Reader) error {
 	if this.Cmd != nil {
 		return errors.New(".Run(..): previous command not done.") }
 
 	done := make(chan bool)
+	this.__done = done
 	this.Done = done
 
 	shell := this.Shell
@@ -73,23 +80,25 @@ func (this *Cmd) Run(stdin ...io.Reader) error {
 		for scanner.Scan() {
 			this.Handler(scanner.Text()) }
 		this.Cmd.Wait()
-		this.Cmd = nil 
-		this.Stdin = nil
-		close(done) }()
+		this.__reset() }()
 
 	return this.Cmd.Start() }
 func (this *Cmd) Wait() error {
 	<-this.Done
 	return nil }
+func (this *Cmd) Kill() error {
+	defer func(){
+		this.__reset() }()
+	if this.Cmd == nil {
+		return errors.New(".Kill(..): no command running.") }
+	return this.Process.Kill() }
+// XXX revise???
+func (this *Cmd) Restart(stdin ...io.Reader) error {
+	this.Kill()
+	return this.Run(stdin...) }
 
-// XXX revise name...
-func (this *Cmd) Write(s string) (int, error) {
-	if this.Stdin == nil {
-		return 0, errors.New(fmt.Sprint(".Write(..): can not write to .Stdin:", this.Stdin)) }
-	return io.WriteString(this.Stdin, s) }
-func (this *Cmd) Writeln(s string) (int, error) {
-	return this.Write(s +"\n") }
-
+// XXX .PipeTo(..)
+// XXX
 
 func Run(code string, handler LineHandler) (*Cmd, error) {
 	this := Cmd{}
@@ -99,8 +108,28 @@ func Run(code string, handler LineHandler) (*Cmd, error) {
 		return &this, err }
 	return &this, nil }
 
-func Pipe(code string, handler LineHandler) (*Cmd, error) {
-	this := Cmd{}
+
+
+
+// XXX Q: should we separate Cmd and PipedCmd???
+//			...should we also overload .Run(..) ???
+type PipedCmd struct {
+	Cmd
+}
+func (this *PipedCmd) Run(stdin io.Reader) error {
+	return this.Cmd.Run(stdin) }
+// XXX revise name -- should be both Go-ey and at the same time obvious, 
+//		this does not fit the expectation from .Write(..) / io.Writer...
+func (this *PipedCmd) Write(s string) (int, error) {
+	if this.Stdin == nil {
+		return 0, errors.New(fmt.Sprint(".Write(..): can not write to .Stdin:", this.Stdin)) }
+	return io.WriteString(this.Stdin, s) }
+func (this *PipedCmd) Writeln(s string) (int, error) {
+	return this.Write(s +"\n") }
+
+
+func Pipe(code string, handler LineHandler) (*PipedCmd, error) {
+	this := PipedCmd{}
 	this.Code = code
 	this.Handler = handler
 	r, w := io.Pipe()
@@ -111,6 +140,7 @@ func Pipe(code string, handler LineHandler) (*Cmd, error) {
 		this.Wait()
 		w.Close() }()
 	return &this, nil }
+
 
 
 
