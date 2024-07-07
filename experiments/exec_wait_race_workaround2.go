@@ -147,7 +147,7 @@ func Pipe(code string, handler LineHandler) (*PipedCmd, error) {
 
 
 
-var RunCount = 100
+var RunCount = 1000
 func main() {
 
 	// XXX make this comparable to ./exec_wait_race_workaround.go in 

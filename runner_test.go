@@ -3,71 +3,18 @@ package main
 
 import (
 	"testing"
-	//"bytes"
-	"os"
-	"io"
-	"bufio"
-	//"strconv"
 	"fmt"
-	"os/exec"
-	"time"
+	"strings"
+	"os"
 )
 
 
 
-// XXX this can sometimes truncate output -- sync error??
-func TestRaw(t *testing.T){
-	/*/ XXX
-	cmd := "cat"
-	c := exec.Command(cmd)
-	/*/
-	cmd := "bash -c 'cat'"
-	c := exec.Command("bash", "-c", "cat")
-	//*/
+var RunCount = 1000
+func TestRun(t *testing.T) {
+	//SHELL = ""
+	//PREFIX = ""
 
-	// XXX both of these work...
-	o, in := io.Pipe()
-	c.Stdin = o
-	/*/
-	in, _ := c.StdinPipe()
-	//*/
-	out, _ := c.StdoutPipe()
-
-	fmt.Println(cmd)
-
-	c.Start()
-
-	done := make(chan bool)
-
-	go func(){
-		scanner := bufio.NewScanner(out)
-		for scanner.Scan() {
-			fmt.Println("    >>", scanner.Text()) } }()
-	go func(){
-		c.Wait()
-		close(done) }()
-
-	io.WriteString(in, "moo\n")
-	io.WriteString(in, "foo\n")
-	time.Sleep(time.Second)
-	io.WriteString(in, "boo\n")
-	io.WriteString(in, "moo\n")
-
-	fmt.Println("async")
-	in.Close()
-	//time.Sleep(time.Second)
-
-	//fmt.Println("async")
-	<-done
-	fmt.Println("done.")
-}
-
-// XXX both of these sometimes do not do the full list...
-//		...no errors...
-//		...seems to either be a Go broblem or something else we're not 
-//		handling here...
-var TestRawFull_Count = 1000
-func TestError(t *testing.T){
 	files, _ := os.ReadDir(".")
 	c := len(files) + 2
 	s := 0
@@ -77,239 +24,92 @@ func TestError(t *testing.T){
 			s++
 		} else {
 			fmt.Print(".") } }
-	for i := 0; i < TestRawFull_Count; i++ {
+
+	for i := 0; i < RunCount; i++ {
 		n := 0
-		done := make(chan bool)
-		c := exec.Command("ls", "-a")
-		out, _ := c.StdoutPipe()
-		go func(){
-			scanner := bufio.NewScanner(out)
-			for scanner.Scan() {
-				scanner.Text() 
-				n++ } 
-			// handle output...
-			report(n)
-			close(done) }()
-		// start...
-		if err := c.Start(); err != nil {
-			fmt.Println("!!! START:", err) }
-		// XXX this breaks the run script some of the time...
-		if err := c.Wait(); err != nil {
-			fmt.Println("!!! WAIT:", err) }
-		<-done }
-	fmt.Println("") 
+		cmd, err := Run("ls -a", func(s string){ n++ })
+		if err != nil {
+			t.Error(err) }
+		if err := cmd.Wait(); err != nil {
+			t.Error(err) }
+		report(n) }
+	fmt.Println("")
+
 	if s > 0 {
-		t.Errorf("Skipped part of the output %v times of %v", s, TestRawFull_Count) } }
-func TestRawFull(t *testing.T){
-	start := true
-	prev := 0
-	s := 0
-	for i := 0; i < TestRawFull_Count; i++ {
-		n := 0
-		done := make(chan bool)
-		c := exec.Command("bash", "-c", "ls")
-		out, _ := c.StdoutPipe()
-		go func(){
-			scanner := bufio.NewScanner(out)
-			// handle output...
-			for scanner.Scan() {
-				scanner.Text() 
-				n++ } 
-			// done -> handle resluts...
-			// XXX need a way to call this AFTER all the output is done...
-			//		...otherwise calling .Wait() too early seems to mess 
-			//		things up...
-			if err := c.Wait(); err != nil {
-				fmt.Println("!!! WAIT:", err) }
-			if start {
-				fmt.Print("->", n)
-				start = false
-				prev = n
-			} else if n != prev {
-				fmt.Print("\n->", n)
-				prev = n
-				s++
-			} else {
-				fmt.Print(".") }
-			close(done) }()
-		// start...
-		if err := c.Start(); err != nil {
-			fmt.Println("!!! START:", err) }
-		<-done }
-	fmt.Println("") 
-	if s > 0 {
-		t.Errorf("Skipped part of the output %v times of %v", s, TestRawFull_Count) } }
-func TestRunFull(t *testing.T){
-	start := true
-	prev := 0
-	for i := 0; i < TestRawFull_Count; i++ {
-		n := 0
-		c, _ := Run("ls", nil)
-		out := c.Stdout
-		go func(){
-			scanner := bufio.NewScanner(out)
-			for scanner.Scan() {
-				scanner.Text() 
-				//txt := scanner.Text() 
-				//fmt.Println("  ", txt)
-				n++ } }()
-		<-c.Done
-		if start {
-			fmt.Print("->", n)
-			start = false
-			prev = n
-		} else if n != prev {
-			fmt.Print("\n->", n)
-			prev = n
-		} else {
-			fmt.Print(".") } }
-	fmt.Println("") }
-
-
-func TestRawPipe(t *testing.T){
-	done := make(chan bool)
-
-	// NOTE  grep/sed/awk seem to be buffering output in non tty pipes...
-	//		see: 
-	//			command buffer options, stdbuf, script and socat as ways around this...
-	//		also see:
-	//			https://unix.stackexchange.com/questions/25372/how-to-turn-off-stdout-buffering-in-a-pipe
-	// XXX should stdbuf be prefixed by default???
-	//filter := exec.Command("bash", "-c", "grep --line-buffered go")
-	filter := exec.Command("bash", "-c", "stdbuf -i0 -oL -eL grep go")
-	in, _ := filter.StdinPipe()
-	out, _ := filter.StdoutPipe()
-	go func(){
-		defer close(done) 
-		defer out.Close()
-		scanner := bufio.NewScanner(out)
-		for scanner.Scan() {
-			fmt.Println("  out:", scanner.Text()) } }()
-	filter.Start()
-
-	source := exec.Command("bash", "-c", "ls")
-	src, _ := source.StdoutPipe()
-	go func(){
-		defer in.Close() 
-		scanner := bufio.NewScanner(src)
-		for scanner.Scan() {
-			// allow time for grep to do its thing...
-			time.Sleep(time.Millisecond*5)
-			line := scanner.Text()
-			fmt.Println("src:", line)
-			io.WriteString(in, line +"\n") } }()
-	source.Start()
-
-	<-done
-	fmt.Println("done.")
+		t.Errorf("Skipped part of the output %v times of %v\n", s, RunCount) } 
 }
 
-// XXX this can sometimes truncate output -- sync error??
-func TestBasics(t *testing.T){
-	c := Cmd{}
-	//cmd := "pwd; sleep 1; ls"
-	cmd := "pwd; sleep 0.2; ls"
 
-	fmt.Println("$", cmd)
-	if _, err := c.Run(cmd, nil); err != nil {
-		t.Fatal(err) }
+func TestPipeManual(t *testing.T) {
+	n := 0
+	c := 0
+	files, _ := os.ReadDir(".")
+	for _, e := range files {
+		if strings.Contains(e.Name(), ".go") {
+			c++ } }
 
-	go func(){
-		scanner := bufio.NewScanner(c.Stdout)
-		for scanner.Scan() {
-			fmt.Println("    >>", scanner.Text()) } }()
+	var err error
 
-	//fmt.Println("async")
-	<-c.Done
-	fmt.Println("done.")
+	// grep...
+	var grep *PipedCmd
+	grep, err = Pipe("grep '.go'", 
+		func(s string){
+			fmt.Println("  grep:", s)
+			n++ })
+	if err != nil {
+		t.Error(err) }
+
+	// ls...
+	var ls *Cmd
+	ls, err = Run("ls -a", 
+		func(s string){ 
+			fmt.Println("ls:", s)
+			grep.Writeln(s) })
+	if err != nil {
+		t.Error(err) }
+
+	ls.Wait()
+	grep.Stdin.Close()
+	grep.Wait()
+
+	if c != n {
+		t.Errorf("Skipped part of grep output, expected: %v got: %v\n", c, n) } 
 }
 
-// XXX this can sometimes truncate output -- sync error??
-func TestRun(t *testing.T){
-	cmd, err := Piped("grep moo")
+/* XXX still need to figure this out...
+func TestPipe(t *testing.T) {
+	n := 0
+	c := 0
+	files, _ := os.ReadDir(".")
+	for _, e := range files {
+		if strings.Contains(e.Name(), ".go") {
+			c++ } }
+
+	var err error
+
+	// ls...
+	var ls *Cmd
+	ls, err = Run("ls -a", 
+		// XXX ERR: this will consume .Stdout...
+		func(s string){ 
+			fmt.Println("ls:", s) })
 	if err != nil {
-		t.Fatal(err) }
-	_, err = cmd.HandleLine(
-		func(line string){
-			fmt.Println("    >>", line) })
-	if err != nil {
-		t.Fatal(err) }
+		t.Error(err) }
 
-	//time.Sleep(time.Second)
-	io.WriteString(cmd.Stdin, "foo\n")
-	cmd.WriteString("moo\n")
-	time.Sleep(time.Second)
-	cmd.WriteString("boo\n")
-	cmd.WriteString("moo\n")
+	// grep...
+	var grep *PipedCmd
+	grep, err = ls.PipeTo("grep '.go'", 
+		func(s string){
+			fmt.Println("  grep:", s)
+			n++ })
 
-	fmt.Println("async")
-	cmd.Stdin.Close()
+	ls.Wait()
+	grep.Stdin.Close()
+	grep.Wait()
 
-	<-cmd.Done
-}
-
-/* XXX
-func TestFilter(t *testing.T){
-	filter, err := RunFilter(
-		"sed 's/go/GO/g'",
-		func(line string){
-			fmt.Println("    <<", line) })
-	if err != nil {
-		t.Fatal(err) }
-
-	runner, _ := Run("ls", nil) 
-	scanner := bufio.NewScanner(runner.Stdout)
-
-	for scanner.Scan() {
-		line := scanner.Text()
-		fmt.Println("    >>", line)
-		filter.WriteString(line +"\n") }
-
-	filter.WriteString("moo\n")
-	filter.WriteString("go\n")
-
-	time.Sleep(time.Second)
-
-	filter.Stdin.Close()
-
-	fmt.Println("done.")
+	if c != n {
+		t.Errorf("Skipped part of grep output, expected: %v got: %v\n", c, n) } 
 }
 //*/
 
 
-func TestPipe(t *testing.T){
-	a, _ := Run("ls", nil)
-	b, _ := a.Pipe("grep go")
-	c, _ := b.Pipe("sed 's/$/ moo!!/'")
-
-	scanner := bufio.NewScanner(c.Stdout)
-	for scanner.Scan() {
-		line := scanner.Text()
-		fmt.Println("    >>", line) }
-
-	<-a.Done
-	fmt.Println("done")
-}
-
-// XXX BUG: this does not stop...
-func TestPipeManual(t *testing.T){
-	piped, _ := Piped("grep go")
-
-	source, _ := Run("ls", nil)
-	source.HandleLine(func(line string){
-		fmt.Println("src:", line)
-		io.WriteString(piped.Stdin, line +"\n") })
-
-	// XXX for some reason this does not stop...
-	//		...is piped.Stdout closing...
-	scanner := bufio.NewScanner(piped.Stdout)
-	for scanner.Scan() {
-		line := scanner.Text()
-		fmt.Println("  out:", line) }
-
-	<-source.Done
-	fmt.Println("done")
-}
-
-
-// vim:set ts=4 sw=4 nowrap :
