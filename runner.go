@@ -9,6 +9,7 @@ import (
 	"io"
 	//"time"
 	"strings"
+	"bytes"
 	"errors"
 )
 
@@ -36,11 +37,13 @@ type Cmd struct {
 
 	Done <- chan bool
 	__done chan bool
+
 }
 func (this *Cmd) __reset(){
 	this.Cmd = nil 
 	this.Stdin = nil 
 	close(this.__done) }
+
 
 func (this *Cmd) Run(stdin ...io.Reader) error {
 	if this.Cmd != nil {
@@ -81,18 +84,27 @@ func (this *Cmd) Run(stdin ...io.Reader) error {
 		return err }
 
 	if this.Handler != nil {
+		// XXX keep both stdout working and call the handler...
+		handler := this.Handler
+		src := this.Stdout
+		//* XXX pipe or a buffer???
+		//		- pipe is sinc, calling go io.WriteString(w, ...) would 
+		//			require us to wait for it to be done (sync group?)...
+		//			is this a good idea to keep the data in runtime stack???
+		//		- buffer gets all the data but for some reason is not 
+		//			scanned...
+		buf := bytes.Buffer{}
+		this.Stdout = bufio.NewReader(&buf)
 		go func(){
-			handler := this.Handler
-			scanner := bufio.NewScanner(this.Stdout)
-			// XXX pipe or buffer???
-			//r, w := io.Pipe()
-			//this.Stdout = r
+			//scanner := bufio.NewScanner(this.Stdout)
+			// XXX
+			scanner := bufio.NewScanner(src)
 			for scanner.Scan() {
 				txt := scanner.Text()
-				//io.WriteString(w, txt +"\n")
-				// XXX might be a good idea to buffer the results returned by this...
-				//		...i.e. use the .Stdout as output rom here and use .Cmd.Stdout as input...
-				handler(txt) }
+				//txt = handler(txt) 
+				handler(txt)
+				// XXX copy txt to .Stdout
+			}
 			this.Cmd.Wait()
 			this.__reset() }() 
 	} else {
