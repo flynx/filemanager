@@ -10,9 +10,16 @@ import (
 )
 
 
-// XXX take either Reader/WriteCloser or Reader/Writer...
-// XXX do we need to control this in any way???
-func PipeTee(reader io.Reader, writer io.WriteCloser, handler func(string)) {
+//
+//	reader -> tee -> handler(line)
+//				\
+//				 +-> writer
+//
+// NOTE: the handler is called sync, this if it blocks it will block the 
+//		line write to writer
+//		XXX should this be the case???
+// NOTE: this buffers the writes and will not block on the writer
+func Tee(reader io.Reader, writer io.Writer, handler func(string)) {
 	writer_buf := bufio.NewWriter(writer)
 	scanner := bufio.NewScanner(reader)
 	var output sync.Mutex
@@ -34,16 +41,23 @@ func PipeTee(reader io.Reader, writer io.WriteCloser, handler func(string)) {
 				output.Unlock() }() } }
 	// finalize things...
 	output.Lock()
-	writer_buf.Flush()
-	// XXX only do this if WriteCloser...
-	writer.Close() }
+	writer_buf.Flush() }
 
 
 // XXX make this a generic Async(func, ...args)
-func AsyncPipeTee(reader io.Reader, writer io.WriteCloser, handler func(string)) (<-chan bool) {
+func AsyncTee(reader io.Reader, writer io.Writer, handler func(string)) (<-chan bool) {
 	done := make(chan bool)
 	go func(){ 
-		PipeTee(reader, writer, handler)
+		Tee(reader, writer, handler)
+		close(done) }()
+	return done }
+
+// XXX make this a generic Async(func, ...args)
+func AsyncTeeCloser(reader io.Reader, writer io.WriteCloser, handler func(string)) (<-chan bool) {
+	done := make(chan bool)
+	go func(){ 
+		Tee(reader, writer, handler)
+		writer.Close() 
 		close(done) }()
 	return done }
 
@@ -56,7 +70,7 @@ func main(){
 	ir, iw := io.Pipe()
 	or, ow := io.Pipe()
 
-	done_input := AsyncPipeTee(ir, ow,
+	done_input := AsyncTeeCloser(ir, ow,
 		func(s string){
 			fmt.Println(">>>", s) })
 
