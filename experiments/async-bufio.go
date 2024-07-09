@@ -66,7 +66,6 @@ func main(){
 	go func(){
 		scanner := bufio.NewScanner(or)
 		for scanner.Scan() {
-			//time.Sleep(time.Millisecond*200)
 			txt := scanner.Text()
 			fmt.Println("  >", txt) }
 		close(done_output) }()
@@ -80,7 +79,5 @@ func main(){
 
 	<-done_input
 	<-done_output
-
-	//time.Sleep(time.Second)
 
 }
