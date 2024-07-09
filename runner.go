@@ -6,12 +6,65 @@ import (
 	"fmt"
 	//"os"
 	"os/exec"
+	"sync"
 	"io"
 	//"time"
 	"strings"
-	"bytes"
+	//"bytes"
 	"errors"
 )
+
+
+//
+//	reader -> tee -> handler(line)
+//				\
+//				 +-> writer
+//
+// NOTE: the handler is called sync, this if it blocks it will block the 
+//		line write to writer
+//		XXX should this be the case???
+// NOTE: this buffers the writes and will not block on the writer
+func Tee(reader io.Reader, writer io.Writer, handler func(string)) {
+	writer_buf := bufio.NewWriter(writer)
+	scanner := bufio.NewScanner(reader)
+	var output sync.Mutex
+	for scanner.Scan() {
+		txt := scanner.Text()
+		if handler != nil {
+			handler(txt) }
+		// NOTE this needs to be non-blocking this is still blocking...
+		// NOTE seems that bufio is not thread-safe as not explicitly
+		//		sychronising writing and flushing produces unpredictable 
+		//		putput (races)
+		output.Lock()
+		io.WriteString(writer_buf, txt +"\n") 
+		output.Unlock()
+		// keep only one blocked .Flush()...
+		if output.TryLock() {
+			go func(){ 
+				writer_buf.Flush() 
+				output.Unlock() }() } }
+	// finalize things...
+	output.Lock()
+	writer_buf.Flush() }
+
+
+// XXX make this a generic Async(func, ...args)
+func AsyncTee(reader io.Reader, writer io.Writer, handler func(string)) (<-chan bool) {
+	done := make(chan bool)
+	go func(){ 
+		Tee(reader, writer, handler)
+		close(done) }()
+	return done }
+
+// XXX make this a generic Async(func, ...args)
+func AsyncTeeCloser(reader io.Reader, writer io.WriteCloser, handler func(string)) (<-chan bool) {
+	done := make(chan bool)
+	go func(){ 
+		Tee(reader, writer, handler)
+		writer.Close() 
+		close(done) }()
+	return done }
 
 
 
@@ -83,33 +136,13 @@ func (this *Cmd) Run(stdin ...io.Reader) error {
 	} else {
 		return err }
 
-	if this.Handler != nil {
-		// XXX keep both stdout working and call the handler...
-		handler := this.Handler
-		src := this.Stdout
-		//* XXX pipe or a buffer???
-		//		- pipe is sinc, calling go io.WriteString(w, ...) would 
-		//			require us to wait for it to be done (sync group?)...
-		//			is this a good idea to keep the data in runtime stack???
-		//		- buffer gets all the data but for some reason is not 
-		//			scanned...
-		buf := bytes.Buffer{}
-		this.Stdout = bufio.NewReader(&buf)
-		go func(){
-			//scanner := bufio.NewScanner(this.Stdout)
-			// XXX
-			scanner := bufio.NewScanner(src)
-			for scanner.Scan() {
-				txt := scanner.Text()
-				//txt = handler(txt) 
-				handler(txt)
-				// XXX copy txt to .Stdout
-			}
-			this.Cmd.Wait()
-			this.__reset() }() 
-	} else {
-		// XXX need a way to stop / call .Cmd.Wait()
-	}
+	src := this.Stdout
+	r, w := io.Pipe()
+	this.Stdout = r
+	go func(){
+		Tee(src, w, this.Handler)
+		this.Cmd.Wait()
+		this.__reset() }() 
 
 	return this.Cmd.Start() }
 func (this *Cmd) Wait() error {

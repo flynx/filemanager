@@ -70,6 +70,7 @@ func main(){
 	ir, iw := io.Pipe()
 	or, ow := io.Pipe()
 
+	// XXX this does not yet work without a reader...
 	done_input := AsyncTeeCloser(ir, ow,
 		func(s string){
 			fmt.Println(">>>", s) })
@@ -83,6 +84,7 @@ func main(){
 			txt := scanner.Text()
 			fmt.Println("  >", txt) }
 		close(done_output) }()
+	//*/
 
 	io.WriteString(iw, "A\n")
 	io.WriteString(iw, "B\n")
