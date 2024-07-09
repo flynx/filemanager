@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"os"
+	"bufio"
 )
 
 
@@ -109,6 +110,32 @@ func TestPipeChainPassive(t *testing.T) {
 }
 
 //* XXX this still fails... 
+func TestCmdStdout(t *testing.T) {
+	n := 0
+	c := 0
+	var err error
+
+	// ls...
+	var ls *Cmd
+	ls, err = Run("ls -a", 
+		func(s string){ 
+			fmt.Println("ls:", s) 
+			c++ })
+	if err != nil {
+		t.Error(err) }
+
+	//scanner := bufio.NewScanner(ls.Stdout)
+	//for scanner.Scan() {
+	//	fmt.Println("  ->", scanner.Text()) 
+	//	n++ }
+
+	ls.Wait()
+
+	if c != n {
+		t.Errorf("Skipped part of grep output, expected: %v got: %v\n", c, n) } 
+}
+
+//* XXX this still fails... 
 func TestPipeChainActive(t *testing.T) {
 	n := 0
 	c := 0
@@ -128,6 +155,10 @@ func TestPipeChainActive(t *testing.T) {
 	if err != nil {
 		t.Error(err) }
 
+	scanner := bufio.NewScanner(ls.Stdout)
+	for scanner.Scan() {
+		fmt.Println("  ls:", scanner.Text()) }
+	/*/
 	// grep...
 	//var grep *PipedCmd
 	//grep, err = ls.PipeTo("grep '.go'", 
@@ -135,6 +166,7 @@ func TestPipeChainActive(t *testing.T) {
 		func(s string){
 			fmt.Println("  grep:", s)
 			n++ })
+	//*/
 
 	ls.Wait()
 	//grep.Stdin.Close()
