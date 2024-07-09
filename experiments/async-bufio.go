@@ -10,8 +10,9 @@ import (
 )
 
 
+// XXX take either Reader/WriteCloser or Reader/Writer...
 // XXX do we need to control this in any way???
-func PipeTee(reader io.ReadCloser, writer io.WriteCloser, handler func(string)) (<-chan bool) {
+func PipeTee(reader io.Reader, writer io.WriteCloser, handler func(string)) (<-chan bool) {
 	writer_buf := bufio.NewWriter(writer)
 	done_input := make(chan bool)
 	go func(){
@@ -33,8 +34,10 @@ func PipeTee(reader io.ReadCloser, writer io.WriteCloser, handler func(string)) 
 				go func(){ 
 					writer_buf.Flush() 
 					output.Unlock() }() } }
+		// finalize things...
 		output.Lock()
 		writer_buf.Flush()
+		// XXX only do this if WriteCloser...
 		writer.Close()
 		close(done_input) }() 
 	return done_input }
@@ -62,7 +65,7 @@ func main(){
 
 	io.WriteString(iw, "A\n")
 	io.WriteString(iw, "B\n")
-	time.Sleep(time.Millisecond*50)
+	time.Sleep(time.Millisecond*100)
 	io.WriteString(iw, "C\n")
 	iw.Close()
 
