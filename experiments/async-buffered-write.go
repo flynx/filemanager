@@ -35,6 +35,7 @@ func Tee(reader io.Reader, writer io.Writer, handler func(string)) {
 		io.WriteString(writer_buf, txt +"\n") 
 		output.Unlock()
 		// keep only one blocked .Flush()...
+		// XXX can we check if someone is waiting to read???
 		if output.TryLock() {
 			go func(){ 
 				writer_buf.Flush() 
