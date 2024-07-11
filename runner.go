@@ -24,6 +24,10 @@ import (
 //		line write to writer
 //		XXX should this be the case???
 // NOTE: this buffers the writes and will not block on the writer
+// XXX can we somehow avoid the blocking goroutine that copies the buf 
+//		to writer???
+//		...somehow initiate this by the writer's reader...
+//		....or stop it on exit...
 func Tee(reader io.Reader, writer io.Writer, handler func(string)) {
 	buf := bytes.Buffer{}
 	prebuf := bytes.Buffer{}
@@ -34,7 +38,8 @@ func Tee(reader io.Reader, writer io.Writer, handler func(string)) {
 		if handler != nil {
 			handler(txt) }
 		// nothing is in queue to pipe -- flush pre-buffer, write...
-		if copying.TryLock() {
+		if writer != nil && 
+				copying.TryLock() {
 			buf.ReadFrom(&prebuf)
 			buf.WriteString(txt +"\n")
 			// write to output...
@@ -46,7 +51,8 @@ func Tee(reader io.Reader, writer io.Writer, handler func(string)) {
 			io.WriteString(&prebuf, txt +"\n") } }
 	copying.Lock()
 	// flush the pre-buffer if non-empty...
-	if prebuf.Len() > 0 {
+	if writer != nil && 
+			prebuf.Len() > 0 {
 		io.Copy(writer, &prebuf) } }
 
 // XXX make this a generic Async(func, ...args)
@@ -62,7 +68,8 @@ func AsyncTeeCloser(reader io.Reader, writer io.WriteCloser, handler func(string
 	done := make(chan bool)
 	go func(){ 
 		Tee(reader, writer, handler)
-		writer.Close() 
+		if writer != nil {
+			writer.Close() }
 		close(done) }()
 	return done }
 
@@ -124,7 +131,10 @@ func (this *Cmd) Run(stdin ...io.Reader) error {
 	this.Cmd = cmd
 
 	// i/o...
-	// XXX revise...
+	// XXX there are instances where we can want stdout to be a buffer 
+	//		instead of a pipe...
+	//		...for example a pipe makes the case where we do not read/pipe
+	//		stdout allot more complicated...
 	if len(stdin) > 0 {
 		this.Cmd.Stdin = stdin[0] }
 	if p, err := cmd.StdoutPipe(); err == nil {
@@ -136,12 +146,12 @@ func (this *Cmd) Run(stdin ...io.Reader) error {
 	} else {
 		return err }
 
+	// handle the output...
 	src := this.Stdout
 	r, w := io.Pipe()
 	this.Stdout = r
 	go func(){
 		Tee(src, w, this.Handler)
-		fmt.Println("##############")
 		w.Close()
 		this.Cmd.Wait()
 		this.__reset() }() 

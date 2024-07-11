@@ -42,6 +42,10 @@ func TestRun(t *testing.T) {
 }
 
 
+func TestSimpleCall(t *testing.T) {
+	// XXX
+}
+
 func TestPipeManual(t *testing.T) {
 	n := 0
 	c := 0
