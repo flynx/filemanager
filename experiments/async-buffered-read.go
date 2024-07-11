@@ -15,20 +15,32 @@ func main(){
 	ir, iw := io.Pipe()
 	or, ow := io.Pipe()
 
-	buf := bytes.Buffer{}
 	done_input := make(chan bool)
 	go func(){
+		buf := bytes.Buffer{}
+		prebuf := bytes.Buffer{}
 		var copying sync.Mutex
 		scanner := bufio.NewScanner(ir)
 		for scanner.Scan() {
 			txt := scanner.Text()
 			fmt.Println(">>>", txt)
-			io.WriteString(&buf, txt +"\n")
+			// nothing is in queue to pipe -- flush pre-buffer, write...
+			if copying.TryLock() {
+				io.Copy(&buf, &prebuf)
+				io.WriteString(&buf, txt +"\n") 
+				copying.Unlock()
+			// waiting to write -- pre-buffer...
+			} else {
+				io.WriteString(&prebuf, txt +"\n") } 
+			// write to pipe...
 			if copying.TryLock() {
 				go func(){
-					io.Copy(ow, &buf)
-					copying.Unlock() }() } }
+					defer copying.Unlock() 
+					io.Copy(ow, &buf) }() } }
 		copying.Lock()
+		// flush the pre-buffer...
+		if prebuf.Len() > 0 {
+			io.Copy(ow, &prebuf) }
 		ow.Close()
 		close(done_input) }()
 
@@ -52,6 +64,6 @@ func main(){
 
 
 	<-done_input
-	<-done_output
+	//<-done_output
 
 }
