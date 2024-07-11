@@ -28,7 +28,6 @@ func Tee(reader io.Reader, writer io.Writer, handler func(string)) {
 	buf := bytes.Buffer{}
 	prebuf := bytes.Buffer{}
 	var copying sync.Mutex
-	defer copying.Unlock() 
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
 		txt := scanner.Text()
@@ -36,23 +35,19 @@ func Tee(reader io.Reader, writer io.Writer, handler func(string)) {
 			handler(txt) }
 		// nothing is in queue to pipe -- flush pre-buffer, write...
 		if copying.TryLock() {
-			io.Copy(&buf, &prebuf)
-			io.WriteString(&buf, txt +"\n") 
-			copying.Unlock()
-		// waiting to write -- pre-buffer...
-		} else {
-			io.WriteString(&prebuf, txt +"\n") } 
-		// write to pipe...
-		if copying.TryLock() {
+			buf.ReadFrom(&prebuf)
+			buf.WriteString(txt +"\n")
+			// write to output...
 			go func(){
 				defer copying.Unlock() 
-				io.Copy(writer, &buf) }() } }
-	// flush the pre-buffer...
+				io.Copy(writer, &buf) }() 
+		// waiting to write -- pre-buffer...
+		} else {
+			io.WriteString(&prebuf, txt +"\n") } }
+	copying.Lock()
+	// flush the pre-buffer if non-empty...
 	if prebuf.Len() > 0 {
-		// XXX should we wait for io.Copy(..) to finish???
-		copying.Lock()
 		io.Copy(writer, &prebuf) } }
-
 
 // XXX make this a generic Async(func, ...args)
 func AsyncTee(reader io.Reader, writer io.Writer, handler func(string)) (<-chan bool) {
@@ -146,6 +141,8 @@ func (this *Cmd) Run(stdin ...io.Reader) error {
 	this.Stdout = r
 	go func(){
 		Tee(src, w, this.Handler)
+		fmt.Println("##############")
+		w.Close()
 		this.Cmd.Wait()
 		this.__reset() }() 
 

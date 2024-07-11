@@ -7,6 +7,7 @@ import (
 	"strings"
 	"os"
 	"bufio"
+	//"time"
 )
 
 
@@ -117,6 +118,7 @@ func TestCmdStdout(t *testing.T) {
 
 	// ls...
 	var ls *Cmd
+	// XXX unless explicitly read from / close this will block...
 	ls, err = Run("ls -a", 
 		func(s string){ 
 			fmt.Println("ls:", s) 
@@ -124,10 +126,12 @@ func TestCmdStdout(t *testing.T) {
 	if err != nil {
 		t.Error(err) }
 
+	//* XXX 
 	scanner := bufio.NewScanner(ls.Stdout)
 	for scanner.Scan() {
 		fmt.Println("  ->", scanner.Text()) 
 		n++ }
+	//*/
 
 	ls.Wait()
 
@@ -158,11 +162,12 @@ func TestPipeChainActive(t *testing.T) {
 	scanner := bufio.NewScanner(ls.Stdout)
 	for scanner.Scan() {
 		fmt.Println("  ls:", scanner.Text()) }
-	/*/
+	//
 	// grep...
-	//var grep *PipedCmd
-	//grep, err = ls.PipeTo("grep '.go'", 
-	_, err = ls.PipeTo("grep '.go'", 
+	// XXX this does not print anything yet...
+	var grep *PipedCmd
+	grep, err = ls.PipeTo("grep '.go'", 
+	//_, err = ls.PipeTo("grep '.go'", 
 		func(s string){
 			fmt.Println("  grep:", s)
 			n++ })
@@ -170,7 +175,9 @@ func TestPipeChainActive(t *testing.T) {
 
 	ls.Wait()
 	//grep.Stdin.Close()
-	//grep.Wait()
+	grep.Wait()
+
+	//time.Sleep(time.Millisecond*500)
 
 	if c != n {
 		t.Errorf("Skipped part of grep output, expected: %v got: %v\n", c, n) } 
