@@ -3,12 +3,11 @@ package main
 import (
 	"fmt"
 	"bufio"
-	//"bytes"
+	"bytes"
 	"io"
 	"time"
-	//"sync"
+	"sync"
 )
-
 
 
 func main(){
@@ -16,26 +15,29 @@ func main(){
 	ir, iw := io.Pipe()
 	or, ow := io.Pipe()
 
-	reader_buf := bufio.NewReader(or)
+	buf := bytes.Buffer{}
 	done_input := make(chan bool)
 	go func(){
+		var copying sync.Mutex
 		scanner := bufio.NewScanner(ir)
 		for scanner.Scan() {
 			txt := scanner.Text()
 			fmt.Println(">>>", txt)
-			// XXX for some reason the reader_buf does not read things 
-			//		from the pipe untill requested -- if we remove the 
-			//		scanner loop below this will block on first write...
-			io.WriteString(ow, txt +"\n") 
-		}
+			io.WriteString(&buf, txt +"\n")
+			if copying.TryLock() {
+				go func(){
+					io.Copy(ow, &buf)
+					copying.Unlock() }() } }
+		copying.Lock()
+		ow.Close()
 		close(done_input) }()
 
 
 	// output chain...
 	done_output := make(chan bool)
 	go func(){
-		time.Sleep(time.Millisecond*2000)
-		scanner := bufio.NewScanner(reader_buf)
+		//time.Sleep(time.Millisecond*2000)
+		scanner := bufio.NewScanner(or)
 		for scanner.Scan() {
 			time.Sleep(time.Millisecond*100)
 			txt := scanner.Text()
