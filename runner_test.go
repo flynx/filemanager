@@ -124,10 +124,10 @@ func TestCmdStdout(t *testing.T) {
 	if err != nil {
 		t.Error(err) }
 
-	//scanner := bufio.NewScanner(ls.Stdout)
-	//for scanner.Scan() {
-	//	fmt.Println("  ->", scanner.Text()) 
-	//	n++ }
+	scanner := bufio.NewScanner(ls.Stdout)
+	for scanner.Scan() {
+		fmt.Println("  ->", scanner.Text()) 
+		n++ }
 
 	ls.Wait()
 

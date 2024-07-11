@@ -15,6 +15,7 @@ func main(){
 	ir, iw := io.Pipe()
 	or, ow := io.Pipe()
 
+	// XXX still truncating the tail sometimes...
 	done_input := make(chan bool)
 	go func(){
 		buf := bytes.Buffer{}
@@ -26,20 +27,22 @@ func main(){
 			fmt.Println(">>>", txt)
 			// nothing is in queue to pipe -- flush pre-buffer, write...
 			if copying.TryLock() {
-				io.Copy(&buf, &prebuf)
-				io.WriteString(&buf, txt +"\n") 
-				copying.Unlock()
-			// waiting to write -- pre-buffer...
-			} else {
-				io.WriteString(&prebuf, txt +"\n") } 
-			// write to pipe...
-			if copying.TryLock() {
+				//fmt.Println("  (flush/buf)", txt)
+				buf.ReadFrom(&prebuf)
+				buf.WriteString(txt +"\n")
+				// write to output...
 				go func(){
 					defer copying.Unlock() 
-					io.Copy(ow, &buf) }() } }
+					//fmt.Println("  (flush: buf)")
+					io.Copy(ow, &buf) }() 
+			// waiting to write -- pre-buffer...
+			} else {
+				//fmt.Println("  (prebuf)", txt)
+				io.WriteString(&prebuf, txt +"\n") } }
 		copying.Lock()
 		// flush the pre-buffer...
 		if prebuf.Len() > 0 {
+			//fmt.Println("  (flush: prebuf)")
 			io.Copy(ow, &prebuf) }
 		ow.Close()
 		close(done_input) }()
@@ -64,6 +67,6 @@ func main(){
 
 
 	<-done_input
-	//<-done_output
+	<-done_output
 
 }
