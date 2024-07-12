@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"strings"
 	"os"
+	"io"
 	"bufio"
-	//"time"
+	"time"
 )
 
 
@@ -42,8 +43,37 @@ func TestRun(t *testing.T) {
 }
 
 
-func TestSimpleCall(t *testing.T) {
-	// XXX
+func TestTee(t *testing.T) {
+
+	r1, w1 := io.Pipe()
+	r2, w2 := io.Pipe()
+	r3, w3 := io.Pipe()
+	r4, w4 := io.Pipe()
+
+	go TeeCloser(r1, w2, 
+		func(s string){
+			time.Sleep(time.Millisecond*5)
+			fmt.Println(">>>", s) })
+
+	go TeeCloser(r2, w3, nil)
+
+	go TeeCloser(r3, w4, 
+		func(s string){
+			time.Sleep(time.Millisecond*10)
+			fmt.Println(" >>", s) })
+
+	done := AsyncTeeCloser(r4, nil, 
+		func(s string){
+			fmt.Println("  >", s) })
+
+	time.Sleep(time.Millisecond*10)
+	io.WriteString(w1, "A\n")
+	io.WriteString(w1, "B\n")
+	io.WriteString(w1, "C\n")
+	io.WriteString(w1, "D\n")
+	w1.Close()
+
+	<-done
 }
 
 func TestPipeManual(t *testing.T) {

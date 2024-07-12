@@ -15,6 +15,7 @@ import (
 )
 
 
+// Tee the reader output into a function and a writer...
 //
 //	reader -> tee -> handler(line)
 //				\
@@ -55,6 +56,11 @@ func Tee(reader io.Reader, writer io.Writer, handler func(string)) {
 			prebuf.Len() > 0 {
 		io.Copy(writer, &prebuf) } }
 
+func TeeCloser(reader io.Reader, writer io.WriteCloser, handler func(string)) {
+	if writer != nil {
+		defer writer.Close() }
+	Tee(reader, writer, handler) }
+
 // XXX make this a generic Async(func, ...args)
 func AsyncTee(reader io.Reader, writer io.Writer, handler func(string)) (<-chan bool) {
 	done := make(chan bool)
@@ -67,9 +73,7 @@ func AsyncTee(reader io.Reader, writer io.Writer, handler func(string)) (<-chan 
 func AsyncTeeCloser(reader io.Reader, writer io.WriteCloser, handler func(string)) (<-chan bool) {
 	done := make(chan bool)
 	go func(){ 
-		Tee(reader, writer, handler)
-		if writer != nil {
-			writer.Close() }
+		TeeCloser(reader, writer, handler)
 		close(done) }()
 	return done }
 
