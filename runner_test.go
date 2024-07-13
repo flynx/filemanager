@@ -112,6 +112,7 @@ func TestPipeManual(t *testing.T) {
 		t.Errorf("Skipped part of grep output, expected: %v got: %v\n", c, n) } 
 }
 
+// XXX this works but
 func TestPipeChainPassive(t *testing.T) {
 	n := 0
 	c := 0
@@ -129,16 +130,17 @@ func TestPipeChainPassive(t *testing.T) {
 		t.Error(err) }
 
 	// grep...
-	//var grep *PipedCmd
-	//grep, err = ls.PipeTo("grep '.go'", 
-	_, err = ls.PipeTo("grep '.go'", 
+	var grep *PipedCmd
+	grep, err = ls.PipeTo("grep '.go'", 
+	//_, err = ls.PipeTo("grep '.go'", 
 		func(s string){
 			fmt.Println("  grep:", s)
 			n++ })
 
 	ls.Wait()
 	//grep.Stdin.Close()
-	//grep.Wait()
+	// XXX this blocks -- unclosed stdin???
+	grep.Wait()
 
 	if c != n {
 		t.Errorf("Skipped part of grep output, expected: %v got: %v\n", c, n) } 

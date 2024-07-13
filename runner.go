@@ -155,8 +155,8 @@ func (this *Cmd) Run(stdin ...io.Reader) error {
 	r, w := io.Pipe()
 	this.Stdout = r
 	go func(){
-		Tee(src, w, this.Handler)
-		w.Close()
+		TeeCloser(src, w, this.Handler)
+		//w.Close()
 		this.Cmd.Wait()
 		this.__reset() }() 
 
@@ -181,8 +181,9 @@ func (this *Cmd) PipeTo(code string, handler ...LineHandler) (*PipedCmd, error) 
 	piped.Code = code
 	if len(handler) > 0 {
 		piped.Handler = handler[0] }
+
 	// transfer output to piped (passive)...
-	if this.Handler == nil {
+	//if this.Handler == nil {
 		this.Handler = func(s string){
 			piped.Writeln(s) }
 		if err := piped.Run(this.Stdout); err != nil {
@@ -191,7 +192,8 @@ func (this *Cmd) PipeTo(code string, handler ...LineHandler) (*PipedCmd, error) 
 			<-piped.Done
 			this.Cmd.Wait()
 			this.__reset() }()
-	// tee output to local handler and piped...
+	/*/
+	// tee output to local handler and piped (active)...
 	// XXX this will not work as by this time this can be already running 
 	//		and using the old handler...
 	} else {
@@ -202,6 +204,8 @@ func (this *Cmd) PipeTo(code string, handler ...LineHandler) (*PipedCmd, error) 
 			piped.Writeln(s) } 
 		if err := piped.Run(); err != nil {
 			return &piped, err } }
+	//*/
+
 	return &piped, nil }
 
 
