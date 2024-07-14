@@ -155,8 +155,8 @@ func (this *Cmd) Run(stdin ...io.Reader) error {
 	r, w := io.Pipe()
 	this.Stdout = r
 	go func(){
+		// XXX this seems to block...
 		TeeCloser(src, w, this.Handler)
-		//w.Close()
 		this.Cmd.Wait()
 		this.__reset() }() 
 

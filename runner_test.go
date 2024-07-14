@@ -104,8 +104,11 @@ func TestPipeManual(t *testing.T) {
 	if err != nil {
 		t.Error(err) }
 
+	// XXX this does not unblock...
+	fmt.Println("### ls.Wait()")
 	ls.Wait()
 	grep.Stdin.Close()
+	fmt.Println("### grep.Wait()")
 	grep.Wait()
 
 	if c != n {
