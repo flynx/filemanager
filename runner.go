@@ -25,10 +25,6 @@ import (
 //		line write to writer
 //		XXX should this be the case???
 // NOTE: this buffers the writes and will not block on the writer
-// XXX can we somehow avoid the blocking goroutine that copies the buf 
-//		to writer???
-//		...somehow initiate this by the writer's reader...
-//		....or stop it on exit...
 func Tee(reader io.Reader, writer io.Writer, handler func(string)) (<-chan bool) {
 	done := make(chan bool)
 	buf := bytes.Buffer{}
@@ -69,15 +65,14 @@ func TeeCloser(reader io.Reader, writer io.WriteCloser, handler func(string)) (<
 			writer.Close() }() }
 	return done }
 
-// XXX make this a generic Async(func, ...args)
+
+// XXX use/write a generic Async(func, ...args)
 func AsyncTee(reader io.Reader, writer io.Writer, handler func(string)) (<-chan bool) {
 	done := make(chan bool)
 	go func(){ 
 		Tee(reader, writer, handler)
 		close(done) }()
 	return done }
-
-// XXX make this a generic Async(func, ...args)
 func AsyncTeeCloser(reader io.Reader, writer io.WriteCloser, handler func(string)) (<-chan bool) {
 	done := make(chan bool)
 	go func(){ 
@@ -191,29 +186,11 @@ func (this *Cmd) PipeTo(code string, handler ...LineHandler) (*PipedCmd, error) 
 	if len(handler) > 0 {
 		piped.Handler = handler[0] }
 
-	// transfer output to piped (passive)...
-	//if this.Handler == nil {
-		this.Handler = func(s string){
-			piped.Writeln(s) }
-		if err := piped.Run(this.Stdout); err != nil {
-			return &piped, err }
-		//go func(){
-		//	<-piped.Done
-		//	this.Cmd.Wait()
-		//	this.__reset() }()
-	/*/
-	// tee output to local handler and piped (active)...
-	// XXX this will not work as by this time this can be already running 
-	//		and using the old handler...
-	} else {
-		local_handler := this.Handler
-		// XXX need to do this BEFORE this starts, or to save the output someplace...
-		this.Handler = func(s string){
-			local_handler(s)
-			piped.Writeln(s) } 
-		if err := piped.Run(); err != nil {
-			return &piped, err } }
-	//*/
+	// transfer output to piped...
+	this.Handler = func(s string){
+		piped.Writeln(s) }
+	if err := piped.Run(this.Stdout); err != nil {
+		return &piped, err }
 
 	return &piped, nil }
 
@@ -246,6 +223,8 @@ func (this *PipedCmd) Writeln(s string) (int, error) {
 
 // XXX 
 func (this *PipedCmd) Close() {
+	// NOTE: after all the input is processed the unclosed .Stdin is the
+	//		only thing that can keep .Wait() from releasing...
 	this.Stdin.Close() }
 
 
