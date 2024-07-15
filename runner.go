@@ -174,24 +174,19 @@ func (this *Cmd) Kill() error {
 	if this.Cmd == nil {
 		return errors.New(".Kill(..): no command running.") }
 	return this.Process.Kill() }
-// XXX revise???
 func (this *Cmd) Restart(stdin ...io.Reader) error {
 	this.Kill()
 	return this.Run(stdin...) }
 
-// XXX TEST...
+// NOTE: this pipes .Stdout to the next command...
 func (this *Cmd) PipeTo(code string, handler ...LineHandler) (*PipedCmd, error) {
 	piped := PipedCmd{}
 	piped.Code = code
 	if len(handler) > 0 {
 		piped.Handler = handler[0] }
-
-	// transfer output to piped...
-	this.Handler = func(s string){
-		piped.Writeln(s) }
+	// run the piped command...
 	if err := piped.Run(this.Stdout); err != nil {
 		return &piped, err }
-
 	return &piped, nil }
 
 
