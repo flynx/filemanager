@@ -29,7 +29,8 @@ import (
 //		to writer???
 //		...somehow initiate this by the writer's reader...
 //		....or stop it on exit...
-func Tee(reader io.Reader, writer io.Writer, handler func(string)) {
+func Tee(reader io.Reader, writer io.Writer, handler func(string)) (<-chan bool) {
+	done := make(chan bool)
 	buf := bytes.Buffer{}
 	prebuf := bytes.Buffer{}
 	var copying sync.Mutex
@@ -50,16 +51,23 @@ func Tee(reader io.Reader, writer io.Writer, handler func(string)) {
 		// waiting to write -- pre-buffer...
 		} else {
 			io.WriteString(&prebuf, txt +"\n") } }
-	copying.Lock()
-	// flush the pre-buffer if non-empty...
-	if writer != nil && 
-			prebuf.Len() > 0 {
-		io.Copy(writer, &prebuf) } }
+	// cleanup...
+	go func(){
+		copying.Lock()
+		// flush the pre-buffer if non-empty...
+		if writer != nil && 
+				prebuf.Len() > 0 {
+			io.Copy(writer, &prebuf) } 
+		close(done) }() 
+	return done }
 
-func TeeCloser(reader io.Reader, writer io.WriteCloser, handler func(string)) {
+func TeeCloser(reader io.Reader, writer io.WriteCloser, handler func(string)) (<-chan bool) {
+	done := Tee(reader, writer, handler) 
 	if writer != nil {
-		defer writer.Close() }
-	Tee(reader, writer, handler) }
+		go func(){
+			<-done
+			writer.Close() }() }
+	return done }
 
 // XXX make this a generic Async(func, ...args)
 func AsyncTee(reader io.Reader, writer io.Writer, handler func(string)) (<-chan bool) {
@@ -114,6 +122,7 @@ func (this *Cmd) Run(stdin ...io.Reader) error {
 		return errors.New(".Run(..): previous command not done.") }
 
 	done := make(chan bool)
+	// XXX these two are needed to have different types (ro vs rw)
 	this.__done = done
 	this.Done = done
 
@@ -188,10 +197,10 @@ func (this *Cmd) PipeTo(code string, handler ...LineHandler) (*PipedCmd, error) 
 			piped.Writeln(s) }
 		if err := piped.Run(this.Stdout); err != nil {
 			return &piped, err }
-		go func(){
-			<-piped.Done
-			this.Cmd.Wait()
-			this.__reset() }()
+		//go func(){
+		//	<-piped.Done
+		//	this.Cmd.Wait()
+		//	this.__reset() }()
 	/*/
 	// tee output to local handler and piped (active)...
 	// XXX this will not work as by this time this can be already running 
@@ -234,6 +243,10 @@ func (this *PipedCmd) Write(s string) (int, error) {
 	return io.WriteString(this.Stdin, s) }
 func (this *PipedCmd) Writeln(s string) (int, error) {
 	return this.Write(s +"\n") }
+
+// XXX 
+func (this *PipedCmd) Close() {
+	this.Stdin.Close() }
 
 
 func Pipe(code string, handler ...LineHandler) (*PipedCmd, error) {

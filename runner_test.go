@@ -43,7 +43,25 @@ func TestRun(t *testing.T) {
 }
 
 
-func TestTee(t *testing.T) {
+func TestTeeBasic(t *testing.T) {
+	r1, w1 := io.Pipe()
+	_, w2 := io.Pipe()
+
+	done := AsyncTeeCloser(r1, w2, 
+		func(s string){
+			time.Sleep(time.Millisecond*5)
+			fmt.Println(">>>", s) })
+
+	time.Sleep(time.Millisecond*10)
+	io.WriteString(w1, "A\n")
+	io.WriteString(w1, "B\n")
+	io.WriteString(w1, "C\n")
+	io.WriteString(w1, "D\n")
+	w1.Close()
+
+	<-done
+}
+func TestTeeChain(t *testing.T) {
 
 	r1, w1 := io.Pipe()
 	r2, w2 := io.Pipe()
@@ -104,18 +122,66 @@ func TestPipeManual(t *testing.T) {
 	if err != nil {
 		t.Error(err) }
 
-	// XXX this does not unblock...
-	fmt.Println("### ls.Wait()")
-	ls.Wait()
-	grep.Stdin.Close()
-	fmt.Println("### grep.Wait()")
+	go func(){
+		ls.Wait()
+		// NOTE: sice we are manually connecting pipes we also need to 
+		//		manually close them...
+		grep.Close() }()
+
 	grep.Wait()
 
 	if c != n {
 		t.Errorf("Skipped part of grep output, expected: %v got: %v\n", c, n) } 
 }
 
-// XXX this works but
+func TestCmd(t *testing.T) {
+	files, _ := os.ReadDir(".")
+	// NOTE: the +2 here is to account for "." and ".." returned by ls -a
+	c := len(files) + 2
+	n := 0
+
+	var err error
+
+	// ls...
+	var ls *Cmd
+	ls, err = Run("ls -a", 
+		func(s string){ 
+			fmt.Println("ls:", s) 
+			n++ })
+	if err != nil {
+		t.Error(err) }
+
+
+	ls.Wait()
+
+	if c != n {
+		t.Errorf("Skipped part of grep output, expected: %v got: %v\n", c, n) } 
+}
+func TestCmdStdout(t *testing.T) {
+	n := 0
+	c := 0
+	var err error
+
+	// ls...
+	var ls *Cmd
+	ls, err = Run("ls -a", 
+		func(s string){ 
+			fmt.Println("ls:", s) 
+			c++ })
+	if err != nil {
+		t.Error(err) }
+
+	scanner := bufio.NewScanner(ls.Stdout)
+	for scanner.Scan() {
+		fmt.Println("  ->", scanner.Text()) 
+		n++ }
+
+	ls.Wait()
+
+	if c != n {
+		t.Errorf("Skipped part of grep output, expected: %v got: %v\n", c, n) } 
+}
+
 func TestPipeChainPassive(t *testing.T) {
 	n := 0
 	c := 0
@@ -135,50 +201,15 @@ func TestPipeChainPassive(t *testing.T) {
 	// grep...
 	var grep *PipedCmd
 	grep, err = ls.PipeTo("grep '.go'", 
-	//_, err = ls.PipeTo("grep '.go'", 
 		func(s string){
 			fmt.Println("  grep:", s)
 			n++ })
 
-	ls.Wait()
-	//grep.Stdin.Close()
-	// XXX this blocks -- unclosed stdin???
 	grep.Wait()
 
 	if c != n {
 		t.Errorf("Skipped part of grep output, expected: %v got: %v\n", c, n) } 
 }
-
-//* XXX this still fails... 
-func TestCmdStdout(t *testing.T) {
-	n := 0
-	c := 0
-	var err error
-
-	// ls...
-	var ls *Cmd
-	// XXX unless explicitly read from / close this will block...
-	ls, err = Run("ls -a", 
-		func(s string){ 
-			fmt.Println("ls:", s) 
-			c++ })
-	if err != nil {
-		t.Error(err) }
-
-	//* XXX 
-	scanner := bufio.NewScanner(ls.Stdout)
-	for scanner.Scan() {
-		fmt.Println("  ->", scanner.Text()) 
-		n++ }
-	//*/
-
-	ls.Wait()
-
-	if c != n {
-		t.Errorf("Skipped part of grep output, expected: %v got: %v\n", c, n) } 
-}
-
-//* XXX this still fails... 
 func TestPipeChainActive(t *testing.T) {
 	n := 0
 	c := 0
@@ -192,28 +223,19 @@ func TestPipeChainActive(t *testing.T) {
 	// ls...
 	var ls *Cmd
 	ls, err = Run("ls -a", 
-		// XXX might be a good idea to buffer the results returned by this...
 		func(s string){ 
+			time.Sleep(time.Millisecond*50)
 			fmt.Println("ls:", s) })
 	if err != nil {
 		t.Error(err) }
 
-	scanner := bufio.NewScanner(ls.Stdout)
-	for scanner.Scan() {
-		fmt.Println("  ls:", scanner.Text()) }
-	//
 	// grep...
-	// XXX this does not print anything yet...
 	var grep *PipedCmd
 	grep, err = ls.PipeTo("grep '.go'", 
-	//_, err = ls.PipeTo("grep '.go'", 
 		func(s string){
 			fmt.Println("  grep:", s)
 			n++ })
-	//*/
 
-	ls.Wait()
-	//grep.Stdin.Close()
 	grep.Wait()
 
 	//time.Sleep(time.Millisecond*500)
@@ -221,6 +243,5 @@ func TestPipeChainActive(t *testing.T) {
 	if c != n {
 		t.Errorf("Skipped part of grep output, expected: %v got: %v\n", c, n) } 
 }
-//*/
 
 
