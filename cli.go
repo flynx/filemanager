@@ -1299,7 +1299,7 @@ func (this *TcellDrawer) ReadFromCmd(cmd string) chan bool {
 // XXX EXPERIMENTAL...
 // XXX should we transform the existing lines???
 func (this *TcellDrawer) TransformCmd(cmd string) *TcellDrawer {
-	c, err := Piped(cmd)
+	c, err := Pipe(cmd)
 	c.HandleLine(
 		func(str string){
 			log.Println("    updated:", str)
