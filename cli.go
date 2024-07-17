@@ -1342,7 +1342,7 @@ func NewTcellLines(l ...Lines) *TcellDrawer {
 func main(){
 	//* XXX stub...
 	lines := NewTcellLines(Lines{
-		SpanMode: "*,5",
+		SpanMode: "*,8",
 		SpanSeparator: "│",
 		Border: "│┌─┐│└─┘",
 		// XXX BUG: this loses the space at the end of $TEXT and draws 
@@ -1362,8 +1362,11 @@ func main(){
 	/*/
 	fmt.Println("start")
 	lines.TransformCmd("sed 's/$/|/'")
+	// XXX BUG: this still produces zero lines on android -- another race???
+	// NOTE: ls flags that trigger stat make things really slow (-F, sorting, ...etc)
 	//lines.ReadFromCmd("ls")
-	lines.ReadFromCmd("ls ~/Pictures/Instagram/")
+	lines.ReadFromCmd("echo .. ; ls -t --group-directories-first ~/Pictures/Instagram/")
+	//lines.ReadFromCmd("echo .. ; ls --group-directories-first ~/Pictures/Instagram/ARCHIVE/")
 	//*/
 
 	//lines.Width = "50%"
