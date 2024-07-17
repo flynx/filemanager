@@ -17,6 +17,7 @@ import (
 	"os"
 	"syscall"
 	"reflect"
+	"sync"
 	"time"
 	//"io"
 	"bufio"
@@ -650,6 +651,9 @@ func (this *Actions) Exit() Result {
 
 
 // Drawer...
+
+var REFRESH_INTERVAL = time.Millisecond * 15
+
 //
 // XXX renmae...
 type TcellDrawer struct {
@@ -696,6 +700,10 @@ type TcellDrawer struct {
 	__style_cache map[string]tcell.Style
 	__float_cache map[string]float64
 	//__int_cache map[string]int
+
+	RefreshInterval time.Duration
+	__refresh_blocked sync.Mutex
+	__refresh_pending sync.Mutex
 }
 
 func (this *TcellDrawer) updateGeometry() *TcellDrawer {
@@ -886,12 +894,27 @@ func (this *TcellDrawer) Draw() *TcellDrawer {
 		Fill().
 		Lines.Draw()
 	return this }
+// NOTE: this will not refresh faster than once per .RefreshInterval
 func (this *TcellDrawer) Refresh() *TcellDrawer {
-	this.
-		updateGeometry().
-		Draw().
-		Screen.Sync()
-	this.Screen.Show()
+	// refresh now...
+	if this.__refresh_blocked.TryLock() {
+		this.
+			updateGeometry().
+			Draw().
+			Screen.Sync()
+		this.Screen.Show()
+		go func(){
+			t := this.RefreshInterval
+			if t == 0 {
+				t = REFRESH_INTERVAL }
+			time.Sleep(t)
+			this.__refresh_blocked.Unlock() 
+			if ! this.__refresh_pending.TryLock() {
+				this.__refresh_pending.Unlock() 
+				this.Refresh() } }() 
+	// schedule a refresh...
+	} else {
+		this.__refresh_pending.TryLock() }
 	return this }
 
 // XXX not done yet...
@@ -1248,19 +1271,16 @@ func (this *TcellDrawer) Finalize() {
 		panic(maybePanic) } }
 
 
-// XXX should this take Lines ot Settings???
-func NewTcellLines(l ...Lines) *TcellDrawer {
-	var lines Lines
-	if len(l) == 0 {
-		lines = Lines{}
+func (this *TcellDrawer) Append(str string) *TcellDrawer {
+	if this.Transformer != nil {
+		//log.Println("  append:", str)
+		_, err := this.Transformer.Write(str +"\n")
+		if err != nil {
+			log.Panic(err) }
 	} else {
-		lines = l[0] }
-
-	drawer := TcellDrawer{}
-	drawer.Setup(lines)
-
-	return &drawer }
-
+		this.Lines.Append(str) }
+	this.Refresh() 
+	return this }
 
 
 /* XXX not sure about the API yet...
@@ -1278,22 +1298,13 @@ func (this *TcellDrawer) ReadFromCmd(cmd string) chan bool {
 	if err != nil {
 		log.Panic(err) }
 	go func(){
-		// update periodically untill we are done...
-		done := false
-		go func(){
-			for {
-				time.Sleep(time.Millisecond*20)
-				this.Refresh()
-				if done {
-					return } } }()
 		// load...
 		scanner := bufio.NewScanner(c.Stdout)
 		for scanner.Scan() {
 			txt := scanner.Text()
-			log.Println("read:", txt)
+			//log.Println("read:", txt)
 			this.Append(txt) } 
 			//this.Append(scanner.Text()) } 
-		done = true 
 		close(running) }()
 	return running }
 // XXX EXPERIMENTAL...
@@ -1301,21 +1312,27 @@ func (this *TcellDrawer) ReadFromCmd(cmd string) chan bool {
 func (this *TcellDrawer) TransformCmd(cmd string) *TcellDrawer {
 	c, err := Pipe(cmd,
 		func(str string){
-			log.Println("    updated:", str)
-			this.Lines.Append(str) })
+			//log.Println("    updated:", str)
+			this.Lines.Append(str) 
+			this.Refresh() })
 	if err != nil {
 		log.Panic(err) }
 	this.Transformer = c
 	return this }
-func (this *TcellDrawer) Append(str string) *TcellDrawer {
-	if this.Transformer != nil {
-		log.Println("  append:", str)
-		_, err := this.Transformer.Write(str +"\n")
-		if err != nil {
-			log.Panic(err) }
+
+
+// XXX should this take Lines ot Settings???
+func NewTcellLines(l ...Lines) *TcellDrawer {
+	var lines Lines
+	if len(l) == 0 {
+		lines = Lines{}
 	} else {
-		this.Lines.Append(str) }
-	return this }
+		lines = l[0] }
+
+	drawer := TcellDrawer{}
+	drawer.Setup(lines)
+
+	return &drawer }
 
 
 
@@ -1328,6 +1345,8 @@ func main(){
 		SpanMode: "*,5",
 		SpanSeparator: "│",
 		Border: "│┌─┐│└─┘",
+		// XXX BUG: this loses the space at the end of $TEXT and draws 
+		//		a space intead of "/"...
 		Title: " $TEXT |/",
 		Status: "|${SELECTED:!*}${SELECTED:+($SELECTED)}$F $LINE/$LINES ",
 	})
@@ -1343,8 +1362,8 @@ func main(){
 	/*/
 	fmt.Println("start")
 	lines.TransformCmd("sed 's/$/|/'")
-	// XXX BUG: sometimes the list is rendered partially...
-	lines.ReadFromCmd("ls")
+	//lines.ReadFromCmd("ls")
+	lines.ReadFromCmd("ls ~/Pictures/Instagram/")
 	//*/
 
 	//lines.Width = "50%"
