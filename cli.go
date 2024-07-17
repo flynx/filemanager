@@ -687,7 +687,7 @@ type TcellDrawer struct {
 	EmptySpace string
 
 
-	Transformer *Cmd
+	Transformer *PipedCmd
 
 	// caches...
 	// NOTE: in normal use-cases the stuff cached here is static and 
@@ -1299,8 +1299,7 @@ func (this *TcellDrawer) ReadFromCmd(cmd string) chan bool {
 // XXX EXPERIMENTAL...
 // XXX should we transform the existing lines???
 func (this *TcellDrawer) TransformCmd(cmd string) *TcellDrawer {
-	c, err := Pipe(cmd)
-	c.HandleLine(
+	c, err := Pipe(cmd,
 		func(str string){
 			log.Println("    updated:", str)
 			this.Lines.Append(str) })
@@ -1311,7 +1310,7 @@ func (this *TcellDrawer) TransformCmd(cmd string) *TcellDrawer {
 func (this *TcellDrawer) Append(str string) *TcellDrawer {
 	if this.Transformer != nil {
 		log.Println("  append:", str)
-		_, err := this.Transformer.WriteString(str +"\n")
+		_, err := this.Transformer.Write(str +"\n")
 		if err != nil {
 			log.Panic(err) }
 	} else {
