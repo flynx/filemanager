@@ -12,7 +12,7 @@
 package main
 
 import (
-	"fmt"
+	//"fmt"
 	"log"
 	"os"
 	"syscall"
@@ -1360,9 +1360,7 @@ func main(){
 	lines.Lines.Index = 1
 	lines.Lines.Lines[0].Selected = true
 	/*/
-	fmt.Println("start")
 	lines.TransformCmd("sed 's/$/|/'")
-	// XXX BUG: this still produces zero lines on android -- another race???
 	// NOTE: ls flags that trigger stat make things really slow (-F, sorting, ...etc)
 	//lines.ReadFromCmd("ls")
 	lines.ReadFromCmd("echo .. ; ls -t --group-directories-first ~/Pictures/Instagram/")
