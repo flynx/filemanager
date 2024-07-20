@@ -238,4 +238,4 @@ func Pipe(code string, handler ...LineHandler) (*PipedCmd, error) {
 	return &this, nil }
 
 
-
+// vim:set ts=4 sw=4 nowrap :
