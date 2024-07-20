@@ -12,10 +12,10 @@
 package main
 
 import (
-	"fmt"
+	//"fmt"
 	"log"
 	"os"
-	"syscall"
+	//"syscall"
 	"reflect"
 	"sync"
 	"time"
@@ -24,7 +24,7 @@ import (
 	"runtime"
 	//"bytes"
 	"strings"
-	"unicode"
+	//"unicode"
 	"strconv"
 	"slices"
 	//"regexp"
@@ -34,105 +34,6 @@ import (
 
 	//"github.com/mkideal/cli"
 )
-
-
-// Tcell-specific helpers...
-//
-func Style2TcellStyle(style Style, base_style ...tcell.Style) tcell.Style {
-	base := tcell.StyleDefault
-	if len(base_style) != 0 {
-		base = base_style[0] } 
-	// set flags...
-	colors := []string{}
-	for _, s := range style {
-		switch s {
-			case "blink":
-				base = base.Blink(true)
-			case "bold":
-				base = base.Bold(true)
-			case "dim":
-				base = base.Dim(true)
-			case "italic":
-				base = base.Italic(true)
-			case "normal":
-				base = base.Normal()
-			case "reverse":
-				base = base.Reverse(true)
-			case "strike-through":
-				base = base.StrikeThrough(true)
-			case "underline":
-				base = base.Underline(true)
-			default:
-				// urls...
-				if string(s[:len("url")]) == "url" {
-					p := strings.SplitN(s, ":", 2)
-					url := ""
-					if len(p) > 1 {
-						url = p[1] }
-					base = base.Url(url)
-				// colors...
-				} else {
-					colors = append(colors, s) } } }
-	// set the colors...
-	if len(colors) > 0 && 
-			colors[0] != "as-is" {
-		base = base.Foreground(
-			tcell.GetColor(colors[0])) }
-	if len(colors) > 1 &&
-			colors[1] != "as-is" {
-		base = base.Background(
-			tcell.GetColor(colors[1])) }
-	return base }
-func TcellEvent2Keys(evt tcell.EventKey) []string {
-	mods := []string{}
-	shifted := false
-
-	var key, Key string
-
-	mod, k, r := evt.Modifiers(), evt.Key(), evt.Rune()
-
-	// handle key and shift state...
-	if k == tcell.KeyRune {
-		if unicode.IsUpper(r) {
-			shifted = true
-			Key = string(r)
-			mods = append(mods, "shift") }
-		key = string(unicode.ToLower(r))
-	// special keys...
-	} else if k > tcell.KeyRune || k <= tcell.KeyDEL {
-		key = evt.Name()
-	// ascii...
-	} else {
-		if unicode.IsUpper(rune(k)) {
-			shifted = true 
-			Key = string(rune(k))
-			mods = append(mods, "shift") } 
-		key = strings.ToLower(string(rune(k))) } 
-
-	// split out mods and normalize...
-	key_mods := strings.Split(key, "+")
-	key = key_mods[len(key_mods)-1]
-	if k := []rune(key) ; len(k) == 1 && unicode.IsUpper(k[0]) {
-		key = strings.ToLower(key) }
-	key_mods = key_mods[:len(key_mods)-1]
-
-	// basic translation...
-	if key == " " {
-		key = "Space" }
-
-	if slices.Contains(key_mods, "Ctrl") || 
-			mod & tcell.ModCtrl != 0 {
-		mods = append(mods, "ctrl") }
-	if slices.Contains(key_mods, "Alt") || 
-			mod & tcell.ModAlt != 0 {
-		mods = append(mods, "alt") }
-	if slices.Contains(key_mods, "Meta") || 
-			mod & tcell.ModMeta != 0 {
-		mods = append(mods, "meta") }
-	if !shifted && mod & tcell.ModShift != 0 {
-		mods = append(mods, "shift") }
-
-	return key2keys(mods, key, Key) }
 
 
 
@@ -262,8 +163,8 @@ var KEYBINDINGS = Keybindings {
 	"ctrl+l": "Refresh",
 }
 
-func key2keys(mods []string, key string, rest ...string) []string {
-	key_seq := []string{}
+func key2keys(mods []string, key string, rest ...string) [][]string {
+	key_seq := [][]string{}
 	Key := ""
 	if len(rest) > 0 {
 		Key = rest[0] }
@@ -272,13 +173,13 @@ func key2keys(mods []string, key string, rest ...string) []string {
 	//		...generate combinations + sort by length...
 	for i := 0; i < len(mods); i++ {
 		for j := i+1; j < len(mods); j++ {
-			key_seq = append(key_seq, mods[i] +"+"+ mods[j] +"+"+ key) } }
+			key_seq = append(key_seq, []string{mods[i], mods[j], key}) } }
 	for _, m := range mods {
-		key_seq = append(key_seq, m +"+"+ key) }
+		key_seq = append(key_seq, []string{m, key}) }
 	// uppercase letter...
 	if Key != "" {
-		key_seq = append(key_seq, Key) }
-	key_seq = append(key_seq, key)
+		key_seq = append(key_seq, []string{Key}) }
+	key_seq = append(key_seq, []string{key})
 
 	return key_seq }
 
@@ -299,6 +200,9 @@ const (
 
 	// Action missing and can not be called -- test next or fail
 	Missing
+
+	// Skip handling this instance
+	Skip
 )
 // Convert from Result type to propper exit code.
 func toExitCode(r Result) int {
@@ -312,7 +216,7 @@ func toExitCode(r Result) int {
 //
 type Actions struct {
 	// XXX this needs to be more generic...
-	*TcellDrawer
+	*UI
 
 	last string
 
@@ -324,9 +228,9 @@ type Actions struct {
 	SelectMotionStart int
 }
 
-func NewActions(d *TcellDrawer) *Actions {
+func NewActions(d *UI) *Actions {
 	return &Actions{
-		TcellDrawer: d,
+		UI: d,
 	} }
 
 // base action...
@@ -618,30 +522,14 @@ func (this *Actions) Update() Result {
 	return res }
 //*/
 func (this *Actions) Refresh() Result {
-	this.TcellDrawer.Refresh()
+	this.UI.Refresh()
 	return OK }
 
 // XXX will this stop goroutines?? (TEST)
 // XXX will this work on windows / windows version / disable on windows???
 //		...how do we deal with things like cygwin/MinGW/..???
 func (this *Actions) Stop() Result {
-	screen := this.TcellDrawer.Screen
-	_, ok := screen.Tty()
-	if ! ok {
-		return OK }
-	// XXX can we go around all of this and simple pass ctrl-z to parent???
-	screen.Suspend()
-	pid := syscall.Getppid()
-	// ask parent to detach us from io...
-	err := syscall.Kill(pid, syscall.SIGSTOP)
-	if err != nil {
-		log.Panic(err) }
-	// stop...
-	err = syscall.Kill(syscall.Getpid(), syscall.SIGSTOP)
-	if err != nil {
-		log.Panic(err) }
-	time.Sleep(time.Millisecond*50)
-	screen.Resume()
+	this.UI.Drawer.Stop()
 	return OK }
 func (this *Actions) Fail() Result {
 	return Fail }
@@ -654,10 +542,29 @@ func (this *Actions) Exit() Result {
 
 var REFRESH_INTERVAL = time.Millisecond * 15
 
+
+type Drawer interface {
+	Size() (width int, height int)
+
+	drawCells(col, row int, str string, style_name string, style Style)
+
+	Fill(style Style)
+	Refresh()
+
+	Setup(lines Lines)
+	Loop(this *UI) Result
+
+	// Actions...
+	Stop()
+}
+
+
 //
 // XXX renmae...
-type TcellDrawer struct {
-	tcell.Screen
+type UI struct {
+	//tcell.Screen
+	// XXX
+	Drawer
 
 	Lines *Lines
 
@@ -706,9 +613,10 @@ type TcellDrawer struct {
 	__refresh_pending sync.Mutex
 }
 
-func (this *TcellDrawer) updateGeometry() *TcellDrawer {
+// XXX TCELL uses .Screen.Size()
+func (this *UI) updateGeometry() *UI {
 	var err error
-	W, H := this.Screen.Size()
+	W, H := this.Drawer.Size()
 	Width, Height := this.Width, this.Height
 	Align := this.Align
 	if len(Align) == 0 {
@@ -800,7 +708,7 @@ func (this *TcellDrawer) updateGeometry() *TcellDrawer {
 			this.Lines.Top = int(float64(H - this.Lines.Height) / 2) } }
 	return this }
 // keep the selection in the same spot...
-func (this *TcellDrawer) handleScrollLimits() *TcellDrawer {
+func (this *UI) handleScrollLimits() *UI {
 	delta := 0
 
 	rows := this.Lines.Rows()
@@ -841,53 +749,17 @@ func (this *TcellDrawer) handleScrollLimits() *TcellDrawer {
 
 	return this }
 
-func (this *TcellDrawer) ResetCache() *TcellDrawer {
+func (this *UI) ResetCache() *UI {
 	this.__style_cache = nil
 	this.__float_cache = nil
 	//this.__int_cache = nil
 	return this }
 
-// Extends Style2TcellStyle(..) by adding cache...
-//
-// XXX do we need this public???
-// XXX URLS are supported but not usable yet as there is no way to set 
-//		the url...
-//		use: "url:<url>"
-// XXX would be nice to be able to use "foreground" and "background" 
-//		colors in a predictable manner -- currently they reference curent 
-//		colors
-//		...i.e. {"yellow", "foreground"} will set both colors to yellow...
-func (this *TcellDrawer) style2TcellStyle(style_name string, style Style) tcell.Style {
-	// cache...
-	if this.__style_cache == nil {
-		this.__style_cache = map[string]tcell.Style{} }
-	s, ok := this.__style_cache[style_name]
-	if ok {
-		return s }
-	cache := func(s tcell.Style) tcell.Style {
-		this.__style_cache[style_name] = s 
-		return s }
-
-	// base style (cached manually)...
-	base, ok := this.__style_cache["default"]
-	if ! ok {
-		_, s := this.Lines.GetStyle("default")
-		base = Style2TcellStyle(s) 
-		this.__style_cache["default"] = base } 
-
-	return cache(
-		Style2TcellStyle(style, base)) }
-func (this *TcellDrawer) drawCells(col, row int, str string, style_name string, style Style) {
-	if style_name == "EOL" {
-		return }
-	s := this.style2TcellStyle(style_name, style)
-	for i, r := range []rune(str) {
-		this.SetContent(col+i, row, r, nil, s) } }
-func (this *TcellDrawer) Fill() *TcellDrawer {
+func (this *UI) Fill() *UI {
 	_, s := this.Lines.GetStyle("background")
-	this.Screen.Fill(' ', this.style2TcellStyle("background", s))
+	this.Drawer.Fill(s)
 	return this }
-func (this *TcellDrawer) Draw() *TcellDrawer {
+func (this *UI) Draw() *UI {
 	this.
 		handleScrollLimits().
 		// XXX do this separately...
@@ -895,14 +767,13 @@ func (this *TcellDrawer) Draw() *TcellDrawer {
 		Lines.Draw()
 	return this }
 // NOTE: this will not refresh faster than once per .RefreshInterval
-func (this *TcellDrawer) Refresh() *TcellDrawer {
+func (this *UI) Refresh() *UI {
 	// refresh now...
 	if this.__refresh_blocked.TryLock() {
 		this.
 			updateGeometry().
-			Draw().
-			Screen.Sync()
-		this.Screen.Show()
+			Draw()
+		this.Drawer.Refresh()
 		go func(){
 			t := this.RefreshInterval
 			if t == 0 {
@@ -918,7 +789,7 @@ func (this *TcellDrawer) Refresh() *TcellDrawer {
 	return this }
 
 // XXX not done yet...
-func (this *TcellDrawer) HandleAction(actions string) Result {
+func (this *UI) HandleAction(actions string) Result {
 	// XXX make split here a bit more cleaver:
 	//		- support ";"
 	//		- support quoting of separators, i.e. ".. \\\n .." and ".. \; .." -- DONE
@@ -1063,7 +934,7 @@ func (this *TcellDrawer) HandleAction(actions string) Result {
 			if value != OK {
 				return value } } //}
 	return OK }
-func (this *TcellDrawer) HandleKey(key string) Result {
+func (this *UI) HandleKey(key string) Result {
 	keybindings := this.Keybindings
 	if keybindings == nil {
 		keybindings = KEYBINDINGS }
@@ -1091,187 +962,92 @@ func (this *TcellDrawer) HandleKey(key string) Result {
 				continue }
 			return res } }
 	return Missing }
+// XXX add zone key handling...
+func (this *UI) HandleMouse(col, row int, pressed []string) Result {
+	button := pressed[len(pressed)-1]
+	switch button {
+		case "MouseLeft", "MouseRight", "MouseMiddle":
+			// ignore clicks outside the list...
+			if col < this.Lines.Left || 
+						col >= this.Lines.Left + this.Lines.Width || 
+					row < this.Lines.Top || 
+						row >= this.Lines.Top + this.Lines.Height {
+				return Skip }
+			// title/status bars and borders...
+			top_offset := 0
+			if ! this.Lines.TitleDisabled {
+				top_offset = 1
+				if row == this.Lines.Top {
+					// XXX handle titlebar click???
+					//log.Println("    TITLE_LINE")
+					return Skip } }
+			if ! this.Lines.StatusDisabled {
+				if row - this.Lines.Top == this.Lines.Rows() + 1 {
+					// XXX handle statusbar click???
+					//log.Println("    STATUS_LINE")
+					return Skip } }
+			if this.Lines.Border != "" {
+				if col == this.Lines.Left ||
+						(! this.Lines.Scrollable() && 
+							col == this.Lines.Left + this.Lines.Width - 1) {
+					//log.Println("    BORDER")
+					return Skip } }
+			// scrollbar...
+			// XXX sould be nice if we started in the scrollbar 
+			//		to keep handling the drag untill released...
+			//		...for this to work need to either detect 
+			//		drag or release...
+			if this.Lines.Scrollable() && 
+					col == this.Lines.Left + this.Lines.Width - 1 {
+				//log.Println("    SCROLLBAR")
+				this.Lines.RowOffset = 
+					int((float64(row - this.Lines.Top - top_offset) / float64(this.Lines.Rows() - 1)) * 
+					float64(len(this.Lines.Lines) - this.Lines.Rows()))
+				this.Draw()
+			// call click handler...
+			} else {
+				border := 0
+				if this.Lines.Border != "" {
+					border = 1 }
+				this.MouseCol = col - this.Lines.Left - border
+				this.MouseRow = row - this.Lines.Top
+				if ! this.Lines.TitleDisabled {
+					this.MouseRow-- }
 
-func (this *TcellDrawer) Setup(lines Lines) *TcellDrawer {
-	this.Lines = &lines
-	this.Actions = NewActions(this)
-	lines.CellsDrawer = this
-	screen, err := tcell.NewScreen()
-	if err != nil {
-		log.Panic(err) }
-	this.Screen = screen
-	if err := this.Screen.Init(); err != nil {
-		log.Panic(err) }
-	this.EnableMouse()
-	this.EnablePaste()
-	this.EnableFocus()
-	return this }
-// XXX can we detect mod key press???
-//		...need to detect release of shift in selection...
-// XXX add background fill...
-// XXX might be fun to indirect this, i.e. add a global workspace manager
-//		that would pass events to clients/windows and handle their draw 
-//		order...
-func (this *TcellDrawer) Loop() Result {
-	defer this.Finalize()
+				// empty space below rows...
+				if this.MouseRow >= len(this.Lines.Lines) {
+					if this.EmptySpace != "active" {
+						//log.Println("    EMPTY SPACE")
+						this.Lines.Index = len(this.Lines.Lines) - 1 }
+					return Skip }
 
-	// initial state...
-	this.
-		updateGeometry().
-		Draw()
+				defer this.handleScrollLimits()
+				return this.HandleKey(strings.Join(pressed, "+")) }
 
-	for {
-		this.Show()
-
-		evt := this.PollEvent()
-
-		switch evt := evt.(type) {
-			// geometry...
-			case *tcell.EventResize:
-				this.
-					updateGeometry().
-					Draw()
-			// keys...
-			case *tcell.EventKey:
-				key_handled := false
-				for _, key := range TcellEvent2Keys(*evt) {
-					res := this.HandleKey(key)
-					if res == Missing {
-						log.Println("Key Unhandled:", key)
-						continue }
-					if res != OK {
-						return res } 
-					key_handled = true
-					this.Draw()
-					break }
-				// do not check for deafults on keys we handled...
-				if key_handled {
-					continue }
-				// defaults...
-				if evt.Key() == tcell.KeyEscape || 
-						evt.Key() == tcell.KeyCtrlC {
-					return OK }
-			// mouse...
-			case *tcell.EventMouse:
-				buttons := evt.Buttons()
-				// get modifiers...
-				// XXX this is almost the same as in TcellEvent2Keys(..) can we generalize???
-				mod := evt.Modifiers()
-				mods := []string{}
-				if mod & tcell.ModCtrl != 0 {
-					mods = append(mods, "ctrl") }
-				if mod & tcell.ModAlt != 0 {
-					mods = append(mods, "alt") }
-				if mod & tcell.ModMeta != 0 {
-					mods = append(mods, "meta") }
-				if mod & tcell.ModShift != 0 {
-					mods = append(mods, "shift") }
-				// XXX handle double click...
-				// XXX handle modifiers...
-				if buttons & tcell.Button1 != 0 || 
-						buttons & tcell.Button2 != 0 {
-					//log.Println("CLICK:", mods)
-					col, row := evt.Position()
-					// ignore clicks outside the list...
-					if col < this.Lines.Left || 
-								col >= this.Lines.Left + this.Lines.Width || 
-							row < this.Lines.Top || 
-								row >= this.Lines.Top + this.Lines.Height {
-						//log.Println("    OUT OF BOUNDS")
-						continue }
-					// title/status bars and borders...
-					top_offset := 0
-					if ! this.Lines.TitleDisabled {
-						top_offset = 1
-						if row == this.Lines.Top {
-							// XXX handle titlebar click???
-							//log.Println("    TITLE_LINE")
-							continue } }
-					if ! this.Lines.StatusDisabled {
-						if row - this.Lines.Top == this.Lines.Rows() + 1 {
-							// XXX handle statusbar click???
-							//log.Println("    STATUS_LINE")
-							continue } }
-					if this.Lines.Border != "" {
-						if col == this.Lines.Left ||
-								(! this.Lines.Scrollable() && 
-									col == this.Lines.Left + this.Lines.Width - 1) {
-							//log.Println("    BORDER")
-							continue } }
-					// scrollbar...
-					// XXX sould be nice if we started in the scrollbar 
-					//		to keep handling the drag untill released...
-					//		...for this to work need to either detect 
-					//		drag or release...
-					if this.Lines.Scrollable() && 
-							col == this.Lines.Left + this.Lines.Width - 1 {
-						//log.Println("    SCROLLBAR")
-						this.Lines.RowOffset = 
-							int((float64(row - this.Lines.Top - top_offset) / float64(this.Lines.Rows() - 1)) * 
-							float64(len(this.Lines.Lines) - this.Lines.Rows()))
-						this.Draw()
-					// call click handler...
-					} else {
-						border := 0
-						if this.Lines.Border != "" {
-							border = 1 }
-						this.MouseCol = col - this.Lines.Left - border
-						this.MouseRow = row - this.Lines.Top
-						if ! this.Lines.TitleDisabled {
-							this.MouseRow-- }
-
-						// empty space below rows...
-						if this.MouseRow >= len(this.Lines.Lines) {
-							if this.EmptySpace != "active" {
-								//log.Println("    EMPTY SPACE")
-								this.Lines.Index = len(this.Lines.Lines) - 1 }
-							continue }
-
-						button := ""
-						// normalize buttons...
-						if buttons & tcell.Button1 != 0 {
-							button = "MouseLeft" }
-						if buttons & tcell.Button2 != 0 {
-							button = "MouseRight" }
-						if buttons & tcell.Button3 != 0 {
-							button = "MouseMiddle" }
-						for _, key := range key2keys(mods, button) {
-							res := this.HandleKey(key) 
-							if res == Missing {
-								continue }
-							if res != OK {
-								return res } 
-							this.Draw()
-							break } }
-					this.handleScrollLimits()
-
-				} else if buttons & tcell.WheelUp != 0 {
-					// XXX add mods...
-					res := this.HandleKey("WheelUp")
-					if res == Missing {
-						res = OK }
-					if res != OK {
-						return res }
-					this.Draw()
-
-				} else if buttons & tcell.WheelDown != 0 {
-					// XXX add mods...
-					res := this.HandleKey("WheelDown")
-					if res == Missing {
-						res = OK }
-					if res != OK {
-						return res } 
-					this.Draw() } } }
+		default:
+			res := this.HandleKey(strings.Join(pressed, "+"))
+			if res == Missing {
+				res = OK }
+			if res != OK {
+				return res }
+			this.Draw() }
 	return OK }
-// handle panics and cleanup...
-func (this *TcellDrawer) Finalize() {
-	maybePanic := recover()
-	this.Screen.Fini()
-	if maybePanic != nil {
-		panic(maybePanic) } }
 
 
-func (this *TcellDrawer) Append(str string) *TcellDrawer {
+func (this *UI) Setup(lines Lines, drawer Drawer) *UI {
+	this.Lines = &lines
+	this.Lines.CellsDrawer = this
+
+	this.Drawer = drawer
+	this.Drawer.Setup(lines)
+
+	this.Actions = NewActions(this)
+
+	return this }
+func (this *UI) Loop() Result {
+	return this.Drawer.Loop(this) }
+
+func (this *UI) Append(str string) *UI {
 	if this.Transformer != nil {
 		//log.Println("  append:", str)
 		_, err := this.Transformer.Write(str +"\n")
@@ -1284,14 +1060,14 @@ func (this *TcellDrawer) Append(str string) *TcellDrawer {
 
 
 /* XXX not sure about the API yet...
-func (this *TcellDrawer) Append(str string) *TcellDrawer {
+func (this *UI) Append(str string) *UI {
 	this.Lines.Append(str)
 	// XXX do transform...
 	return this }
 //*/
 // XXX BUG: this sometimes does not go through the whole list...
 //		...does Run(..) close .Stdout too early???
-func (this *TcellDrawer) ReadFromCmd(cmd string) chan bool {
+func (this *UI) ReadFromCmd(cmd string) chan bool {
 	this.Lines.Clear()
 	running := make(chan bool)
 	c, err := Run(cmd, nil)
@@ -1309,7 +1085,7 @@ func (this *TcellDrawer) ReadFromCmd(cmd string) chan bool {
 	return running }
 // XXX EXPERIMENTAL...
 // XXX should we transform the existing lines???
-func (this *TcellDrawer) TransformCmd(cmd string) *TcellDrawer {
+func (this *UI) TransformCmd(cmd string) *UI {
 	c, err := Pipe(cmd,
 		func(str string){
 			//log.Println("    updated:", str)
@@ -1322,17 +1098,19 @@ func (this *TcellDrawer) TransformCmd(cmd string) *TcellDrawer {
 
 
 // XXX should this take Lines ot Settings???
-func NewTcellLines(l ...Lines) *TcellDrawer {
+func NewTcellLines(l ...Lines) *UI {
 	var lines Lines
 	if len(l) == 0 {
 		lines = Lines{}
 	} else {
 		lines = l[0] }
 
-	drawer := TcellDrawer{}
-	drawer.Setup(lines)
+	drawer := UI{}
+	// XXX revise the Tcell passing...
+	drawer.Setup(lines, &Tcell{})
 
 	return &drawer }
+
 
 
 
@@ -1342,7 +1120,7 @@ func NewTcellLines(l ...Lines) *TcellDrawer {
 func main(){
 	//* XXX stub...
 	lines := NewTcellLines(Lines{
-		SpanMode: "*,5",
+		SpanMode: "*,8",
 		SpanSeparator: "│",
 		Border: "│┌─┐│└─┘",
 		// XXX BUG: this loses the space at the end of $TEXT and draws 
@@ -1360,10 +1138,11 @@ func main(){
 	lines.Lines.Index = 1
 	lines.Lines.Lines[0].Selected = true
 	/*/
-	fmt.Println("start")
 	lines.TransformCmd("sed 's/$/|/'")
+	// NOTE: ls flags that trigger stat make things really slow (-F, sorting, ...etc)
 	//lines.ReadFromCmd("ls")
-	lines.ReadFromCmd("ls ~/Pictures/Instagram/")
+	lines.ReadFromCmd("echo .. ; ls -t --group-directories-first ~/Pictures/Instagram/")
+	//lines.ReadFromCmd("echo .. ; ls --group-directories-first ~/Pictures/Instagram/ARCHIVE/")
 	//*/
 
 	//lines.Width = "50%"
