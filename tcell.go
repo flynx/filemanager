@@ -157,6 +157,9 @@ type Tcell struct {
 	__style_cache map[string]tcell.Style
 }
 
+func (this *Tcell) ResetCache() {
+	this.__style_cache = nil }
+
 // Extends Style2TcellStyle(..) by adding cache...
 //
 // XXX do we need this public???
@@ -213,6 +216,7 @@ func (this *Tcell) Setup(lines Lines) {
 	this.EnableMouse()
 	this.EnablePaste()
 	this.EnableFocus() }
+
 // XXX can we detect mod key press???
 //		...need to detect release of shift in selection...
 // XXX add background fill...
@@ -302,5 +306,4 @@ func (this *Tcell) Finalize() {
 
 
 
-
-
+// vim:set sw=4 ts=4 nowrap :

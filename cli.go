@@ -29,7 +29,7 @@ import (
 	"slices"
 	//"regexp"
 
-	"github.com/gdamore/tcell/v2"
+	//"github.com/gdamore/tcell/v2"
 	//"github.com/jessevdk/go-flags"
 
 	//"github.com/mkideal/cli"
@@ -529,7 +529,7 @@ func (this *Actions) Refresh() Result {
 // XXX will this work on windows / windows version / disable on windows???
 //		...how do we deal with things like cygwin/MinGW/..???
 func (this *Actions) Stop() Result {
-	this.UI.Drawer.Stop()
+	this.UI.Renderer.Stop()
 	return OK }
 func (this *Actions) Fail() Result {
 	return Fail }
@@ -538,33 +538,32 @@ func (this *Actions) Exit() Result {
 
 
 
-// Drawer...
-
-var REFRESH_INTERVAL = time.Millisecond * 15
-
-
-type Drawer interface {
-	Size() (width int, height int)
-
+// Renderer...
+//
+type Renderer interface {
 	drawCells(col, row int, str string, style_name string, style Style)
+
+	ResetCache()
+
+	Size() (width int, height int)
 
 	Fill(style Style)
 	Refresh()
-
 	Setup(lines Lines)
 	Loop(this *UI) Result
-
-	// Actions...
 	Stop()
 }
 
 
+
+// UI...
 //
+
+var REFRESH_INTERVAL = time.Millisecond * 15
+
 // XXX renmae...
 type UI struct {
-	//tcell.Screen
-	// XXX
-	Drawer
+	Renderer
 
 	Lines *Lines
 
@@ -604,7 +603,6 @@ type UI struct {
 	// NOTE: in normal use-cases the stuff cached here is static and 
 	//		there should never be any leakage, if there is then something 
 	//		odd is going on.
-	__style_cache map[string]tcell.Style
 	__float_cache map[string]float64
 	//__int_cache map[string]int
 
@@ -616,7 +614,7 @@ type UI struct {
 // XXX TCELL uses .Screen.Size()
 func (this *UI) updateGeometry() *UI {
 	var err error
-	W, H := this.Drawer.Size()
+	W, H := this.Renderer.Size()
 	Width, Height := this.Width, this.Height
 	Align := this.Align
 	if len(Align) == 0 {
@@ -750,14 +748,14 @@ func (this *UI) handleScrollLimits() *UI {
 	return this }
 
 func (this *UI) ResetCache() *UI {
-	this.__style_cache = nil
 	this.__float_cache = nil
 	//this.__int_cache = nil
+	this.Renderer.ResetCache()
 	return this }
 
 func (this *UI) Fill() *UI {
 	_, s := this.Lines.GetStyle("background")
-	this.Drawer.Fill(s)
+	this.Renderer.Fill(s)
 	return this }
 func (this *UI) Draw() *UI {
 	this.
@@ -773,7 +771,7 @@ func (this *UI) Refresh() *UI {
 		this.
 			updateGeometry().
 			Draw()
-		this.Drawer.Refresh()
+		this.Renderer.Refresh()
 		go func(){
 			t := this.RefreshInterval
 			if t == 0 {
@@ -1034,18 +1032,18 @@ func (this *UI) HandleMouse(col, row int, pressed []string) Result {
 	return OK }
 
 
-func (this *UI) Setup(lines Lines, drawer Drawer) *UI {
+func (this *UI) Setup(lines Lines, drawer Renderer) *UI {
 	this.Lines = &lines
 	this.Lines.CellsDrawer = this
 
-	this.Drawer = drawer
-	this.Drawer.Setup(lines)
+	this.Renderer = drawer
+	this.Renderer.Setup(lines)
 
 	this.Actions = NewActions(this)
 
 	return this }
 func (this *UI) Loop() Result {
-	return this.Drawer.Loop(this) }
+	return this.Renderer.Loop(this) }
 
 func (this *UI) Append(str string) *UI {
 	if this.Transformer != nil {
