@@ -146,9 +146,9 @@ func TcellEvent2Mouse(evt tcell.EventMouse) [][]string {
 
 
 type Tcell struct {
-	tcell.Screen
+	tcell.Screen `no-flag:"true"`
 
-	Lines *Lines
+	Lines *Lines `no-flag:"true"`
 
 	// caches...
 	// NOTE: in normal use-cases the stuff cached here is static and 
@@ -210,13 +210,14 @@ func (this *Tcell) Setup(lines Lines) {
 	screen, err := tcell.NewScreen()
 	if err != nil {
 		log.Panic(err) }
-	this.Screen = screen
+	this.Screen = screen }
+
+func (this *Tcell) Init() {
 	if err := this.Screen.Init(); err != nil {
 		log.Panic(err) }
 	this.EnableMouse()
 	this.EnablePaste()
 	this.EnableFocus() }
-
 // XXX can we detect mod key press???
 //		...need to detect release of shift in selection...
 // XXX add background fill...
@@ -225,6 +226,7 @@ func (this *Tcell) Setup(lines Lines) {
 //		order...
 func (this *Tcell) Loop(ui *UI) Result {
 	defer this.Finalize()
+	this.Init()
 
 	// initial state...
 	ui.

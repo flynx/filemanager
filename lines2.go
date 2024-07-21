@@ -383,7 +383,7 @@ var SCROLLBAR = "┃│"
 
 // XXX should this be Reader/Writer???
 type Lines struct {
-	CellsDrawer
+	CellsDrawer `no-flag:"true"`
 
 	// XXX is this a good idea???
 	LinesBuffer
@@ -1413,4 +1413,4 @@ func main(){
 }
 //*/
 
-// vim:set ts=4 sw=4 nowrap :
+// vim:set ts=4 sw=4 :
