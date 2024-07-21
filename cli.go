@@ -124,190 +124,6 @@ type Options struct {
 
 }
 
-/* XXX
-func HandleOptions() {
-	options := Options{}
-	parser := flags.NewParser(&options, flags.Default)
-
-	_, err := parser.Parse()
-	if err != nil {
-		if flags.WroteHelp(err) {
-			return }
-		log.Println("Error:", err)
-		os.Exit(1) }
-
-// 	// doc...
-//	if options.Introspection.ListActions {
-//		actions := Actions{}
-//		t := reflect.TypeOf(&actions)
-//		for i := 0; i < t.NumMethod(); i++ {
-//			m := t.Method(i)
-//			fmt.Println("    "+ m.Name) }
-//		return }
-//	if options.Introspection.ListThemeable {
-//		for name, _ := range THEME {
-//			fmt.Println("    "+ name) }
-//		return }
-//	if options.Introspection.ListBorderThemes {
-//		names := []string{}
-//		l := 0
-//		for name, _ := range BORDER_THEME {
-//			if len(name) > l {
-//				l = len(name) }
-//			names = append(names, name) }
-//		slices.Sort(names)
-//		for _, name := range names {
-//			fmt.Printf("    %-"+ fmt.Sprint(l) +"v \"%v\"\n", name, BORDER_THEME[name]) }
-//		return }
-//	if options.Introspection.ListSpinners {
-//		for i, style := range SPINNER_STYLES {
-//			fmt.Printf("    %3v \"%v\"\n", i, style) }
-//		return }
-//	if options.Introspection.ListColors {
-//		for name, _ := range tcell.ColorNames {
-//			fmt.Println("    "+ name) }
-//		return }
-
-	lines := NewUI(
-		Lines{
-			SpanMode: "*,8",
-			SpanSeparator: "│",
-			Border: "│┌─┐│└─┘",
-			// XXX BUG: this loses the space at the end of $TEXT and draws 
-			//		a space intead of "/"...
-			Title: " $TEXT |/",
-			Status: "|${SELECTED:!*}${SELECTED:+($SELECTED)}$F $LINE/$LINES ",
-		})
-	lines.Options = options
-
-// 	// globals...
-//	INPUT_FILE = options.Pos.FILE
-//	LIST_CMD = options.ListCommand
-//	TRANSFORM_CMD = options.TransformCommand
-//	TRANSFORM_POPULATE_CMD = options.TransformPopulateCommand
-//	SELECTION_CMD = options.SelectionCommand
-
-//	// focus/positioning...
-//	FOCUS = options.Focus
-//	CURRENT_ROW = options.FocusRow
-//	FOCUS_CMD = options.FocusCmd
-
-//	if options.Chrome.Border ||  
-//			! parser.FindOptionByLongName("border-chars").IsSetDefault() {
-//		BORDER = 1 
-//		// char order: 
-//		//		 01234567
-//		//		"│┌─┐│└─┘"
-//		// XXX might be fun to add border themes...
-//		chars, ok := BORDER_THEME[options.Chrome.BorderChars]
-//		border_chars := []rune{}
-//		if ok {
-//			border_chars = []rune(chars)
-//		} else {
-//			border_chars = []rune(
-//				// normalize length...
-//				fmt.Sprintf("%-8v", options.Chrome.BorderChars)) }
-//		BORDER_LEFT = border_chars[0] 
-//		BORDER_RIGHT = border_chars[4] 
-//		BORDER_TOP = border_chars[2] 
-//		BORDER_BOTTOM = border_chars[6] 
-//		BORDER_CORNERS = map[string]rune{
-//			"ul": border_chars[1],	
-//			"ur": border_chars[3],	
-//			"ll": border_chars[5],	
-//			"lr": border_chars[7],	
-//		} }
-
-//	if i, err := strconv.Atoi(options.Chrome.SpinnerChars); err != nil {
-//		SPINNER.Frames = options.Chrome.SpinnerChars
-//	} else {
-//		SPINNER.Frames = SPINNER_STYLES[i] }
-
-// 	TITLE_LINE_FMT = options.Chrome.Title
-//	TITLE_LINE = TITLE_LINE_FMT != ""
-//	TITLE_CMD = options.Chrome.TitleCommand
-//
-//	STATUS_LINE_FMT = options.Chrome.Status
-//	STATUS_LINE = STATUS_LINE_FMT != ""
-//	STATUS_CMD = options.Chrome.StatusCommand
-//
-//	SIZE = strings.Split(options.Chrome.Size, ",")
-//	ALIGN = strings.Split(options.Chrome.Align, ",")
-//	TAB_SIZE = options.Chrome.Tab
-//	SPAN_MODE = options.Chrome.Span
-//	//SPAN_MARKER = options.Chrome.SpanMarker
-//	SPAN_EXTEND = options.Chrome.SpanExtend
-//	SPAN_LEFT_MIN_WIDTH = options.Chrome.SpanLeftMin
-//	SPAN_RIGHT_MIN_WIDTH = options.Chrome.SpanRightMin
-//	SPAN_FILLER = []rune(options.Chrome.SpanFiller)[0]
-//	SPAN_FILLER_TITLE = []rune(fmt.Sprintf("%1v", options.Chrome.SpanFillerTitle))[0]
-//	SPAN_FILLER_STATUS = []rune(fmt.Sprintf("%1v", options.Chrome.SpanFillerStatus))[0]
-//	// defaults to SPAN_FILLER...
-//	SPAN_SEPARATOR = SPAN_FILLER
-//	if ! parser.FindOptionByLongName("span-separator").IsSetDefault() {
-//		SPAN_SEPARATOR = []rune(fmt.Sprintf("%1v", options.Chrome.SpanSeparator))[0] }
-//	OVERFLOW_INDICATOR = []rune(options.Chrome.OverflowIndicator)[0]
-//	EMPTY_SPACE = options.Chrome.EmptySpace
-//	// defaults to .ScrollThreshold...
-//	SCROLL_THRESHOLD_TOP = options.Config.ScrollThreshold
-//	if ! parser.FindOptionByLongName("scroll-threshold-top").IsSetDefault() {
-//		SCROLL_THRESHOLD_TOP = options.Config.ScrollThresholdTop }
-//	SCROLL_THRESHOLD_BOTTOM = options.Config.ScrollThreshold
-//	if ! parser.FindOptionByLongName("scroll-threshold-bottom").IsSetDefault() {
-//		SCROLL_THRESHOLD_BOTTOM = options.Config.ScrollThresholdBottom }
-	
-	// action aliases...
-	if options.Actions.Select != "" {
-		KEYBINDINGS["Select"] = 
-			strings.ReplaceAll(
-				options.Actions.Select, 
-				options.Config.Separator, "\n") }
-	if options.Actions.Reject != "" {
-		KEYBINDINGS["Reject"] = 
-			strings.ReplaceAll(
-				options.Actions.Reject, 
-				options.Config.Separator, "\n") }
-
-	// keys...
-	for key, action := range options.Keyboard.Key {
-		KEYBINDINGS[key] = 
-			strings.ReplaceAll(
-				action, 
-				options.Config.Separator, "\n") }
-
-// 	// themes/colors...
-//	for name, spec := range options.Config.Theme {
-//		color := strings.SplitN(spec, ":", 2)
-//		THEME[name] = 
-//			tcell.StyleDefault.
-//				Foreground(tcell.GetColor(color[0])).
-//				Background(tcell.GetColor(color[1])) }
-
-	// log...
-	logFileName := options.Config.LogFile
-	// XXX can we suppress only log.Print*(..) and keep errors and panic output???
-	if logFileName == "" {
-		logFileName = "/dev/null" }
-	logFile, err := os.OpenFile(
-		logFileName,
-		os.O_APPEND|os.O_RDWR|os.O_CREATE, 0644)
-	defer logFile.Close()
-	if err != nil {
-		log.Panic(err) }
-	// Set log out put and enjoy :)
-	log.SetOutput(logFile) 
-
-	// output...
-//	defer func(){
-//		if STDOUT != "" {
-//			fmt.Println(STDOUT) } }()
-
-	// startup...
-	os.Exit(
-		toExitCode(
-			lines.Loop())) }
-//*/
-
 
 
 // Keyboard...
@@ -840,13 +656,13 @@ var REFRESH_INTERVAL = time.Millisecond * 15
 type UI struct {
 	Renderer `no-flag:"true"`
 
-	Lines *Lines
-	Actions *Actions `no-flag:"true"`
-
 	ListCommand string `short:"c" long:"cmd" value-name:"CMD" env:"CMD" description:"List command"`
 	// NOTE: this is not the same as filtering the input as it will be 
 	//		done lazily when the line reaches view.
 	TransformCommand string `short:"t" long:"transform" value-name:"CMD" env:"TRANSFORM" description:"Row transform command"`
+
+	Lines *Lines `group:"Chrome"`
+	Actions *Actions `no-flag:"true"`
 
 	// Keyboard..
 	//
@@ -872,8 +688,6 @@ type UI struct {
 	MouseCol int
 
 	ScrollThreshold int `long:"scroll-threshold" value-name:"N" default:"3" description:"Number of lines from the edge of screen to triger scrolling"`
-	// Format:
-	//		"passive" | "active"
 	EmptySpace string `long:"empty-space" choice:"passive" choice:"select-last" env:"EMPTY_SPACE" default:"passive" description:"Click in empty space below list action"`
 
 	Transformer *PipedCmd
@@ -888,7 +702,6 @@ type UI struct {
 	RefreshInterval time.Duration
 	__refresh_blocked sync.Mutex
 	__refresh_pending sync.Mutex
-
 }
 
 func (this *UI) ResetCache() *UI {
@@ -1294,7 +1107,7 @@ func (this *UI) HandleMouse(col, row int, pressed []string) Result {
 
 				// empty space below rows...
 				if this.MouseRow >= len(this.Lines.Lines) {
-					if this.EmptySpace != "active" {
+					if this.EmptySpace == "select-last" {
 						//log.Println("    EMPTY SPACE")
 						this.Lines.Index = len(this.Lines.Lines) - 1 }
 					return Skip }

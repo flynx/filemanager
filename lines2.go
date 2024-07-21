@@ -221,7 +221,7 @@ type Row struct {
 type LinesBuffer struct {
 	sync.Mutex
 	Lines []Row
-	Index int
+	Index int `short:"i" long:"index" default:"0" description:"Focus position"`
 	Width int
 }
 // Editing...
@@ -413,12 +413,12 @@ type Lines struct {
 
 	TabSize int
 
-	OverflowIndicator rune
-
 	// Format: 
 	//		"│┌─┐│└─┘"
 	//		 01234567
-	Border string
+	Border string `short:"b" long:"border" env:"BORDER" define:"│┌─┐│└─┘" description:"Set border"`
+
+	OverflowIndicator rune
 	OverflowOverBorder bool
 
 	// Format: 
