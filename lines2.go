@@ -416,7 +416,7 @@ type Lines struct {
 	// Format: 
 	//		"│┌─┐│└─┘"
 	//		 01234567
-	Border string `short:"b" long:"border" env:"BORDER" define:"│┌─┐│└─┘" description:"Set border"`
+	Border string `short:"b" long:"border" env:"BORDER" default:"│┌─┐│└─┘" description:"Set border"`
 
 	OverflowIndicator rune
 	OverflowOverBorder bool
@@ -431,7 +431,7 @@ type Lines struct {
 	Filler rune
 
 	// column spanning...
-	SpanMode string
+	SpanMode string `short:"s" long:"span" description:"Span columns"`
 	SpanModeTitle string
 	SpanModeStatus string
 	// cache...

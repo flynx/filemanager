@@ -1226,9 +1226,9 @@ func NewUI(l ...Lines) *UI {
 func main(){
 	//* XXX stub...
 	lines := NewUI(Lines{
+		// XXX setting this to "" breaks things -- revise deafult handling...
 		SpanMode: "*,8",
 		SpanSeparator: "│",
-		Border: "│┌─┐│└─┘",
 		// XXX BUG: this loses the space at the end of $TEXT and draws 
 		//		a space intead of "/"...
 		Title: " $TEXT |/",
