@@ -1046,32 +1046,6 @@ func (this *UI) HandleArgs() Result {
 func (this *UI) Loop() Result {
 	return this.Renderer.Loop(this) }
 
-// XXX TEST / not done...
-func (this *UI) Update() Result {
-	selection := this.Lines.Selected()
-	res := OK
-	if !this.__stdin_read {
-		// file...
-		if this.Files.Input != "" {
-			this.ReadFromFile()
-			return OK
-		// command...
-		} else if this.ListCommand != "" {
-			this.ReadFromCmd()
-			return OK
-		// pipe...
-		} else {
-			// do this only once per run...
-			this.__stdin_read = true
-			stat, err := os.Stdin.Stat()
-			if err != nil {
-				log.Fatalf("%+v", err) }
-			if stat.Mode() & os.ModeNamedPipe != 0 {
-				this.ReadFrom(os.Stdin) } } }
-	// XXX should this be done here or live in .ReadFrom(..) ???
-	this.Lines.Select(selection)
-	return res }
-
 func (this *UI) Append(str string) *UI {
 	if this.Transformer != nil {
 		//log.Println("  append:", str)
@@ -1139,6 +1113,33 @@ func (this *UI) ReadFromCmd(cmds ...string) chan bool {
 		log.Panic(err) }
 
 	return this.ReadFrom(c.Stdout) }
+
+// XXX TEST / not done...
+func (this *UI) Update() Result {
+	selection := this.Lines.Selected()
+	res := OK
+	if !this.__stdin_read {
+		// file...
+		if this.Files.Input != "" {
+			this.ReadFromFile()
+			return OK
+		// command...
+		} else if this.ListCommand != "" {
+			this.ReadFromCmd()
+			return OK
+		// pipe...
+		} else {
+			// do this only once per run...
+			this.__stdin_read = true
+			stat, err := os.Stdin.Stat()
+			if err != nil {
+				log.Fatalf("%+v", err) }
+			if stat.Mode() & os.ModeNamedPipe != 0 {
+				this.ReadFrom(os.Stdin) } } }
+	// XXX should this be done here or live in .ReadFrom(..) ???
+	this.Lines.Select(selection)
+	return res }
+
 // XXX EXPERIMENTAL...
 // XXX might be a good idea to make this standalone/reusable (for selection/focus commands)
 // XXX should we transform the existing lines???
