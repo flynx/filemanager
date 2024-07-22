@@ -484,36 +484,8 @@ func (this *Actions) SelectEndCurrent() Result {
 	return this.SelectEnd(this.Lines.Index + this.Lines.RowOffset) }
 
 // Utility...
-/* XXX
-// XXX handle focus... 
-// XXX revise behaviour of reupdates on pipe...
 func (this *Actions) Update() Result {
-	selection := this.Lines.Selected()
-	res := OK
-	// file...
-	if this.Lines.Files.Input != "" {
-		this.Lines.ReadFromFile()
-		return OK
-	// command...
-	} else if this.Lines.ListCommand != "" {
-		this.Lines.ReadFromCmd()
-		return OK
-	// pipe...
-	// XXX how should this behave on re-update???
-	//		...should we replace, append or simply redraw cache???
-	} else {
-		stat, err := os.Stdin.Stat()
-		if err != nil {
-			log.Fatalf("%+v", err) }
-		if stat.Mode() & os.ModeNamedPipe != 0 {
-			this.ReadFrom(os.Stdin) } }
-	this.Lines.Select(selection)
-	if FOCUS_CMD != "" {
-		// XXX generate FOCUS
-	}
-	//this.Refresh()
-	return res }
-//*/
+	return this.UI.Update() }
 func (this *Actions) Refresh() Result {
 	this.UI.Refresh()
 	return OK }
@@ -622,6 +594,8 @@ type UI struct {
 	RefreshInterval time.Duration
 	__refresh_blocked sync.Mutex
 	__refresh_pending sync.Mutex
+
+	__stdin_read bool
 
 	// XXX UGLY... 
 	Files struct {
@@ -1071,6 +1045,32 @@ func (this *UI) HandleArgs() Result {
 	return OK }
 func (this *UI) Loop() Result {
 	return this.Renderer.Loop(this) }
+
+// XXX TEST / not done...
+func (this *UI) Update() Result {
+	selection := this.Lines.Selected()
+	res := OK
+	if !this.__stdin_read {
+		// file...
+		if this.Files.Input != "" {
+			this.ReadFromFile()
+			return OK
+		// command...
+		} else if this.ListCommand != "" {
+			this.ReadFromCmd()
+			return OK
+		// pipe...
+		} else {
+			// do this only once per run...
+			this.__stdin_read = true
+			stat, err := os.Stdin.Stat()
+			if err != nil {
+				log.Fatalf("%+v", err) }
+			if stat.Mode() & os.ModeNamedPipe != 0 {
+				this.ReadFrom(os.Stdin) } } }
+	// XXX should this be done here or live in .ReadFrom(..) ???
+	this.Lines.Select(selection)
+	return res }
 
 func (this *UI) Append(str string) *UI {
 	if this.Transformer != nil {
