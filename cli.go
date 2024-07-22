@@ -19,7 +19,7 @@ import (
 	"reflect"
 	"sync"
 	"time"
-	//"io"
+	"io"
 	"bufio"
 	"runtime"
 	//"bytes"
@@ -485,6 +485,7 @@ func (this *Actions) SelectEndCurrent() Result {
 
 // Utility...
 /* XXX
+// XXX handle focus... 
 // XXX revise behaviour of reupdates on pipe...
 func (this *Actions) Update() Result {
 	selection := this.Lines.Selected()
@@ -492,6 +493,7 @@ func (this *Actions) Update() Result {
 	// file...
 	if this.Lines.Files.Input != "" {
 		this.Lines.ReadFromFile()
+		return OK
 	// command...
 	} else if this.Lines.ListCommand != "" {
 		this.Lines.ReadFromCmd()
@@ -504,9 +506,7 @@ func (this *Actions) Update() Result {
 		if err != nil {
 			log.Fatalf("%+v", err) }
 		if stat.Mode() & os.ModeNamedPipe != 0 {
-			// XXX do we need to close this??
-			//defer os.Stdin.Close()
-			this.Lines.Write(os.Stdin) } }
+			this.ReadFrom(os.Stdin) } }
 	this.Lines.Select(selection)
 	if FOCUS_CMD != "" {
 		// XXX generate FOCUS
@@ -1091,38 +1091,56 @@ func (this *UI) Append(str string) *UI {
 	return this }
 //*/
 
-func (this *UI) ReadFromFile(filename ...string) {
+// XXX handle selection...
+//		...if this is handled elsewhere then use .Lines.Write(reader) instead...
+// XXX might be a good idea not to clear the buffer but rather overwrite 
+//		and trim it (???)
+func (this *UI) ReadFrom(reader io.Reader) chan bool {
+	running := make(chan bool)
+	index := this.Lines.LinesBuffer.Index
+	this.Lines.Clear()
+	this.Lines.LinesBuffer.Index = index
+	go func(){
+		scanner := bufio.NewScanner(reader)
+		for scanner.Scan() {
+			txt := scanner.Text()
+			this.Append(txt) } 
+		close(running) }()
+	return running }
+func (this *UI) ReadFromFile(filename ...string) chan bool {
 	name := this.Files.Input
 	if len(filename) > 0 {
 		name = filename[0] }
 	if len(name) == 0 {
-		return }
-	this.Lines.Clear()
+		c := make(chan bool)
+		defer close(c)
+		return c }
 	file, err := os.Open(name)
-	defer file.Close()
 	if err != nil {
 		log.Panic(err) }
-	this.Lines.Write(file) }
+
+	running := this.ReadFrom(file) 
+
+	// cleanup...
+	go func(){
+		<-running
+		file.Close() }()
+	return running }
 func (this *UI) ReadFromCmd(cmds ...string) chan bool {
 	cmd := this.ListCommand
 	if len(cmds) > 0 {
 		cmd = cmds[0] }
-	this.Lines.Clear()
-	running := make(chan bool)
+	if len(cmd) == 0 {
+		c := make(chan bool)
+		defer close(c)
+		return c }
 	c, err := Run(cmd, nil)
 	if err != nil {
 		log.Panic(err) }
-	go func(){
-		// load...
-		scanner := bufio.NewScanner(c.Stdout)
-		for scanner.Scan() {
-			txt := scanner.Text()
-			//log.Println("read:", txt)
-			this.Append(txt) } 
-			//this.Append(scanner.Text()) } 
-		close(running) }()
-	return running }
+
+	return this.ReadFrom(c.Stdout) }
 // XXX EXPERIMENTAL...
+// XXX might be a good idea to make this standalone/reusable (for selection/focus commands)
 // XXX should we transform the existing lines???
 // XXX add multiple transforms...
 func (this *UI) TransformCmd(cmds ...string) *UI {
