@@ -33,98 +33,6 @@ import (
 )
 
 
-// command line args...
-type Options struct {
-	Pos struct {
-		FILE string
-	} `positional-args:"yes"`
-
-	//ListCommand string `short:"c" long:"cmd" value-name:"CMD" env:"CMD" description:"List command"`
-	// NOTE: this is not the same as filtering the input as it will be 
-	//		done lazily when the line reaches view.
-	//TransformCommand string `short:"t" long:"transform" value-name:"CMD" env:"TRANSFORM" description:"Row transform command"`
-	TransformPopulateCommand string `short:"p" long:"transform-populate" value-name:"CMD" env:"TRANSFORM" description:"Row transform command"`
-
-	SelectionCommand string `short:"e" long:"selection" value-name:"ACTION" env:"REJECT" description:"Command to filter selection from input"`
-
-	// XXX doc: to match a number explicitly escape it with '\\'...
-	Focus string `short:"f" long:"focus" value-name:"[N|STR]" env:"FOCUS" description:"Line number to focus"`
-	FocusRow int `long:"focus-row" value-name:"N" env:"FOCUS_ROW" description:"Screen line number of focused line"`
-	FocusCmd string `long:"focus-cmd" value-name:"CMD" env:"FOCUS_CMD" description:"Focus command"`
-
-	/* XXX
-	RowOffset int `long:"row-offset" value-name:"N" env:"ROW_OFFSET" description:"Row offset of visible lines"`
-	//ColOffset int `long:"col-offset" value-name:"N" env:"COL_OFFSET" description:"Column offset of visible lines"`
-	//*/
-
-	// XXX
-	//Selection: string ``
-	//SelectionCmd: string ``
-
-	// XXX chicken-egg: need to first parse the args then parse the ini 
-	//		and then merge the two...
-	//ArgsFile string `long:"args-file" value-name:"FILE" env:"ARGS" description:"Arguments file"`
-
-
-	// Quick actions...
-	Actions struct {
-		Select string `short:"s" long:"select" value-name:"ACTION" env:"SELECT" description:"Action to execute on item select"`
-		Reject string `short:"r" long:"reject" value-name:"ACTION" env:"REJECT" description:"Action to execute on reject"`
-	} `group:"Actions"`
-
-	Keyboard struct {
-		Key map[string]string `short:"k" long:"key" value-name:"KEY:ACTION" description:"Bind key to action"`
-	} `group:"Keyboard"`
-
-	Chrome struct {
-		Title string `long:"title" value-name:"STR" env:"TITLE" default:"%CMD%SPAN%SPINNER" description:"Title format"`
-		TitleCommand string `long:"title-cmd" value-name:"CMD" env:"TITLE_CMD" description:"Title command"`
-		Status string `long:"status" value-name:"STR" env:"STATUS" default:"%CMD%SPAN $LINE/$LINES " description:"Status format"`
-		StatusCommand string `long:"status-cmd" value-name:"CMD" env:"STATUS_CMD" description:"Status command"`
-		Size string `long:"size" value-name:"WIDTH,HEIGHT" env:"SIZE" default:"auto,auto" description:"Widget size"`
-		Align string `long:"align" value-name:"LEFT,TOP" env:"ALIGN" default:"center,center" description:"Widget alignment"`
-		Tab int `long:"tab" value-name:"COLS" env:"TABSIZE" default:"8" description:"Tab size"`
-		Border bool `short:"b" long:"border" env:"BORDER" description:"Toggle border on"`
-		//BorderChars string `long:"border-chars" env:"BORDER_CHARS" default:"│┌─┐│└─┘" description:"Border characters"`
-		BorderChars string `long:"border-chars" env:"BORDER_CHARS" default:"single" description:"Border theme name or border characters"`
-		SpinnerChars string `long:"spinner-chars" env:"SPINNER_CHARS" default:"10" description:"Spinner theme number or spinner characters"`
-		Span string `long:"span" value-name:"[MODE|SIZE]" env:"SPAN" default:"fit-right" description:"Line spanning mode/size"`
-		// XXX at this point this depends on leading '%'...
-		//SpanMarker string `long:"span-marker" value-name:"STR" env:"SPAN_MARKER" default:"%SPAN" description:"Marker to use to span a line"`
-		SpanExtend string `long:"span-extend" env:"SPAN_EXTEND" choice:"auto" choice:"always" choice:"never" default:"auto" description:"Extend span separator through unspanned and empty lines"`
-		SpanSeparator string `long:"span-separator" value-name:"CHR" env:"SPAN_SEPARATOR" default:" " description:"Span separator character"`
-		SpanLeftMin int `long:"span-left-min" value-name:"COLS" env:"SPAN_LEFT_MIN" default:"8" description:"Left column minimum span"`
-		SpanRightMin int `long:"span-right-min" value-name:"COLS" env:"SPAN_RIGHT_MIN" default:"6" description:"Right column minimum span"`
-		OverflowIndicator string `long:"overflow-indicator" value-name:"CHR" env:"OVERFLOW_INDICATOR" default:"}" description:"Line overflow character"`
-		SpanFiller string `long:"span-filler" value-name:"CHR" env:"SPAN_FILLER" default:" " description:"Span fill character"`
-		SpanFillerTitle string `long:"span-filler-title" value-name:"CHR" env:"SPAN_FILLER_TITLE" default:" " description:"Title span fill character"`
-		SpanFillerStatus string `long:"span-filler-status" value-name:"CHR" env:"SPAN_FILLER_STATUS" default:" " description:"Status span fill character"`
-		// XXX not sure what should be the default...
-		EmptySpace string `long:"empty-space" choice:"passive" choice:"select-last" env:"EMPTY_SPACE" default:"passive" description:"Click in empty space below list action"`
-	} `group:"Chrome"`
-
-	Config struct {
-		LogFile string `short:"l" long:"log" value-name:"FILE" env:"LOG" description:"Log file"`
-		Separator string `long:"separator" value-name:"STRING" default:"\\n" env:"SEPARATOR" description:"Command separator"`
-		// XXX might be fun to be able to set this to something like "middle"...
-		ScrollThreshold int `long:"scroll-threshold" value-name:"N" default:"3" description:"Number of lines from the edge of screen to triger scrolling"`
-		//ScrollThresholdTop int `long:"scroll-threshold-top" value-name:"N" default:"3" description:"Number of lines from the top edge of screen to triger scrolling"`
-		//ScrollThresholdBottom int `long:"scroll-threshold-bottom" value-name:"N" default:"3" description:"Number of lines from the bottom edge of screen to triger scrolling"`
-		// XXX add named themes/presets...
-		//Theme map[string]string `long:"theme" value-name:"NAME:FGCOLOR:BGCOLOR" description:"Set theme color"`
-	} `group:"Configuration"`
-
-	Introspection struct {
-		ListActions bool `long:"list-actions" description:"List available actions"`
-		ListThemeable bool `long:"list-themeable" description:"List available themable element names"`
-		ListBorderThemes bool `long:"list-border-themes" description:"List border theme names"`
-		ListSpinners bool `long:"list-spinners" description:"List spinner styles"`
-		ListColors bool `long:"list-colors" description:"List usable color names"`
-	} `group:"Introspection"`
-
-}
-
-
 
 // Keyboard...
 //
@@ -582,16 +490,12 @@ func (this *Actions) Update() Result {
 	selection := this.Lines.Selected()
 	res := OK
 	// file...
-	if INPUT_FILE != "" {
-		file, err := os.Open(INPUT_FILE)
-		if err != nil {
-			fmt.Println(err)
-			return Fail }
-		defer file.Close()
-		this.Lines.Write(file) 
+	if this.Lines.Files.Input != "" {
+		this.Lines.ReadFromFile()
 	// command...
-	} else if LIST_CMD != "" {
-		res = callAction("<"+ LIST_CMD)
+	} else if this.Lines.ListCommand != "" {
+		this.Lines.ReadFromCmd()
+		return OK
 	// pipe...
 	// XXX how should this behave on re-update???
 	//		...should we replace, append or simply redraw cache???
@@ -656,18 +560,36 @@ var REFRESH_INTERVAL = time.Millisecond * 15
 type UI struct {
 	Renderer `no-flag:"true"`
 
+	// XXX watch/update on input filechange (.Files.Input)...
+	//WatchFile bool
+
 	ListCommand string `short:"c" long:"cmd" value-name:"CMD" env:"CMD" description:"List command"`
 	// NOTE: this is not the same as filtering the input as it will be 
 	//		done lazily when the line reaches view.
 	TransformCommand string `short:"t" long:"transform" value-name:"CMD" env:"TRANSFORM" description:"Row transform command"`
+	Transformer *PipedCmd
+
+	// XXX like transform but use output for selection...
+	//SelectionCommand string `short:"e" long:"selection" value-name:"ACTION" env:"REJECT" description:"Command to filter selection from input"`
+
+	// NOTE: these only affect startup -- set .Index and .RowOffset...
+	// XXX these need a uniform startup-load mechanic done...
+	//Focus string `short:"f" long:"focus" value-name:"[N|STR]" env:"FOCUS" description:"Line number / line to focus"`
+	//FocusRow int `long:"focus-row" value-name:"N" env:"FOCUS_ROW" description:"Screen line number of focused line"`
+	//FocusCmd string `long:"focus-cmd" value-name:"CMD" env:"FOCUS_CMD" description:"Focus command"`
+
+	// Quick actions...
+	//Select string `short:"s" long:"select" value-name:"ACTION" env:"SELECT" description:"Action to execute on item select"`
+	//Reject string `short:"r" long:"reject" value-name:"ACTION" env:"REJECT" description:"Action to execute on reject"`
 
 	Lines *Lines `group:"Chrome"`
+
 	Actions *Actions `no-flag:"true"`
 
-	// Keyboard..
+	// Keyboard...
 	//
 	KeyAliases KeyAliases
-	Keybindings Keybindings
+	Keybindings Keybindings //`short:"k" long:"key" value-name:"KEY:ACTION" description:"Bind key to action"`
 
 	// Geometry
 	//
@@ -690,8 +612,6 @@ type UI struct {
 	ScrollThreshold int `long:"scroll-threshold" value-name:"N" default:"3" description:"Number of lines from the edge of screen to triger scrolling"`
 	EmptySpace string `long:"empty-space" choice:"passive" choice:"select-last" env:"EMPTY_SPACE" default:"passive" description:"Click in empty space below list action"`
 
-	Transformer *PipedCmd
-
 	// caches...
 	// NOTE: in normal use-cases the stuff cached here is static and 
 	//		there should never be any leakage, if there is then something 
@@ -702,6 +622,11 @@ type UI struct {
 	RefreshInterval time.Duration
 	__refresh_blocked sync.Mutex
 	__refresh_pending sync.Mutex
+
+	// XXX UGLY... 
+	Files struct {
+		Input string `positional-arg-name:"PATH"`
+	} `positional-args:"true"`
 }
 
 func (this *UI) ResetCache() *UI {
@@ -1165,8 +1090,19 @@ func (this *UI) Append(str string) *UI {
 	// XXX do transform...
 	return this }
 //*/
-// XXX BUG: this sometimes does not go through the whole list...
-//		...does Run(..) close .Stdout too early???
+
+func (this *UI) ReadFromFile(filename ...string) {
+	name := this.Files.Input
+	if len(filename) > 0 {
+		name = filename[0] }
+	if len(name) == 0 {
+		return }
+	this.Lines.Clear()
+	file, err := os.Open(name)
+	defer file.Close()
+	if err != nil {
+		log.Panic(err) }
+	this.Lines.Write(file) }
 func (this *UI) ReadFromCmd(cmds ...string) chan bool {
 	cmd := this.ListCommand
 	if len(cmds) > 0 {
@@ -1228,41 +1164,21 @@ func main(){
 	lines := NewUI(Lines{
 		// XXX setting this to "" breaks things -- revise deafult handling...
 		SpanMode: "*,8",
-		SpanSeparator: "│",
 		// XXX BUG: this loses the space at the end of $TEXT and draws 
 		//		a space intead of "/"...
 		Title: " $TEXT |/",
-		Status: "|${SELECTED:!*}${SELECTED:+($SELECTED)}$F $LINE/$LINES ",
 	})
 	if lines.HandleArgs() == Exit {
 		return }
 
-	/* XXX
-	lines.Lines.Append(
-		"Some text",
-		"Current|",
-		"Some|Columns")
-	for i := 0; i < 10; i++ {
-		lines.Lines.Append(fmt.Sprint("bam|", i)) }
-	lines.Lines.Index = 1
-	lines.Lines.Lines[0].Selected = true
-	/*/
 	lines.TransformCmd("sed 's/$/|/'")
 	// NOTE: ls flags that trigger stat make things really slow (-F, sorting, ...etc)
 	//lines.ReadFromCmd("ls")
 	lines.ReadFromCmd("echo .. ; ls -t --group-directories-first ~/Pictures/Instagram/")
 	//lines.ReadFromCmd("echo .. ; ls --group-directories-first ~/Pictures/Instagram/ARCHIVE/")
-	//*/
 
 	//lines.Width = "50%"
 	//lines.Align = []string{"right"}
-	/*/
-	lines := NewUI()
-
-	// XXX set settings...
-	// XXX
-
-	//*/
 
 	os.Exit(
 		toExitCode(

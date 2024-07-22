@@ -221,7 +221,7 @@ type Row struct {
 type LinesBuffer struct {
 	sync.Mutex
 	Lines []Row
-	Index int `short:"i" long:"index" default:"0" description:"Focus position"`
+	Index int
 	Width int
 }
 // Editing...
@@ -406,32 +406,30 @@ type Lines struct {
 	//Theme Theme
 
 	// chrome...
-	Title string
-	TitleDisabled bool
-	Status string
-	StatusDisabled bool
-
-	TabSize int
+	Title string `long:"title" value-name:"TEXT" default:" $TEXT |%SPINNER" env:"TITLE" description:"Title line"`
+	TitleDisabled bool `long:"no-title" description:"Disable title line"`
+	Status string `long:"status" value-name:"TEXT" default:"|${SELECTED:!*}${SELECTED:+($SELECTED)}$F $LINE/$LINES" env:"STATUS" description:"Status line"`
+	StatusDisabled bool `long:"no-status" description:"Disable status line"`
 
 	// Format: 
 	//		"│┌─┐│└─┘"
 	//		 01234567
-	Border string `short:"b" long:"border" env:"BORDER" default:"│┌─┐│└─┘" description:"Set border"`
+	Border string `long:"border" value-name:"STR" env:"BORDER" default:"│┌─┐│└─┘" description:"Set border chars"`
 
-	OverflowIndicator rune
+	OverflowIndicator string `long:"overflow-indicator" value-name:"C" default:"}" description:"Overflow indicator char"`
 	OverflowOverBorder bool
 
 	// Format: 
 	//		"█░"
 	//		 01
 	// NOTE: if this is set to "" the default SCROLLBAR will be used.
-	Scrollbar string
+	Scrollbar string `long:"scrollbar" value-name:"STR" env:"SCROLLBAR" default:"┃│" description:"Set scrollbar chars"`
 	ScrollbarDisabled bool
 
 	Filler rune
 
 	// column spanning...
-	SpanMode string `short:"s" long:"span" description:"Span columns"`
+	SpanMode string `long:"span" value-name:"STR" description:"Span columns"`
 	SpanModeTitle string
 	SpanModeStatus string
 	// cache...
@@ -443,10 +441,12 @@ type Lines struct {
 		value []int
 	}
 	SpanMarker string
-	SpanSeparator string
+	SpanSeparator string `long:"span-separator" value-name:"C" default:"│" description:"Span separator"`
 	// defaults to: SPAN_MIN_SIZE
-	SpanMinSize int
+	SpanMinSize int `long:"span-min" value-name:"N" default:"8" description:"Minimum span size"`
 	SpanNoExtend bool
+
+	TabSize int `long:"tab-size" value-name:"N" default:"8" description:"Tab size"`
 
 	Theme Theme
 }
@@ -689,8 +689,8 @@ func (this *Lines) makeSections(str, span string, width int, sep_size int, rest 
 	if marker == "" {
 		marker = SPAN_MARKER }
 	overflow := string(OVERFLOW_INDICATOR)
-	if this.OverflowIndicator != 0 {
-		overflow = string(this.OverflowIndicator) }
+	if len(this.OverflowIndicator) != 0 {
+		overflow = string([]rune(this.OverflowIndicator)[0]) }
 
 	sections := strings.Split(str, marker)
 
@@ -1070,8 +1070,8 @@ func (this *Lines) drawCells(col, row int, str string, style string) {
 		fmt.Print(str) } }
 func (this *Lines) drawLine(col, row int, sections []string, style string) *Lines {
 	overflow := string(OVERFLOW_INDICATOR)
-	if this.OverflowIndicator != 0 {
-		overflow = string(this.OverflowIndicator) }
+	if len(this.OverflowIndicator) != 0 {
+		overflow = string([]rune(this.OverflowIndicator)[0]) }
 
 	// helper: length in runes...
 	runes := func(s string) int {
@@ -1107,8 +1107,8 @@ func (this *Lines) drawLine(col, row int, sections []string, style string) *Line
 // NOTE: this adds $F to the env containing the current fill character.
 func (this *Lines) Draw() *Lines {
 	overflow := string(OVERFLOW_INDICATOR)
-	if this.OverflowIndicator != 0 {
-		overflow = string(this.OverflowIndicator) }
+	if len(this.OverflowIndicator) != 0 {
+		overflow = string([]rune(this.OverflowIndicator)[0]) }
 	rows := this.Rows()
 	row := 0
 	col := 0
