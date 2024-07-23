@@ -839,7 +839,8 @@ func (this *Lines) makeEnv() Env {
 		fill = string(this.Filler) }
 	// positioning...
 	l := len(this.Lines)
-	i := this.RowOffset + this.Index
+	i := this.Index
+	//i := this.RowOffset + this.Index
 	// test and friends...
 	var text, text_left, text_right string
 	if i < l {
@@ -1216,7 +1217,7 @@ func (this *Lines) Draw() *Lines {
 				this.SpanSeparator, border_l, border_r) }
 		// style...
 		style := "normal"
-		if row == this.Index + top_line {
+		if row == this.Index - this.RowOffset + top_line {
 			style = "current" } 
 		if line.Selected {
 			if style == "current" {

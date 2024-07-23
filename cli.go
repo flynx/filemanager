@@ -238,6 +238,7 @@ func (this *Actions) Action() Result {
 	if ok {
 		path := strings.Split(runtime.FuncForPC(pc).Name(), ".")
 		this.last = path[len(path)-1] }
+	//log.Println(this.last)
 	return OK }
 
 // Debug helper...
@@ -248,22 +249,22 @@ func (this *Actions) LOG() Result {
 // General...
 func (this *Actions) Focus() Result {
 	// second click on same row...
-	if this.MouseRow == this.Lines.Index {
+	if this.MouseRow == this.Lines.Index - this.Lines.RowOffset {
 		res := this.HandleKey("ClickSelected") 
 		if res == Missing {
 			res = OK }
 		if res != OK {
 			return res } }
 	// select row...
-	this.Lines.Index = this.MouseRow
+	this.Lines.Index = this.MouseRow + this.Lines.RowOffset
 	return OK }
 
 // Vertical navigation...
 func (this *Actions) Up() Result {
 	this.Action()
-	if this.Lines.Index > 0 && 
+	if this.Lines.Index - this.Lines.RowOffset > 0 && 
 			// at scroll threshold (top)...
-			(this.Lines.Index > this.ScrollThreshold ||
+			(this.Lines.Index - this.Lines.RowOffset > this.ScrollThreshold ||
 				this.Lines.RowOffset == 0) {
 		this.Lines.Index-- 
 	// scroll the buffer...
@@ -274,80 +275,69 @@ func (this *Actions) Down() Result {
 	this.Action()
 	rows := this.Lines.Rows()
 	// within the text buffer...
-	if this.Lines.Index + this.Lines.RowOffset < len(this.Lines.Lines)-1 && 
+	if this.Lines.Index < len(this.Lines.Lines)-1 && 
 			// within screen...
-			this.Lines.Index < rows-1 && 
+			this.Lines.Index - this.Lines.RowOffset < rows-1 && 
 			// buffer smaller than screen...
 			(rows >= len(this.Lines.Lines) ||
 				// screen at end of buffer...
 				this.Lines.RowOffset + rows == len(this.Lines.Lines) ||
 				// at scroll threshold (bottom)...
-				this.Lines.Index < rows - this.ScrollThreshold - 1) {
+				this.Lines.Index - this.Lines.RowOffset < rows - this.ScrollThreshold - 1) {
 		this.Lines.Index++ 
 	// scroll the buffer...
 	} else {
 		this.ScrollDown() }
 	return OK }
 
-// XXX should these track this.Lines.Index relative to screen (current) or 
-//		relative to content???
+// XXX should these also scroll focus???
+//		...or should it be "dragged by screen"
 func (this *Actions) ScrollUp() Result {
 	this.Action()
 	if this.Lines.RowOffset > 0 {
 		this.Lines.RowOffset-- }
+	if this.Lines.Index > 0 {
+		this.Lines.Index-- }
 	return OK }
 func (this *Actions) ScrollDown() Result {
 	this.Action()
 	rows := this.Lines.Rows()
 	if this.Lines.RowOffset + rows < len(this.Lines.Lines) {
 		this.Lines.RowOffset++ } 
+	if this.Lines.Index < len(this.Lines.Lines)-1 {
+		this.Lines.Index++ }
 	return OK }
 
+// XXX should we keep focus position relative to screen???
 func (this *Actions) PageUp() Result {
 	this.Action()
 	if this.Lines.RowOffset > 0 {
 		rows := this.Lines.Rows()
-		this.Lines.RowOffset -= rows 
-		if this.Lines.RowOffset < 0 {
+		this.Lines.Index -= rows 
+		if this.Lines.Index < 0 {
 			this.Top() } 
-	} else if this.Lines.RowOffset == 0 {
+	} else {
 		this.Top() } 
 	return OK }
 func (this *Actions) PageDown() Result {
 	this.Action()
 	rows := this.Lines.Rows()
-	if len(this.Lines.Lines) < rows {
-		this.Lines.Index = len(this.Lines.Lines) - 1
-		return OK }
-	offset := len(this.Lines.Lines) - rows
-	if this.Lines.RowOffset < offset {
-		this.Lines.RowOffset += rows 
-		if this.Lines.RowOffset > offset {
-			this.Bottom() } 
-	} else if this.Lines.RowOffset == offset {
-		this.Bottom() } 
+	if this.Lines.RowOffset < len(this.Lines.Lines) - rows {
+		this.Lines.Index += rows 
+		if this.Lines.Index >= len(this.Lines.Lines) {
+			this.Bottom() }
+	} else {
+		this.Bottom() }
 	return OK }
 
 func (this *Actions) Top() Result {
 	this.Action()
-	if this.Lines.RowOffset == 0 {
-		this.Lines.Index = 0 
-	} else {
-		this.Lines.RowOffset = 0 }
+	this.Lines.Index = 0
 	return OK }
 func (this *Actions) Bottom() Result {
 	this.Action()
-	rows := this.Lines.Rows()
-	if len(this.Lines.Lines) < rows {
-		this.Lines.Index = len(this.Lines.Lines) - 1
-		return OK }
-	offset := len(this.Lines.Lines) - rows 
-	if this.Lines.RowOffset == offset {
-		this.Lines.Index = rows - 1
-	} else {
-		this.Lines.RowOffset = len(this.Lines.Lines) - rows }
+	this.Lines.Index = len(this.Lines.Lines) - 1
 	return OK }
-//*/
 
 /*// XXX Horizontal navigation...
 func (this *Actions) Left() Result {
@@ -385,14 +375,14 @@ func (this *Actions) RightEdge() Result {
 func (this *Actions) Select(rows ...int) Result {
 	this.Action()
 	if len(rows) == 0 {
-		rows = []int{this.Lines.Index + this.Lines.RowOffset} }
+		rows = []int{this.Lines.Index} }
 	for _, i := range rows {
 		this.Lines.Lines[i].Selected = true }
 	return OK }
 func (this *Actions) Deselect(rows ...int) Result {
 	this.Action()
 	if len(rows) == 0 {
-		rows = []int{this.Lines.Index + this.Lines.RowOffset} }
+		rows = []int{this.Lines.Index} }
 	for _, i := range rows {
 		this.Lines.Lines[i].Selected = false }
 	return OK }
@@ -400,7 +390,7 @@ func (this *Actions) Deselect(rows ...int) Result {
 func (this *Actions) SelectToggle(rows ...int) Result {
 	this.Action()
 	if len(rows) == 0 {
-		rows = []int{this.Lines.Index + this.Lines.RowOffset} }
+		rows = []int{this.Lines.Index} }
 	for _, i := range rows {
 		if this.Lines.Lines[i].Selected {
 			this.Lines.Lines[i].Selected = false 
@@ -431,11 +421,11 @@ func (this *Actions) SelectStart() Result {
 	if this.last != "SelectEnd" {
 		log.Println("NEW SELECTION")
 		this.SelectMotion = "select"
-		if this.Lines.Lines[this.Lines.Index+this.Lines.RowOffset].Selected {
+		if this.Lines.Lines[this.Lines.Index].Selected {
 			this.SelectMotion = "deselect" } }
 	log.Println("SELECTION", this.SelectMotion)
 	this.Action()
-	this.SelectMotionStart = this.Lines.Index + this.Lines.RowOffset
+	this.SelectMotionStart = this.Lines.Index
 	return OK }
 // XXX need to handle shift release...
 func (this *Actions) SelectEnd(rows ...int) Result {
@@ -447,7 +437,7 @@ func (this *Actions) SelectEnd(rows ...int) Result {
 		start, end = this.SelectMotionStart, rows[0]
 	} else {
 		start = this.SelectMotionStart
-		end = this.Lines.Index + this.Lines.RowOffset 
+		end = this.Lines.Index
 		/* XXX
 		// toggle selection mode when on first/last row...
 		// XXX HACK? this should be done on shift release...
@@ -481,7 +471,7 @@ func (this *Actions) SelectEnd(rows ...int) Result {
 	this.Action()
 	return OK }
 func (this *Actions) SelectEndCurrent() Result {
-	return this.SelectEnd(this.Lines.Index + this.Lines.RowOffset) }
+	return this.SelectEnd(this.Lines.Index) }
 
 // Utility...
 func (this *Actions) Update() Result {
@@ -546,7 +536,7 @@ type UI struct {
 
 	// NOTE: these only affect startup -- set .Index and .RowOffset...
 	// XXX these need a uniform startup-load mechanic done...
-	//Focus string `short:"f" long:"focus" value-name:"[N|STR]" env:"FOCUS" description:"Line number / line to focus"`
+	Focus string `short:"f" long:"focus" value-name:"[N|STR]" env:"FOCUS" description:"Line number / line to focus"`
 	//FocusRow int `long:"focus-row" value-name:"N" env:"FOCUS_ROW" description:"Screen line number of focused line"`
 	//FocusCmd string `long:"focus-cmd" value-name:"CMD" env:"FOCUS_CMD" description:"Focus command"`
 
@@ -708,40 +698,41 @@ func (this *UI) handleScrollLimits() *UI {
 	delta := 0
 
 	rows := this.Lines.Rows()
+	screen_focus_offset := this.Lines.Index - this.Lines.RowOffset
 	top_threshold := this.ScrollThreshold
 	bottom_threshold := rows - this.ScrollThreshold - 1 
 	if rows < this.ScrollThreshold + this.ScrollThreshold {
 		top_threshold = rows / 2
 		bottom_threshold = rows - top_threshold }
+
 	
 	// buffer smaller than screen -- keep at top...
 	if rows > len(this.Lines.Lines) {
 		this.Lines.RowOffset = 0
 		// XXX this is odd -- see above line...
-		this.Lines.Index -= this.Lines.RowOffset
+		//this.Lines.Index -= this.Lines.RowOffset
 		return this }
 
 	// keep from scrolling past the bottom of the screen...
 	if this.Lines.RowOffset + rows > len(this.Lines.Lines) {
 		delta = this.Lines.RowOffset - (len(this.Lines.Lines) - rows)
 	// scroll to top threshold...
-	} else if this.Lines.Index < top_threshold && 
+	} else if screen_focus_offset < top_threshold && 
 			this.Lines.RowOffset > 0 {
-		delta = top_threshold - this.Lines.Index
+		delta = top_threshold - screen_focus_offset
 		if delta > this.Lines.RowOffset {
 			delta = this.Lines.RowOffset }
 	// keep current row on screen...
-	} else if this.Lines.Index > bottom_threshold && 
-			this.Lines.Index > top_threshold {
-		delta = bottom_threshold - this.Lines.Index
+	} else if screen_focus_offset > bottom_threshold && 
+			screen_focus_offset > top_threshold {
+		delta = bottom_threshold - screen_focus_offset
 		// saturate delta...
 		if delta < (this.Lines.RowOffset + rows) - len(this.Lines.Lines) {
 			delta = (this.Lines.RowOffset + rows) - len(this.Lines.Lines) } } 
 
 	// do the update...
 	if delta != 0 {
-		this.Lines.RowOffset -= delta 
-		this.Lines.Index += delta }
+		this.Lines.RowOffset -= delta }
 
 	return this }
 
@@ -1071,14 +1062,36 @@ func (this *UI) Append(str string) *UI {
 //		and trim it (???)
 func (this *UI) ReadFrom(reader io.Reader) chan bool {
 	running := make(chan bool)
-	index := this.Lines.LinesBuffer.Index
+	// parse .Focus...
+	index := 0
+	substr := ""
+	if len(this.Focus) > 0 {
+		i, err := strconv.Atoi(this.Focus)
+		// number...
+		if err == nil {
+			index = i - 1 
+		// substring...
+		} else {
+			substr = this.Focus }
+		this.Focus = ""
+	} else {
+		index = this.Lines.Index }
 	this.Lines.Clear()
-	this.Lines.LinesBuffer.Index = index
+	this.Lines.Index = index
 	go func(){
+		i := 0
 		scanner := bufio.NewScanner(reader)
 		for scanner.Scan() {
 			txt := scanner.Text()
-			this.Append(txt) } 
+			if len(substr) > 0 && 
+					(txt == substr || 
+						strings.Contains(txt, substr)) {
+				substr = ""
+				this.Lines.Index = i }
+			this.Append(txt) 
+			i++ } 
+		if this.Lines.Index > i {
+			this.Lines.Index = i - 1 }
 		close(running) }()
 	return running }
 func (this *UI) ReadFromFile(filename ...string) chan bool {
