@@ -1025,6 +1025,9 @@ func (this *UI) Setup(lines Lines, drawer Renderer) *UI {
 	// XXX can we make these lazy or not-required???
 	this.Actions = NewActions(this)
 
+	// XXX
+	//this.Update()
+
 	return this }
 func (this *UI) HandleArgs() Result {
 	parser := flags.NewParser(this, flags.Default)
@@ -1077,19 +1080,35 @@ func (this *UI) ReadFrom(reader io.Reader) chan bool {
 	} else {
 		index = this.Lines.Index }
 	this.Lines.Clear()
-	this.Lines.Index = index
+	// positive index...
+	if index >= 0 {
+		this.Lines.Index = index
+	// negative index -> prepare for handling...
+	} else {
+		this.Lines.Index = 0 }
 	go func(){
 		i := 0
 		scanner := bufio.NewScanner(reader)
 		for scanner.Scan() {
 			txt := scanner.Text()
+			// focus pattern...
 			if len(substr) > 0 && 
 					(txt == substr || 
 						strings.Contains(txt, substr)) {
 				substr = ""
-				this.Lines.Index = i }
+				this.Lines.Index = i 
+			// negative index...
+			} else if index < 0 && 
+					i >= -index {
+				// only update untill the index moved by something else...
+				if this.Lines.Index == i + index {
+					this.Lines.Index++ 
+				// index has moved -> abort traking...
+				} else {
+					index = 0 } }
 			this.Append(txt) 
 			i++ } 
+		// normalize index -- if out of range...
 		if this.Lines.Index > i {
 			this.Lines.Index = i - 1 }
 		close(running) }()
