@@ -1025,9 +1025,6 @@ func (this *UI) Setup(lines Lines, drawer Renderer) *UI {
 	// XXX can we make these lazy or not-required???
 	this.Actions = NewActions(this)
 
-	// XXX
-	//this.Update()
-
 	return this }
 func (this *UI) HandleArgs() Result {
 	parser := flags.NewParser(this, flags.Default)
@@ -1036,6 +1033,7 @@ func (this *UI) HandleArgs() Result {
 		if flags.WroteHelp(err) {
 			return Exit }
 		os.Exit(1) } 
+	this.Update()
 	return OK }
 func (this *UI) Loop() Result {
 	return this.Renderer.Loop(this) }
@@ -1147,20 +1145,24 @@ func (this *UI) ReadFromCmd(cmds ...string) chan bool {
 	return this.ReadFrom(c.Stdout) }
 
 // XXX TEST / not done...
+// XXX BUG: empty files break things...
 func (this *UI) Update() Result {
 	selection := this.Lines.Selected()
 	res := OK
 	if !this.__stdin_read {
 		// file...
 		if this.Files.Input != "" {
+			log.Println("FILE")
 			this.ReadFromFile()
 			return OK
 		// command...
 		} else if this.ListCommand != "" {
+			log.Println("CMD")
 			this.ReadFromCmd()
 			return OK
 		// pipe...
 		} else {
+			log.Println("STDIN")
 			// do this only once per run...
 			this.__stdin_read = true
 			stat, err := os.Stdin.Stat()
@@ -1222,10 +1224,10 @@ func main(){
 	if lines.HandleArgs() == Exit {
 		return }
 
-	lines.TransformCmd("sed 's/$/|/'")
+	//lines.TransformCmd("sed 's/$/|/'")
 	// NOTE: ls flags that trigger stat make things really slow (-F, sorting, ...etc)
 	//lines.ReadFromCmd("ls")
-	lines.ReadFromCmd("echo .. ; ls -t --group-directories-first ~/Pictures/Instagram/")
+	//lines.ReadFromCmd("echo .. ; ls -t --group-directories-first ~/Pictures/Instagram/")
 	//lines.ReadFromCmd("echo .. ; ls --group-directories-first ~/Pictures/Instagram/ARCHIVE/")
 
 	//lines.Width = "50%"
