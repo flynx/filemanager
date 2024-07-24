@@ -1220,7 +1220,7 @@ func NewUI(l ...Lines) *UI {
 //		ui + keep it redirectable... 
 func main(){
 	//* XXX stub...
-	lines := NewUI(Lines{})
+	lines := NewUI()
 	if lines.HandleArgs() == Exit {
 		return }
 

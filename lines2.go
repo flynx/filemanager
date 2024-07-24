@@ -429,6 +429,7 @@ type Lines struct {
 	Filler rune
 
 	// column spanning...
+	// NOTE: values of 0 are swapped for .SpanMinSize
 	SpanMode string `long:"span" value-name:"STR" description:"Span columns"`
 	SpanModeTitle string `long:"span-title" value-name:"STR" description:"Span title columns"`
 	SpanModeStatus string `long:"span-status" value-name:"STR" description:"Span status columns"`
@@ -443,6 +444,7 @@ type Lines struct {
 	SpanMarker string
 	SpanSeparator string `long:"span-separator" value-name:"C" default:"│" description:"Span separator"`
 	// defaults to: SPAN_MIN_SIZE
+	// NOTE: this affects only % and * spans, explicit spans are not changed.
 	SpanMinSize int `long:"span-min" value-name:"N" default:"8" description:"Minimum span size"`
 	SpanNoExtend bool
 
@@ -790,6 +792,10 @@ func (this *Lines) makeSectionChrome(str, span string, width int, rest ...string
 	if len(rest) >= 1 {
 		separator = rest[0]
 		rest = rest[1:] }
+	border := this.Border
+	if len(border) > 0 && 
+			len(border) < 8 {
+		border += strings.Repeat(" ", 8 - len(border)) }
 	border_l := ""
 	border_r := ""
 	if len(rest) >= 2 {
@@ -797,9 +803,9 @@ func (this *Lines) makeSectionChrome(str, span string, width int, rest ...string
 		border_r = rest[1] 
 		width -= len([]rune(border_l)) + len([]rune(border_r))
 		rest = rest[2:]
-	} else if this.Border != "" {
-		border_l = string([]rune(this.Border)[0])
-		border_r = string([]rune(this.Border)[4])
+	} else if border != "" {
+		border_l = string([]rune(border)[0])
+		border_r = string([]rune(border)[4])
 		width -= 2 }
 	// XXX BUG: looks like this yiels the same results with sep_size of 0 an 1...
 	sections := this.makeSections(str, span, width, len([]rune(separator)), rest...)
@@ -1129,6 +1135,10 @@ func (this *Lines) Draw() *Lines {
 	overflow := string(OVERFLOW_INDICATOR)
 	if len(this.OverflowIndicator) != 0 {
 		overflow = string([]rune(this.OverflowIndicator)[0]) }
+	border := this.Border
+	if len(border) > 0 && 
+			len(border) < 8 {
+		border += strings.Repeat(" ", 8 - len(border)) }
 	rows := this.Rows()
 	row := 0
 	col := 0
@@ -1141,13 +1151,13 @@ func (this *Lines) Draw() *Lines {
 	border_h := " "
 	top_line := 0
 	if ! this.TitleDisabled || 
-			this.Border != "" {
+			border != "" {
 		top_line = 1
 		env = this.makeEnv()
-		if this.Border != "" {
-			corner_l = string([]rune(this.Border)[1])
-			corner_r = string([]rune(this.Border)[3]) 
-			border_h = string([]rune(this.Border)[2]) }
+		if border != "" {
+			corner_l = string([]rune(border)[1])
+			corner_r = string([]rune(border)[3]) 
+			border_h = string([]rune(border)[2]) }
 		env["__F"] = border_h
 		sections := this.makeSectionChrome(
 			this.expandTemplate(this.Title, env), 
@@ -1162,9 +1172,9 @@ func (this *Lines) Draw() *Lines {
 	// border...
 	border_l := ""
 	border_r := ""
-	if this.Border != "" {
-		border_l = string([]rune(this.Border)[0])
-		border_r = string([]rune(this.Border)[4]) }
+	if border != "" {
+		border_l = string([]rune(border)[0])
+		border_r = string([]rune(border)[4]) }
 	// scrollbar...
 	scrollbar := false
 	var scrollbar_fg, scrollbar_bg string
@@ -1250,10 +1260,10 @@ func (this *Lines) Draw() *Lines {
 	if ! this.StatusDisabled {
 		if len(env) == 0 {
 			env = this.makeEnv() }
-		if this.Border != "" {
-			corner_l = string([]rune(this.Border)[5])
-			corner_r = string([]rune(this.Border)[7])
-			border_h = string([]rune(this.Border)[6]) }
+		if border != "" {
+			corner_l = string([]rune(border)[5])
+			corner_r = string([]rune(border)[7])
+			border_h = string([]rune(border)[6]) }
 		env["__F"] = border_h
 		sections := this.makeSectionChrome(
 			this.expandTemplate(this.Status, env), 
