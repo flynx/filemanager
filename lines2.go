@@ -406,7 +406,7 @@ type Lines struct {
 	//Theme Theme
 
 	// chrome...
-	Title string `long:"title" value-name:"TEXT" default:" $TEXT_LEFT |%SPINNER" env:"TITLE" description:"Title line"`
+	Title string `long:"title" value-name:"TEXT" default:" $TEXT_LEFT |$F%S$F" env:"TITLE" description:"Title line"`
 	TitleDisabled bool `long:"no-title" description:"Disable title line"`
 	Status string `long:"status" value-name:"TEXT" default:"|${SELECTED:!*}${SELECTED:+($SELECTED)}$F $LINE/$LINES" env:"STATUS" description:"Status line"`
 	StatusDisabled bool `long:"no-status" description:"Disable status line"`
@@ -430,8 +430,8 @@ type Lines struct {
 
 	// column spanning...
 	SpanMode string `long:"span" value-name:"STR" description:"Span columns"`
-	SpanModeTitle string
-	SpanModeStatus string
+	SpanModeTitle string `long:"span-title" value-name:"STR" description:"Span title columns"`
+	SpanModeStatus string `long:"span-status" value-name:"STR" description:"Span status columns"`
 	// cache...
 	// XXX do we need to cache multiple values???
 	__SpanMode_cache struct {
@@ -449,11 +449,6 @@ type Lines struct {
 	TabSize int `long:"tab-size" value-name:"N" default:"8" description:"Tab size"`
 
 	Theme Theme
-}
-// XXX can we integrate this transparently???
-var LinesDefaults = Lines {
-	Title: "",
-	Status: "%CMD| $LINE/$LINES ",
 }
 
 func (this *Lines) Rows() int {
@@ -603,6 +598,10 @@ func (this *Lines) parseSizes(str string, width int, sep int) []int {
 			// accout for separators...
 			if i < len(spec)-1 {
 				cols -= sep }
+			// min width...
+			if cols > 0 && 
+					cols < min_size {
+				cols = min_size }
 		// explicit cols...
 		// NOTE: these do not include separators...
 		} else {
@@ -613,14 +612,12 @@ func (this *Lines) parseSizes(str string, width int, sep int) []int {
 				stars++
 				sizes = append(sizes, cols)
 				continue } 
+			if cols < 0 {
+				cols = min_size }
 			if i < len(spec)-1 {
 				rest -= sep } }
-		// min width...
-		if cols > 0 && 
-				cols < min_size {
-			cols = min_size }
 		if cols > 0 {
-		rest -= cols }
+			rest -= cols }
 		sizes = append(sizes, cols) }
 
 	// precalculate * sizes...
@@ -716,8 +713,13 @@ func (this *Lines) makeSections(str, span string, width int, sep_size int, rest 
 		// NOTE: we do not cache this because the output depends on sections...
 		sizes := []int{}
 		if span == "" || span == "fit-right" {
+			min_size := this.SpanMinSize
+			if min_size == 0 {
+				min_size = SPAN_MIN_SIZE }
 			section := doSection(sections[len(sections)-1], 0)
 			l := len([]rune(section[0]))
+			if l <= 0 {
+				l = min_size }
 			sizes = this.parseSizes("*,"+ fmt.Sprint(l), width, sep_size)
 		// sizing: manual (cached)...
 		} else {
@@ -759,7 +761,7 @@ func (this *Lines) makeSections(str, span string, width int, sep_size int, rest 
 			res = append(res, doSection(getSection(i), sizes[i])...) } }
 	return res }
 //
-//	.makeSectionChrome(<str>, <width>[, <span_separator>[, <left_border>, <right_border>[, <filler>]]])
+//	.makeSectionChrome(<str>, <span>, <width>[, <left_border>, <right_border>[, <filler>]])
 //		-> <line>
 //
 // Format:
@@ -860,6 +862,7 @@ func (this *Lines) makeEnv() Env {
 		selected = fmt.Sprint(l) }
 
 	env := Env {
+		// XXX should this be a var or a placeholder???
 		// XXX revise name...
 		"F": fill,
 		"INDEX": fmt.Sprint(i),
@@ -897,6 +900,14 @@ type AST struct {
 }
 type Placeholders map[string] func(*Lines, Env) string
 var PLACEHOLDERS = Placeholders {
+	// XXX should this be a var or a placeholder???
+	/* XXX this can't be set to a different value for title/status lines...
+	"F": func(this *Lines, env Env) string {
+		fill := " "
+		if this.Filler != 0 {
+			fill = string(this.Filler) }
+		return fill },
+	//*/
 	"CMD": func(this *Lines, env Env) string {
 		cmd, ok := env["CMD"]
 		if ! ok {
@@ -905,6 +916,9 @@ var PLACEHOLDERS = Placeholders {
 		// XXX call the command...
 		fmt.Println("---", cmd)
 		return res },
+	"S": func(this *Lines, env Env) string {
+		// XXX
+		return "/" },
 }
 type Expander func([]AST) string
 type Expanders map[string]func(string, []AST, Expander) string

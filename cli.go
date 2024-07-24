@@ -1220,13 +1220,7 @@ func NewUI(l ...Lines) *UI {
 //		ui + keep it redirectable... 
 func main(){
 	//* XXX stub...
-	lines := NewUI(Lines{
-		// XXX setting this to "" breaks things -- revise deafult handling...
-		SpanMode: "*,8",
-		// XXX BUG: this loses the space at the end of $TEXT and draws 
-		//		a space intead of "/"...
-		Title: " $TEXT_LEFT |/",
-	})
+	lines := NewUI(Lines{})
 	if lines.HandleArgs() == Exit {
 		return }
 
