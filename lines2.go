@@ -406,7 +406,7 @@ type Lines struct {
 	//Theme Theme
 
 	// chrome...
-	Title string `long:"title" value-name:"TEXT" default:" $TEXT_LEFT |$F%S$F" env:"TITLE" description:"Title line"`
+	Title string `long:"title" value-name:"TEXT" default:" $TEXT_LEFT |%F%S%F" env:"TITLE" description:"Title line"`
 	TitleDisabled bool `long:"no-title" description:"Disable title line"`
 	Status string `long:"status" value-name:"TEXT" default:"|${SELECTED:!*}${SELECTED:+($SELECTED)}$F $LINE/$LINES" env:"STATUS" description:"Status line"`
 	StatusDisabled bool `long:"no-status" description:"Disable status line"`
@@ -862,9 +862,11 @@ func (this *Lines) makeEnv() Env {
 		selected = fmt.Sprint(l) }
 
 	env := Env {
+		// used for '%F' value...
+		"__F": fill,
+
 		// XXX should this be a var or a placeholder???
-		// XXX revise name...
-		"F": fill,
+		//"F": fill,
 		"INDEX": fmt.Sprint(i),
 		"LINE": fmt.Sprint(i + 1),
 		"LINES": fmt.Sprint(l),
@@ -901,11 +903,13 @@ type AST struct {
 type Placeholders map[string] func(*Lines, Env) string
 var PLACEHOLDERS = Placeholders {
 	// XXX should this be a var or a placeholder???
-	/* XXX this can't be set to a different value for title/status lines...
+	//* XXX this can't be set to a different value for title/status lines...
 	"F": func(this *Lines, env Env) string {
-		fill := " "
-		if this.Filler != 0 {
-			fill = string(this.Filler) }
+		fill, ok := env["__F"]
+		if !ok {
+			fill = " "
+			if this.Filler != 0 {
+				fill = string(this.Filler) } }
 		return fill },
 	//*/
 	"CMD": func(this *Lines, env Env) string {
@@ -1143,7 +1147,7 @@ func (this *Lines) Draw() *Lines {
 			corner_l = string([]rune(this.Border)[1])
 			corner_r = string([]rune(this.Border)[3]) 
 			border_h = string([]rune(this.Border)[2]) }
-		env["F"] = border_h
+		env["__F"] = border_h
 		sections := this.makeSectionChrome(
 			this.expandTemplate(this.Title, env), 
 			this.SpanModeTitle,
@@ -1249,7 +1253,7 @@ func (this *Lines) Draw() *Lines {
 			corner_l = string([]rune(this.Border)[5])
 			corner_r = string([]rune(this.Border)[7])
 			border_h = string([]rune(this.Border)[6]) }
-		env["F"] = border_h
+		env["__F"] = border_h
 		sections := this.makeSectionChrome(
 			this.expandTemplate(this.Status, env), 
 			this.SpanModeStatus,
