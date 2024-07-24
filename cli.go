@@ -694,6 +694,7 @@ func (this *UI) updateGeometry() *UI {
 			this.Lines.Top = int(float64(H - this.Lines.Height) / 2) } }
 	return this }
 // keep the selection in the same spot...
+// XXX should we handle negative indexes here???
 func (this *UI) handleScrollLimits() *UI {
 	delta := 0
 
@@ -704,13 +705,15 @@ func (this *UI) handleScrollLimits() *UI {
 	if rows < this.ScrollThreshold + this.ScrollThreshold {
 		top_threshold = rows / 2
 		bottom_threshold = rows - top_threshold }
-
 	
 	// buffer smaller than screen -- keep at top...
 	if rows > len(this.Lines.Lines) {
 		this.Lines.RowOffset = 0
-		// XXX this is odd -- see above line...
-		//this.Lines.Index -= this.Lines.RowOffset
+		// normalize index...
+		if this.Lines.Index > len(this.Lines.Lines) {
+			this.Lines.Index = len(this.Lines.Lines)-1 }
+		if this.Lines.Index < 0 {
+			this.Lines.Index = 0 }
 		return this }
 
 	// keep from scrolling past the bottom of the screen...
@@ -1040,10 +1043,9 @@ func (this *UI) Loop() Result {
 
 func (this *UI) Append(str string) *UI {
 	if this.Transformer != nil {
-		//log.Println("  append:", str)
 		_, err := this.Transformer.Write(str +"\n")
 		if err != nil {
-			log.Panic(err) }
+			log.Fatal(err) }
 	} else {
 		this.Lines.Append(str) }
 	this.Refresh() 
@@ -1063,6 +1065,8 @@ func (this *UI) Append(str string) *UI {
 //		and trim it (???)
 func (this *UI) ReadFrom(reader io.Reader) chan bool {
 	running := make(chan bool)
+	// prep the transform command if defined...
+	this.TransformCmd()
 	// parse .Focus...
 	index := 0
 	substr := ""
@@ -1121,7 +1125,7 @@ func (this *UI) ReadFromFile(filename ...string) chan bool {
 		return c }
 	file, err := os.Open(name)
 	if err != nil {
-		log.Panic(err) }
+		log.Fatal(err) }
 
 	running := this.ReadFrom(file) 
 
@@ -1140,38 +1144,36 @@ func (this *UI) ReadFromCmd(cmds ...string) chan bool {
 		return c }
 	c, err := Run(cmd, nil)
 	if err != nil {
-		log.Panic(err) }
+		log.Fatal(err) }
 
 	return this.ReadFrom(c.Stdout) }
 
-// XXX TEST / not done...
-// XXX BUG: empty files break things...
 func (this *UI) Update() Result {
+	if this.__stdin_read {
+		return OK }
+	done := make(chan bool)
+	close(done)
 	selection := this.Lines.Selected()
 	res := OK
-	if !this.__stdin_read {
-		// file...
-		if this.Files.Input != "" {
-			log.Println("FILE")
-			this.ReadFromFile()
-			return OK
-		// command...
-		} else if this.ListCommand != "" {
-			log.Println("CMD")
-			this.ReadFromCmd()
-			return OK
-		// pipe...
-		} else {
-			log.Println("STDIN")
-			// do this only once per run...
-			this.__stdin_read = true
-			stat, err := os.Stdin.Stat()
-			if err != nil {
-				log.Fatalf("%+v", err) }
-			if stat.Mode() & os.ModeNamedPipe != 0 {
-				this.ReadFrom(os.Stdin) } } }
+	// file...
+	if this.Files.Input != "" {
+		done = this.ReadFromFile()
+	// command...
+	} else if this.ListCommand != "" {
+		done = this.ReadFromCmd()
+	// pipe...
+	} else {
+		// do this only once per run...
+		this.__stdin_read = true
+		stat, err := os.Stdin.Stat()
+		if err != nil {
+			log.Fatal(err) }
+		if stat.Mode() & os.ModeNamedPipe != 0 {
+			done = this.ReadFrom(os.Stdin) } } 
 	// XXX should this be done here or live in .ReadFrom(..) ???
-	this.Lines.Select(selection)
+	go func(){
+		<-done
+		this.Lines.Select(selection) }()
 	return res }
 
 // XXX EXPERIMENTAL...
@@ -1179,16 +1181,20 @@ func (this *UI) Update() Result {
 // XXX should we transform the existing lines???
 // XXX add multiple transforms...
 func (this *UI) TransformCmd(cmds ...string) *UI {
+	if this.Transformer != nil {
+		return this }
 	cmd := this.TransformCommand
 	if len(cmds) > 0 {
 		cmd = cmds[0] }
+	if len(cmd) == 0 {
+		return this }
 	c, err := Pipe(cmd,
 		func(str string){
 			//log.Println("    updated:", str)
 			this.Lines.Append(str) 
 			this.Refresh() })
 	if err != nil {
-		log.Panic(err) }
+		log.Fatal(err) }
 	this.Transformer = c
 	return this }
 
@@ -1219,7 +1225,7 @@ func main(){
 		SpanMode: "*,8",
 		// XXX BUG: this loses the space at the end of $TEXT and draws 
 		//		a space intead of "/"...
-		Title: " $TEXT |/",
+		Title: " $TEXT_LEFT |/",
 	})
 	if lines.HandleArgs() == Exit {
 		return }

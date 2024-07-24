@@ -406,7 +406,7 @@ type Lines struct {
 	//Theme Theme
 
 	// chrome...
-	Title string `long:"title" value-name:"TEXT" default:" $TEXT |%SPINNER" env:"TITLE" description:"Title line"`
+	Title string `long:"title" value-name:"TEXT" default:" $TEXT_LEFT |%SPINNER" env:"TITLE" description:"Title line"`
 	TitleDisabled bool `long:"no-title" description:"Disable title line"`
 	Status string `long:"status" value-name:"TEXT" default:"|${SELECTED:!*}${SELECTED:+($SELECTED)}$F $LINE/$LINES" env:"STATUS" description:"Status line"`
 	StatusDisabled bool `long:"no-status" description:"Disable status line"`
