@@ -780,7 +780,7 @@ func (this *Lines) makeSections(str, span string, width int, sep_size int, rest 
 //
 // NOTE: we are not joining the list here so as to enable further 
 //		processing (e.g. styling) down the line...
-// XXX shoud we be able to distinguish between last cell overflow and 
+// XXX should we be able to distinguish between last cell overflow and 
 //		and section overflow???
 //		...currently it is not possible to do so...
 // XXX make sure to handle/trim lines ending in escape sequences correctly 
@@ -862,7 +862,7 @@ func (this *Lines) makeEnv() Env {
 		selected = fmt.Sprint(l) }
 
 	env := Env {
-		// used for '%F' value...
+		// used for '%F' placeholder value...
 		"__F": fill,
 
 		// XXX should this be a var or a placeholder???
@@ -875,7 +875,8 @@ func (this *Lines) makeEnv() Env {
 		"TEXT_RIGHT": text_right,
 		"SELECTION": strings.Join(selection, "\n"),
 		"SELECTED": selected,
-		//"ACTIVE": strings.Join(this.Active(), "\n"),
+		// XXX TEST...
+		"ACTIVE": strings.Join(this.Active(), "\n"),
 	}
 	for k, v := range this.Env {
 		env[k] = v }
