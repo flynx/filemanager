@@ -542,8 +542,8 @@ type UI struct {
 	//FocusCmd string `long:"focus-cmd" value-name:"CMD" env:"FOCUS_CMD" description:"Focus command"`
 
 	// Quick actions...
-	//Select string `short:"s" long:"select" value-name:"ACTION" env:"SELECT" description:"Action to execute on item select"`
-	//Reject string `short:"r" long:"reject" value-name:"ACTION" env:"REJECT" description:"Action to execute on reject"`
+	Select string `short:"s" long:"select" value-name:"ACTION" env:"SELECT" description:"Action to execute on item select"`
+	Reject string `short:"r" long:"reject" value-name:"ACTION" env:"REJECT" description:"Action to execute on reject"`
 
 	Lines *Lines `group:"Chrome"`
 
@@ -584,7 +584,6 @@ type UI struct {
 	// mark that stdin read was started...
 	__stdin_read bool
 
-	// XXX
 	Introspection struct {
 		ListActions bool `long:"list-actions" description:"List available actions"`
 		ListThemeable bool `long:"list-themeable" description:"List available themable element names"`
@@ -1101,35 +1100,55 @@ func (this *UI) HandleArgs() Result {
 			fmt.Println() }
 		os.Exit(0) }
 
-	// merge key bindings...
-	if this.Keybindings != nil || 
-			this.KeybindingsDefaults != nil {
+	// key binding...
+	ensureKeybindings := func(bindings ...Keybindings) {
+		// nothing to do...
+		if len(bindings) == 1 && 
+				bindings[0] != nil &&
+				this.Keybindings != nil &&
+				&bindings[0] == &this.Keybindings {
+			return }
 		kb := Keybindings{}
+		// defaults...
 		if ! this.KeybindingsNoDefaults {
 			defaults := this.KeybindingsDefaults
 			if defaults == nil {
 				defaults = KEYBINDINGS }
 			maps.Copy(kb, defaults) }
-		if this.Keybindings != nil {
-			maps.Copy(kb, this.Keybindings) }
+		// merge rest...
+		for _, b := range bindings {
+			if b != nil {
+				maps.Copy(kb, b) } }
 		this.Keybindings = kb }
-	// colors...
+	// merge key bindings...
+	if this.Keybindings != nil {
+		ensureKeybindings( 
+			// force merge defaults...
+			maps.Clone(this.Keybindings) ) 
+	} else if this.KeybindingsDefaults != nil {
+		ensureKeybindings() }
+	// select...
+	if this.Select != "" {
+		ensureKeybindings(this.Keybindings)
+		this.Keybindings["Select"] = this.Select }
+	// reject...
+	if this.Reject != "" {
+		ensureKeybindings(this.Keybindings)
+		this.Keybindings["Reject"] = this.Reject }
+
+	// themes/colors...
 	// XXX for some magical reason overloading "deafult" does not work...
 	if this.Lines.Theme != nil {
 		theme := Theme{}
 		maps.Copy(theme, THEME)
+		// parse colors...
 		for name, style := range this.Lines.Theme {
 			style = strings.Split(style[0], ",")
 			for i, color := range style {
 				style[i] = strings.TrimSpace(color) }
 			this.Lines.Theme[name] = style }
 		maps.Copy(theme, this.Lines.Theme)
-		this.Lines.Theme = theme 
-		//log.Println("---", this.Lines.Theme, len(this.Lines.Theme["default"]))
-		//_, s := this.Lines.GetStyle("default")
-		//log.Println("  -", s)
-		//this.Renderer.(Tcell).style2TcellStyle("default")
-	}
+		this.Lines.Theme = theme }
 	// border...
 	if theme, ok := BORDER_THEME[this.Lines.Border]; ok {
 		this.Lines.Border = theme }
