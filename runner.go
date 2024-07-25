@@ -3,6 +3,7 @@ package main
 
 import (
 	"bufio"
+	//"log"
 	"fmt"
 	//"os"
 	"os/exec"
@@ -159,8 +160,10 @@ func (this *Cmd) Run(stdin ...io.Reader) error {
 	r, w := io.Pipe()
 	this.Stdout = r
 	go func(){
-		// XXX this seems to block...
 		TeeCloser(src, w, this.Handler)
+		// we've been killed...
+		if this.Cmd == nil {
+			return }
 		this.Cmd.Wait()
 		this.__reset() }() 
 
@@ -169,8 +172,7 @@ func (this *Cmd) Wait() error {
 	<-this.Done
 	return nil }
 func (this *Cmd) Kill() error {
-	defer func(){
-		this.__reset() }()
+	defer this.__reset()
 	if this.Cmd == nil {
 		return errors.New(".Kill(..): no command running.") }
 	return this.Process.Kill() }

@@ -527,6 +527,7 @@ type UI struct {
 	//WatchFile bool
 
 	ListCommand string `short:"c" long:"cmd" value-name:"CMD" env:"CMD" description:"List command"`
+	Cmd *Cmd
 	// NOTE: this is not the same as filtering the input as it will be 
 	//		done lazily when the line reaches view.
 	TransformCommand string `short:"t" long:"transform" value-name:"CMD" env:"TRANSFORM" description:"Row transform command"`
@@ -580,6 +581,15 @@ type UI struct {
 	RefreshInterval time.Duration
 	__refresh_blocked sync.Mutex
 	__refresh_pending sync.Mutex
+
+	__reading sync.Mutex
+	__read_running chan bool
+	__writing sync.Mutex
+	__write_index int
+
+	__selection []string
+	__focus string
+	__index int
 
 	// mark that stdin read was started...
 	__stdin_read bool
@@ -1030,8 +1040,6 @@ func (this *UI) HandleMouse(col, row int, pressed []string) Result {
 			this.Draw() }
 	return OK }
 
-
-// XXX revise...
 func (this *UI) Setup(lines Lines, drawer Renderer) *UI {
 	this.Lines = &lines
 	// XXX can we not do this???
@@ -1162,79 +1170,39 @@ func (this *UI) HandleArgs() Result {
 func (this *UI) Loop() Result {
 	return this.Renderer.Loop(this) }
 
-func (this *UI) Append(str string) *UI {
+// XXX need a clean way to stop runinng commands....
+//		,,,this is not clean yet...
+// XXX this does not kill the child process sometimes....
+func (this *UI) StopRunning() {
+	if this.Cmd != nil {
+		this.Cmd.Kill()
+		this.Cmd = nil }
 	if this.Transformer != nil {
-		_, err := this.Transformer.Write(str +"\n")
-		if err != nil {
-			log.Fatal(err) }
-	} else {
-		this.Lines.Append(str) }
-	this.Refresh() 
-	return this }
+		this.Transformer.Kill()
+		this.Transformer = nil } }
 
-
-/* XXX not sure about the API yet...
-func (this *UI) Append(str string) *UI {
-	this.Lines.Append(str)
-	// XXX do transform...
-	return this }
-//*/
-
-// XXX handle selection...
-//		...if this is handled elsewhere then use .Lines.Write(reader) instead...
-// XXX might be a good idea not to clear the buffer but rather overwrite 
-//		and trim it (???)
+// XXX need to make next update cancel running ???)
 func (this *UI) ReadFrom(reader io.Reader) chan bool {
+	// keep only one read running at a time...
+	if ! this.__reading.TryLock() {
+		return this.__read_running }
 	running := make(chan bool)
+	this.__read_running = running
 	// prep the transform command if defined...
 	this.TransformCmd()
-	// parse .Focus...
-	index := 0
-	substr := ""
-	if len(this.Focus) > 0 {
-		i, err := strconv.Atoi(this.Focus)
-		// number...
-		if err == nil {
-			index = i - 1 
-		// substring...
-		} else {
-			substr = this.Focus }
-		this.Focus = ""
-	} else {
-		index = this.Lines.Index }
-	this.Lines.Clear()
-	// positive index...
-	if index >= 0 {
-		this.Lines.Index = index
-	// negative index -> prepare for handling...
-	} else {
-		this.Lines.Index = 0 }
+	this.__write_index = 0
 	go func(){
+		defer this.__reading.Unlock()
+		defer close(running) 
 		i := 0
 		scanner := bufio.NewScanner(reader)
 		for scanner.Scan() {
 			txt := scanner.Text()
-			// focus pattern...
-			if len(substr) > 0 && 
-					(txt == substr || 
-						strings.Contains(txt, substr)) {
-				substr = ""
-				this.Lines.Index = i 
-			// negative index...
-			} else if index < 0 && 
-					i >= -index {
-				// only update untill the index moved by something else...
-				if this.Lines.Index == i + index {
-					this.Lines.Index++ 
-				// index has moved -> abort traking...
-				} else {
-					index = 0 } }
 			this.Append(txt) 
 			i++ } 
-		// normalize index -- if out of range...
-		if this.Lines.Index > i {
-			this.Lines.Index = i - 1 }
-		close(running) }()
+		// trim lines...
+		if i < len(this.Lines.Lines) {
+			this.Lines.Lines = this.Lines.Lines[:i] } }()
 	return running }
 func (this *UI) ReadFromFile(filename ...string) chan bool {
 	name := this.Files.Input
@@ -1264,18 +1232,57 @@ func (this *UI) ReadFromCmd(cmds ...string) chan bool {
 		defer close(c)
 		return c }
 	c, err := Run(cmd, nil)
+	this.Cmd = c
+	go func(){
+		c.Wait()
+		this.Cmd = nil }()
 	if err != nil {
 		log.Fatal(err) }
 
 	return this.ReadFrom(c.Stdout) }
 
+func (this *UI) Append(str string) *UI {
+	if this.Transformer != nil {
+		_, err := this.Transformer.Write(str +"\n")
+		if err != nil {
+			return this }
+			//log.Fatal(err) }
+			//log.Panic(err) }
+	} else {
+		this.__writing.Lock()
+		this.Lines.Append(str) 
+		i := len(this.Lines.Lines)-1
+		this.handleRowState(i, &this.Lines.Lines[i]) 
+		this.__writing.Unlock() }
+	this.Refresh() 
+	return this }
+
+func (this *UI) handleRowState(i int, row *Row){
+	txt := row.Text
+	if this.__selection != nil {
+		for i, s := range this.__selection {
+			if s != "" && txt == s {
+				row.Selected = true
+				if i == 0 {
+					this.__selection = this.__selection[1:]
+				} else {
+					this.__selection[i] = "" } } } }
+	if this.__focus != "" &&
+			this.__focus == txt {
+		this.Lines.Index = i
+	} else if this.__index == i {
+		this.Lines.Index = i } }
 func (this *UI) Update() Result {
 	if this.__stdin_read {
 		return OK }
 	done := make(chan bool)
 	close(done)
-	selection := this.Lines.Selected()
-	res := OK
+	this.StopRunning()
+	//
+	this.__selection = slices.Clone(this.Lines.Selected())
+	this.__focus = this.Lines.Current()
+	// XXX
+	this.__index = -1
 	this.Lines.Spinner.Start()
 	// file...
 	if this.Files.Input != "" {
@@ -1292,12 +1299,11 @@ func (this *UI) Update() Result {
 			log.Fatal(err) }
 		if stat.Mode() & os.ModeNamedPipe != 0 {
 			done = this.ReadFrom(os.Stdin) } } 
-	// XXX should this be done here or live in .ReadFrom(..) ???
 	go func(){
 		<-done
-		this.Lines.Select(selection) 
 		this.Lines.Spinner.Stop() }()
-	return res }
+	return OK }
+
 
 // XXX EXPERIMENTAL...
 // XXX might be a good idea to make this standalone/reusable (for selection/focus commands)
@@ -1313,8 +1319,11 @@ func (this *UI) TransformCmd(cmds ...string) *UI {
 		return this }
 	c, err := Pipe(cmd,
 		func(str string){
-			//log.Println("    updated:", str)
-			this.Lines.Append(str) 
+			this.__writing.Lock()
+			this.Lines.Replace(this.__write_index, str)
+			this.handleRowState(this.__write_index, &this.Lines.Lines[this.__write_index])
+			this.__write_index++
+			this.__writing.Unlock()
 			this.Refresh() })
 	if err != nil {
 		log.Fatal(err) }

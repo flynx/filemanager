@@ -347,6 +347,14 @@ func (this *LinesBuffer) Push(lines ...string) *LinesBuffer {
 // like .Push(..) but can accept io.Reader's...
 // XXX should this return indexes???
 func (this *LinesBuffer) Append(strs ...any) *LinesBuffer {
+	return this.Replace(len(this.Lines), strs...) }
+func (this *LinesBuffer) Replace(i int, strs ...any) *LinesBuffer {
+	line := func(s string) {
+		line := Row{ Text: s }
+		this.Lines[i] = line
+		l := len([]rune(s))
+		if this.Width < l {
+			this.Width = l } }
 	for _, in := range strs {
 		switch in.(type) {
 			// XXX this is covered by default, do we need this case???
@@ -355,11 +363,17 @@ func (this *LinesBuffer) Append(strs ...any) *LinesBuffer {
 			//		this.Push(str) }
 			case io.Reader:
 				scanner := bufio.NewScanner(in.(io.Reader))
-				for scanner.Scan(){
-					this.Push(scanner.Text()) } 
+				for scanner.Scan() {
+					if i == len(this.Lines) {
+						this.Push(scanner.Text()) 
+					} else {
+						line(scanner.Text()) } }
 			default:
 				for _, str := range strings.Split(fmt.Sprint(in), "\n") {
-					this.Push(str) } } }
+					if i == len(this.Lines) {
+						this.Push(str) 
+					} else {
+						line(str) } } } }
 	return this }
 // XXX this does not comply to io.Writer -- rename...
 func (this *LinesBuffer) Write(in any) *LinesBuffer {
@@ -533,7 +547,7 @@ type Lines struct {
 	// column spanning...
 	// NOTE: values of 0 are swapped for .SpanMinSize
 	SpanMode string `long:"span" value-name:"STR" description:"Span columns"`
-	SpanModeTitle string `long:"span-title" value-name:"STR" description:"Span title columns"`
+	SpanModeTitle string `long:"span-title" value-name:"STR" default:"*,3" description:"Span title columns"`
 	SpanModeStatus string `long:"span-status" value-name:"STR" description:"Span status columns"`
 	// cache...
 	// XXX do we need to cache multiple values???
