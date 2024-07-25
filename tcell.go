@@ -205,8 +205,8 @@ func (this *Tcell) Refresh() {
 	this.Screen.Sync()
 	this.Screen.Show() }
 
-func (this *Tcell) Setup(lines Lines) {
-	this.Lines = &lines
+func (this *Tcell) Setup(lines *Lines) {
+	this.Lines = lines
 	screen, err := tcell.NewScreen()
 	if err != nil {
 		log.Panic(err) }

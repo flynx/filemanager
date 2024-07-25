@@ -12,7 +12,7 @@
 package main
 
 import (
-	//"fmt"
+	"fmt"
 	"log"
 	"os"
 	//"syscall"
@@ -27,6 +27,7 @@ import (
 	//"unicode"
 	"strconv"
 	"slices"
+	"maps"
 	//"regexp"
 
 	"github.com/jessevdk/go-flags"
@@ -80,8 +81,8 @@ var KEYBINDINGS = Keybindings {
 	"Reject": "Exit",
 
 	// keys...
-	//"Esc": "Reject",
-	"Esc": "Down",
+	"Esc": "Reject",
+	//"Esc": "Down",
 	"q": "Reject",
 	"ctrl+z": "Stop",
 
@@ -504,7 +505,7 @@ type Renderer interface {
 
 	Fill(style Style)
 	Refresh()
-	Setup(lines Lines)
+	Setup(lines *Lines)
 	Loop(this *UI) Result
 	Stop()
 	// XXX
@@ -551,7 +552,9 @@ type UI struct {
 	// Keyboard...
 	//
 	KeyAliases KeyAliases
-	Keybindings Keybindings //`short:"k" long:"key" value-name:"KEY:ACTION" description:"Bind key to action"`
+	KeybindingsDefaults Keybindings
+	Keybindings Keybindings `short:"k" long:"key" value-name:"KEY:ACTION" description:"Bind key to action"`
+	KeybindingsNoDefaults bool `long:"no-key-defaults" description:"do not set default keybindings"`
 
 	// Geometry
 	//
@@ -574,23 +577,34 @@ type UI struct {
 	ScrollThreshold int `long:"scroll-threshold" value-name:"N" default:"3" description:"Number of lines from the edge of screen to triger scrolling"`
 	EmptySpace string `long:"empty-space" choice:"passive" choice:"select-last" env:"EMPTY_SPACE" default:"passive" description:"Click in empty space below list action"`
 
+	RefreshInterval time.Duration
+	__refresh_blocked sync.Mutex
+	__refresh_pending sync.Mutex
+
+	// mark that stdin read was started...
+	__stdin_read bool
+
+	// XXX
+	Introspection struct {
+		ListActions bool `long:"list-actions" description:"List available actions"`
+		ListThemeable bool `long:"list-themeable" description:"List available themable element names"`
+		ListBorderThemes bool `long:"list-border-themes" description:"List border theme names"`
+		ListSpinnerThemes bool `long:"list-spinners" description:"List spinner styles"`
+		//ListColors bool `long:"list-colors" description:"List usable color names"`
+		ListAll bool `long:"list-all" description:"List all"`
+	} `group:"Introspection"`
+
+	// XXX UGLY... 
+	Files struct {
+		Input string `positional-arg-name:"PATH"`
+	} `positional-args:"true"`
+
 	// caches...
 	// NOTE: in normal use-cases the stuff cached here is static and 
 	//		there should never be any leakage, if there is then something 
 	//		odd is going on.
 	__float_cache map[string]float64
 	//__int_cache map[string]int
-
-	RefreshInterval time.Duration
-	__refresh_blocked sync.Mutex
-	__refresh_pending sync.Mutex
-
-	__stdin_read bool
-
-	// XXX UGLY... 
-	Files struct {
-		Input string `positional-arg-name:"PATH"`
-	} `positional-args:"true"`
 }
 
 func (this *UI) ResetCache() *UI {
@@ -919,18 +933,18 @@ func (this *UI) HandleAction(actions string) Result {
 				return value } } //}
 	return OK }
 func (this *UI) HandleKey(key string) Result {
-	keybindings := this.Keybindings
-	if keybindings == nil {
-		keybindings = KEYBINDINGS }
 	aliases := this.KeyAliases
 	if aliases == nil {
 		aliases = KEY_ALIASES }
+	bindings := this.Keybindings
+	if bindings == nil {
+		bindings = KEYBINDINGS }
 	// expand aliases...
 	seen := []string{ key }
-	if action, exists := keybindings[key] ; exists {
+	if action, exists := bindings[key] ; exists {
 		_action := action
 		for exists && ! slices.Contains(seen, _action) {
-			if _action, exists = keybindings[_action] ; exists {
+			if _action, exists = bindings[_action] ; exists {
 				seen = append(seen, _action)
 				action = _action } }
 		return this.HandleAction(action) }
@@ -1018,24 +1032,112 @@ func (this *UI) HandleMouse(col, row int, pressed []string) Result {
 	return OK }
 
 
+// XXX revise...
 func (this *UI) Setup(lines Lines, drawer Renderer) *UI {
 	this.Lines = &lines
+	// XXX can we not do this???
 	this.Lines.CellsDrawer = this
 
 	this.Renderer = drawer
-	this.Renderer.Setup(lines)
+	this.Renderer.Setup(&lines)
 
-	// XXX can we make these lazy or not-required???
 	this.Actions = NewActions(this)
 
 	return this }
+// XXX might be a good idea to move handlers to methods of specific structs...
 func (this *UI) HandleArgs() Result {
+	// parse...
 	parser := flags.NewParser(this, flags.Default)
 	_, err := parser.Parse()
+
+	// help...
 	if err != nil {
 		if flags.WroteHelp(err) {
 			return Exit }
-		os.Exit(1) } 
+		os.Exit(0) } 
+
+	// introspection...
+	introspection := []func(){}
+	mapLister := func(m map[string]string) func() {
+		return func(){
+			if len(introspection) > 1 {
+				fmt.Println("Border themes:") }
+			order := []string{}
+			for name, _ := range m {
+				order = append(order, name) }
+			slices.Sort(order)
+			for _, name := range order {
+				fmt.Printf("    %-20v %#v\n", name+":", m[name]) } } }
+	// list actions...
+	if this.Introspection.ListAll || 
+			this.Introspection.ListActions {
+		introspection = append(introspection,
+			func(){
+				if len(introspection) > 1 {
+					fmt.Println("Actions:") }
+				t := reflect.TypeOf(this.Actions)
+				for i := 0; i < t.NumMethod(); i++ {
+					fmt.Println("    "+ t.Method(i).Name) } }) }
+	// list theamable...
+	if this.Introspection.ListAll || 
+			this.Introspection.ListThemeable {
+		introspection = append(introspection,
+			func(){
+				if len(introspection) > 1 {
+					fmt.Println("Theamable:") }
+				for name, _ := range THEME {
+					fmt.Println("    "+ name) } }) }
+	// list borders...
+	if this.Introspection.ListAll || 
+			this.Introspection.ListBorderThemes {
+		introspection = append(introspection, mapLister(BORDER_THEME)) }
+	// list spinners...
+	if this.Introspection.ListAll || 
+			this.Introspection.ListSpinnerThemes {
+		introspection = append(introspection, mapLister(SPINNER_THEME)) }
+	if len(introspection) > 0 {
+		for _, f := range(introspection) {
+			f() 
+			fmt.Println() }
+		os.Exit(0) }
+
+	// merge key bindings...
+	if this.Keybindings != nil || 
+			this.KeybindingsDefaults != nil {
+		kb := Keybindings{}
+		if ! this.KeybindingsNoDefaults {
+			defaults := this.KeybindingsDefaults
+			if defaults == nil {
+				defaults = KEYBINDINGS }
+			maps.Copy(kb, defaults) }
+		if this.Keybindings != nil {
+			maps.Copy(kb, this.Keybindings) }
+		this.Keybindings = kb }
+	// colors...
+	// XXX for some magical reason overloading "deafult" does not work...
+	if this.Lines.Theme != nil {
+		theme := Theme{}
+		maps.Copy(theme, THEME)
+		for name, style := range this.Lines.Theme {
+			style = strings.Split(style[0], ",")
+			for i, color := range style {
+				style[i] = strings.TrimSpace(color) }
+			this.Lines.Theme[name] = style }
+		maps.Copy(theme, this.Lines.Theme)
+		this.Lines.Theme = theme 
+		//log.Println("---", this.Lines.Theme, len(this.Lines.Theme["default"]))
+		//_, s := this.Lines.GetStyle("default")
+		//log.Println("  -", s)
+		//this.Renderer.(Tcell).style2TcellStyle("default")
+	}
+	// border...
+	if theme, ok := BORDER_THEME[this.Lines.Border]; ok {
+		this.Lines.Border = theme }
+	// spinner...
+	if theme, ok := SPINNER_THEME[this.Lines.Spinner.Frames]; ok {
+		this.Lines.Spinner.Frames = theme }
+
+	// load data...
 	this.Update()
 	return OK }
 func (this *UI) Loop() Result {
@@ -1155,6 +1257,7 @@ func (this *UI) Update() Result {
 	close(done)
 	selection := this.Lines.Selected()
 	res := OK
+	this.Lines.Spinner.Start()
 	// file...
 	if this.Files.Input != "" {
 		done = this.ReadFromFile()
@@ -1173,7 +1276,8 @@ func (this *UI) Update() Result {
 	// XXX should this be done here or live in .ReadFrom(..) ???
 	go func(){
 		<-done
-		this.Lines.Select(selection) }()
+		this.Lines.Select(selection) 
+		this.Lines.Spinner.Stop() }()
 	return res }
 
 // XXX EXPERIMENTAL...

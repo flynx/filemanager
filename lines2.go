@@ -12,8 +12,73 @@ import (
 	"sync"
 	"regexp"
 	"os"
+	"time"
 )
 
+
+// Spinner...
+//
+type Spinner struct {
+	Frames string `long:"spinner" value-name:"THEME|STR" default:"><" description:"Spinner frames"`
+	State int
+
+	running int
+	starting sync.Mutex
+
+	interval time.Time
+}
+func (this *Spinner) String() string {
+	if this.running <= 0 {
+		return "" } 
+	frames := this.Frames
+	if frames == "" {
+		frames = SPINNER_THEME[SPINNER_DEFAULT] }
+	return string([]rune(frames)[this.State]) }
+func (this *Spinner) Start() {
+	this.starting.Lock()
+	defer this.starting.Unlock()
+	this.running++ 
+	if this.running > 1 {
+		return }
+	if this.State < 0 {
+		this.Step() }
+	go func(){
+		ticker := time.NewTicker(150 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			<-ticker.C
+			if this.running <= 0 {
+				return }
+			this.Step() } }() }
+func (this *Spinner) Stop() *Spinner {
+	if this.running == 1 {
+		return this.StopAll() }
+	if this.running > 0 {
+		this.running-- }
+	return this }
+func (this *Spinner) StopAll() *Spinner {
+	if this.running > 0 {
+		this.running = 0
+		//ACTIONS.Refresh() 
+	}
+	return this }
+// XXX should this draw the whole screen???
+//		...might be nice to be able to only update the chrome (title/status)
+func (this *Spinner) Step() string {
+	if this.running <= 0 {
+		return "" }
+	frames := this.Frames
+	if frames == "" {
+		frames = SPINNER_THEME[SPINNER_DEFAULT] }
+	this.State++
+	if this.State >= len([]rune(frames)) {
+		this.State = 0 }
+	// XXX should this draw the whole screen???
+	//ACTIONS.Refresh()
+	return this.String() }
+func (this *Spinner) Done() *Spinner {
+	this.StopAll()
+	return this }
 
 
 
@@ -198,6 +263,43 @@ func (this Theme) GetStyle(style string) (string, Style) {
 	if ok {
 		return "default", res }
 	return "default", []string{} }
+
+var BORDER_DEFAULT = "single"
+var BORDER_THEME = map[string]string {
+	"single": "│┌─┐│└─┘",
+	"thick": "┃┏━┓┃┗━┛",
+	"double": "║╔═╗║╚═╝",
+	"mixed": "│┌─┒┃┕━┛",
+	"mixed-double": "│┌─╖║╘═╝",
+	"single-double": "│╒═╕│╘═╛",
+	"double-single": "║╓─╖║╙─╜",
+	"shaded": "│┌─┐┃└━┛",
+	"shaded-double": "│┌─┐║└═╝",
+	"ascii": "|+-+|+-+",
+}
+
+var SPINNER_DEFAULT = "><"
+var SPINNER_THEME = map[string]string {
+	"><": "><",
+	"rotating-v": "v<^>",
+	// NOTE: can't use "|" (span marker), thus this uses a unicode analogue...
+	"rotating-line": "-\\❘/",
+	"dots-spin": "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏",
+	"dot-jump": "⠁⠂⠄⡀⢀⠠⠐⠈",
+	"bin-counter": "⡀⡁⡂⡃⡄⡅⡆⡇⡈⡉⡊⡋⡌⡍⡎⡏⡐⡑⡒⡓⡔⡕⡖⡗⡘⡙⡚⡛⡜⡝⡞⡟⡠⡡⡢⡣⡤⡥⡦⡧⡨⡩⡪⡫⡬⡭⡮⡯⡰⡱⡲⡳⡴⡵⡶⡷⡸⡹⡺⡻⡼⡽⡾⡿⢀⢁⢂⢃⢄⢅⢆⢇⢈⢉⢊⢋⢌⢍⢎⢏⢐⢑⢒⢓⢔⢕⢖⢗⢘⢙⢚⢛⢜⢝⢞⢟⢠⢡⢢⢣⢤⢥⢦⢧⢨⢩⢪⢫⢬⢭⢮⢯⢰⢱⢲⢳⢴⢵⢶⢷⢸⢹⢺⢻⢼⢽⢾⢿⣀⣁⣂⣃⣄⣅⣆⣇⣈⣉⣊⣋⣌⣍⣎⣏⣐⣑⣒⣓⣔⣕⣖⣗⣘⣙⣚⣛⣜⣝⣞⣟⣠⣡⣢⣣⣤⣥⣦⣧⣨⣩⣪⣫⣬⣭⣮⣯⣰⣱⣲⣳⣴⣵⣶⣷⣸⣹⣺⣻⣼⣽⣾⣿",
+	"dots": "⣾⣽⣻⢿⡿⣟⣯⣷",
+	"dots-eight": "⠋⠙⠚⠒⠂⠂⠒⠲⠴⠦⠖⠒⠐⠐⠒⠓⠋",
+	"dots-jump": "⢄⢂⢁⡁⡈⡐⡠",
+	"lines": "☱☲☴☲",
+	"blink-rombus": "◇◈◆",
+	"blink-square": "■□▪▫",
+	"squares": "◰◳◲◱",
+	"circle-half": "◐◓◑◒",
+	"circle-quarter": "◴◷◶◵",
+	"block-spin": "▌▀▐▄",
+	"blocks-turn": "▖▘▝▗",
+	"line-flip": "┤┘┴└├┌┬┐",
+}
 
 
 
@@ -408,13 +510,13 @@ type Lines struct {
 	// chrome...
 	Title string `long:"title" value-name:"TEXT" default:" $TEXT_LEFT |%F%S%F" env:"TITLE" description:"Title line"`
 	TitleDisabled bool `long:"no-title" description:"Disable title line"`
-	Status string `long:"status" value-name:"TEXT" default:"|${SELECTED:!*}${SELECTED:+($SELECTED)}$F $LINE/$LINES" env:"STATUS" description:"Status line"`
+	Status string `long:"status" value-name:"TEXT" default:"|${SELECTED:!*}${SELECTED:+($SELECTED)}%F $LINE/$LINES" env:"STATUS" description:"Status line"`
 	StatusDisabled bool `long:"no-status" description:"Disable status line"`
 
 	// Format: 
 	//		"│┌─┐│└─┘"
 	//		 01234567
-	Border string `long:"border" value-name:"STR" env:"BORDER" default:"│┌─┐│└─┘" description:"Set border chars"`
+	Border string `long:"border" value-name:"THEME|STR" env:"BORDER" default:"│┌─┐│└─┘" description:"Set border chars"`
 
 	OverflowIndicator string `long:"overflow-indicator" value-name:"C" default:"}" description:"Overflow indicator char"`
 	OverflowOverBorder bool
@@ -450,7 +552,9 @@ type Lines struct {
 
 	TabSize int `long:"tab-size" value-name:"N" default:"8" description:"Tab size"`
 
-	Theme Theme
+	Theme Theme `long:"theme" value-name:"NAME:[STYLE,]FGCOLOR[,BGCOLOR]" description:"Set theme color"`
+
+	Spinner Spinner
 }
 
 func (this *Lines) Rows() int {
@@ -910,7 +1014,6 @@ type AST struct {
 type Placeholders map[string] func(*Lines, Env) string
 var PLACEHOLDERS = Placeholders {
 	// XXX should this be a var or a placeholder???
-	//* XXX this can't be set to a different value for title/status lines...
 	"F": func(this *Lines, env Env) string {
 		fill, ok := env["__F"]
 		if !ok {
@@ -918,18 +1021,16 @@ var PLACEHOLDERS = Placeholders {
 			if this.Filler != 0 {
 				fill = string(this.Filler) } }
 		return fill },
-	//*/
 	"CMD": func(this *Lines, env Env) string {
 		cmd, ok := env["CMD"]
 		if ! ok {
 			return "" }
 		res := ""
 		// XXX call the command...
-		fmt.Println("---", cmd)
+		fmt.Println("XXX", cmd)
 		return res },
 	"S": func(this *Lines, env Env) string {
-		// XXX
-		return "/" },
+		return this.Spinner.String() },
 }
 type Expander func([]AST) string
 type Expanders map[string]func(string, []AST, Expander) string
