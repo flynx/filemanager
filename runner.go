@@ -2,13 +2,15 @@
 package main
 
 import (
-	"bufio"
 	//"log"
 	"fmt"
 	//"os"
 	"os/exec"
+	"os/signal"
+	"syscall"
 	"sync"
 	"io"
+	"bufio"
 	//"time"
 	"strings"
 	"bytes"
@@ -139,6 +141,12 @@ func (this *Cmd) Run(stdin ...io.Reader) error {
 		cmd = exec.Command(s[0], append(s[1:], prefix +" "+ this.Code)...) }
 	this.Cmd = cmd
 
+	// kill children when killed...
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	//cmd.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGKILL}
+	// prvent children from zombifiying when killed...
+	signal.Ignore(syscall.SIGCHLD)
+
 	// i/o...
 	// XXX there are instances where we can want stdout to be a buffer 
 	//		instead of a pipe...
@@ -175,6 +183,8 @@ func (this *Cmd) Kill() error {
 	defer this.__reset()
 	if this.Cmd == nil {
 		return errors.New(".Kill(..): no command running.") }
+	this.Process.Release()
+	//return syscall.Kill(-this.Process.Pid, syscall.SIGKILL) }
 	return this.Process.Kill() }
 func (this *Cmd) Restart(stdin ...io.Reader) error {
 	this.Kill()

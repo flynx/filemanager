@@ -1178,6 +1178,7 @@ func (this *UI) StopRunning() {
 		this.Cmd.Kill()
 		this.Cmd = nil }
 	if this.Transformer != nil {
+		this.Transformer.Close()
 		this.Transformer.Kill()
 		this.Transformer = nil } }
 
