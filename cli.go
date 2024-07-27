@@ -584,8 +584,8 @@ type UI struct {
 
 	__reading sync.Mutex
 	__read_running chan bool
-	__writing sync.Mutex
-	__write_index int
+	__appending sync.Mutex
+	__updating sync.Mutex
 
 	__selection []string
 	__focus string
@@ -1191,7 +1191,7 @@ func (this *UI) ReadFrom(reader io.Reader) chan bool {
 	this.__read_running = running
 	// prep the transform command if defined...
 	this.TransformCmd()
-	this.__write_index = 0
+	this.Lines.Reset()
 	go func(){
 		defer this.__reading.Unlock()
 		defer close(running) 
@@ -1242,6 +1242,30 @@ func (this *UI) ReadFromCmd(cmds ...string) chan bool {
 
 	return this.ReadFrom(c.Stdout) }
 
+func (this *UI) AppendDirect(str string) *UI {
+	this.__appending.Lock()
+	defer this.__appending.Unlock()
+
+	i := this.Lines.Append(str) 
+
+	row := this.Lines.Lines[i]
+	txt := row.Text
+	if this.__selection != nil {
+		for j, s := range this.__selection {
+			if s != "" && txt == s {
+				row.Selected = true
+				if j == 0 {
+					this.__selection = this.__selection[1:]
+				} else {
+					this.__selection[j] = "" } } } }
+	if this.__focus != "" &&
+			this.__focus == txt {
+		this.Lines.Index = i
+	} else if this.__index == i {
+		this.Lines.Index = i }
+
+	return this }
+
 func (this *UI) Append(str string) *UI {
 	if this.Transformer != nil {
 		_, err := this.Transformer.Write(str +"\n")
@@ -1250,34 +1274,26 @@ func (this *UI) Append(str string) *UI {
 			//log.Fatal(err) }
 			//log.Panic(err) }
 	} else {
-		this.__writing.Lock()
-		this.Lines.Append(str) 
-		i := len(this.Lines.Lines)-1
-		this.handleRowState(i, &this.Lines.Lines[i]) 
-		this.__writing.Unlock() }
+		this.AppendDirect(str) }
 	this.Refresh() 
 	return this }
 
-func (this *UI) handleRowState(i int, row *Row){
-	txt := row.Text
-	if this.__selection != nil {
-		for i, s := range this.__selection {
-			if s != "" && txt == s {
-				row.Selected = true
-				if i == 0 {
-					this.__selection = this.__selection[1:]
-				} else {
-					this.__selection[i] = "" } } } }
-	if this.__focus != "" &&
-			this.__focus == txt {
-		this.Lines.Index = i
-	} else if this.__index == i {
-		this.Lines.Index = i } }
+// XXX BUG: race: refreshing while a refresh is still ongoing may result
+//		in remains of the interupted output in the current buffer...
+//		to reproduce:
+//			press ctrl-r in fast succession
 func (this *UI) Update() Result {
 	if this.__stdin_read {
 		return OK }
+	// XXX if this is used .StopRunning() becomdes not relevant... (???)
+	if ! this.__updating.TryLock(){
+		return OK }
 	done := make(chan bool)
 	close(done)
+	// drop eerything already running...
+	// XXX this should clear the pipes but sometimes we get leftovers of 
+	//		running/killed commands...
+	// XXX is this relevant with .__updating ???
 	this.StopRunning()
 	//
 	this.__selection = slices.Clone(this.Lines.Selected())
@@ -1302,6 +1318,7 @@ func (this *UI) Update() Result {
 			done = this.ReadFrom(os.Stdin) } } 
 	go func(){
 		<-done
+		this.__updating.Unlock()
 		this.Lines.Spinner.Stop() }()
 	return OK }
 
@@ -1319,13 +1336,10 @@ func (this *UI) TransformCmd(cmds ...string) *UI {
 	if len(cmd) == 0 {
 		return this }
 	c, err := Pipe(cmd,
-		func(str string){
-			this.__writing.Lock()
-			this.Lines.Replace(this.__write_index, str)
-			this.handleRowState(this.__write_index, &this.Lines.Lines[this.__write_index])
-			this.__write_index++
-			this.__writing.Unlock()
-			this.Refresh() })
+		func(str string) bool {
+			this.AppendDirect(str)
+			this.Refresh() 
+			return true })
 	if err != nil {
 		log.Fatal(err) }
 	this.Transformer = c

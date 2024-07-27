@@ -324,72 +324,105 @@ type LinesBuffer struct {
 	sync.Mutex
 	Lines []Row
 	Index int
-	Width int
+	Length int
+
+	__writing sync.Mutex
 }
 // Editing...
 func (this *LinesBuffer) Clear() *LinesBuffer {
 	this.Lines = []Row{}
 	this.Index = 0
-	this.Width = 0
+	this.Length = 0
 	return this }
+
 func (this *LinesBuffer) String() string {
 	lines := []string{}
-	for _, line := range this.Lines {
+	for i, line := range this.Lines {
+		if i >= this.Length {
+			break }
 		lines = append(lines, line.Text) }
 	return strings.Join(lines, "\n") }
-func (this *LinesBuffer) Push(lines ...string) *LinesBuffer {
-	for _, line := range lines {
-		this.Lines = append(this.Lines, Row{ Text: line })
-		l := len([]rune(line))
-		if this.Width < l {
-			this.Width = l } }
+
+func (this *LinesBuffer) Reset() *LinesBuffer {
+	this.Length = 0
 	return this }
-// like .Push(..) but can accept io.Reader's...
-// XXX should this return indexes???
-func (this *LinesBuffer) Append(strs ...any) *LinesBuffer {
-	return this.Replace(len(this.Lines), strs...) }
-func (this *LinesBuffer) Replace(i int, strs ...any) *LinesBuffer {
-	line := func(s string) {
-		line := Row{ Text: s }
-		this.Lines[i] = line
-		l := len([]rune(s))
-		if this.Width < l {
-			this.Width = l } }
-	for _, in := range strs {
+func (this *LinesBuffer) Trim() *LinesBuffer {
+	this.__writing.Lock()
+	this.Lines = this.Lines[:this.Length]
+	this.__writing.Unlock()
+	return this }
+
+func (this *LinesBuffer) Append(strs ...any) int {
+	this.__writing.Lock()
+	i := this.Length
+	l := 0
+	// normalize inputs + count lines if possible...
+	for i, in := range strs {
 		switch in.(type) {
-			// XXX this is covered by default, do we need this case???
-			//case string:
-			//	for _, str := range strings.Split(in.(string), "\n") {
-			//		this.Push(str) }
+			// readers make things non-deterministic...
+			case io.Reader:
+				l = -1
+				defer this.__writing.Unlock() 
+			case string:
+				lst := strings.Split(in.(string), "\n")
+				strs[i] = lst
+				if l >= 0 {
+					l += len(lst) }
+			case []string:
+				if l >= 0 {
+					l += len(in.([]string)) }
+			// convert any to string...
+			default:
+				strs[i] = fmt.Sprint(in)
+				if l >= 0 {
+					l++ } } }
+	// grow .Lines if needed...
+	if l >= 0 {
+		this.Length += l 
+		if this.Length > len(this.Lines) {
+			slices.Grow(this.Lines, this.Length - len(this.Lines)) }
+		this.__writing.Unlock() }
+
+	// append...
+	//
+	place := func(i int, s string) bool {
+		// the list has been trimmed...
+		if this.Length < i {
+			return false }
+		row := Row{ Text: s }
+		if i < len(this.Lines) {
+			this.Lines[i] = row
+		// NOTE: since we are adding line-by-line there is not chance 
+		//		that we are more than 1 off, unless we .Trim() while we 
+		//		are running...
+		} else {
+			this.Lines = append(this.Lines, row) } 
+		return true }
+	for _, in := range strs {
+		stop := false
+		switch in.(type) {
 			case io.Reader:
 				scanner := bufio.NewScanner(in.(io.Reader))
-				for scanner.Scan() {
-					if i == len(this.Lines) {
-						this.Push(scanner.Text()) 
-					} else {
-						line(scanner.Text()) } }
-			default:
-				for _, str := range strings.Split(fmt.Sprint(in), "\n") {
-					if i == len(this.Lines) {
-						this.Push(str) 
-					} else {
-						line(str) } } } }
-	return this }
-// XXX this does not comply to io.Writer -- rename...
-func (this *LinesBuffer) Write(in any) *LinesBuffer {
-	//this.Lock()
-	//defer this.Unlock()
-	return this.
-		Clear().
-		Append(in) }
-// Introspection...
-// XXX should these be here or in actions???
-/* XXX can't seem to figure out how to indicate empty .Lines...
-func (this *LinesBuffer) CurrentRow() Row {
-	if len(this.Lines) == 0 {
-		return nil }
-	return this.Lines[this.Index] }
-//*/
+				for ! stop && 
+						scanner.Scan() {
+					stop = ! place(i, scanner.Text()) 
+					i++ }
+			case []string:
+				for _, in := range in.([]string) {
+					if stop = ! place(i, in) ; stop {
+						break } 
+					i++ } 
+			case string:
+				if stop = ! place(i, in.(string)) ; stop {
+					break } 
+				i++ }
+		if stop {
+			break } }
+
+	return i-1 }
+
+// XXX do we need .Write(..)
+
 func (this *LinesBuffer) Current() string {
 	if len(this.Lines) == 0 {
 		return "" }

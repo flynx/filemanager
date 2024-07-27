@@ -18,6 +18,8 @@ import (
 )
 
 
+type LineHandler func(string) bool
+
 // Tee the reader output into a function and a writer...
 //
 //	reader -> tee -> handler(line)
@@ -28,7 +30,8 @@ import (
 //		line write to writer
 //		XXX should this be the case???
 // NOTE: this buffers the writes and will not block on the writer
-func Tee(reader io.Reader, writer io.Writer, handler func(string)) (<-chan bool) {
+// XXX need a way to kill this...
+func Tee(reader io.Reader, writer io.Writer, handler LineHandler) (<-chan bool) {
 	done := make(chan bool)
 	buf := bytes.Buffer{}
 	prebuf := bytes.Buffer{}
@@ -36,8 +39,10 @@ func Tee(reader io.Reader, writer io.Writer, handler func(string)) (<-chan bool)
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
 		txt := scanner.Text()
-		if handler != nil {
-			handler(txt) }
+		if handler != nil &&
+				// stop if returning false...
+				! handler(txt) {
+			break }
 		// nothing is in queue to pipe -- flush pre-buffer, write...
 		if writer != nil && 
 				copying.TryLock() {
@@ -60,7 +65,7 @@ func Tee(reader io.Reader, writer io.Writer, handler func(string)) (<-chan bool)
 		close(done) }() 
 	return done }
 
-func TeeCloser(reader io.Reader, writer io.WriteCloser, handler func(string)) (<-chan bool) {
+func TeeCloser(reader io.Reader, writer io.WriteCloser, handler LineHandler) (<-chan bool) {
 	done := Tee(reader, writer, handler) 
 	if writer != nil {
 		go func(){
@@ -70,13 +75,13 @@ func TeeCloser(reader io.Reader, writer io.WriteCloser, handler func(string)) (<
 
 
 // XXX use/write a generic Async(func, ...args)
-func AsyncTee(reader io.Reader, writer io.Writer, handler func(string)) (<-chan bool) {
+func AsyncTee(reader io.Reader, writer io.Writer, handler LineHandler) (<-chan bool) {
 	done := make(chan bool)
 	go func(){ 
 		Tee(reader, writer, handler)
 		close(done) }()
 	return done }
-func AsyncTeeCloser(reader io.Reader, writer io.WriteCloser, handler func(string)) (<-chan bool) {
+func AsyncTeeCloser(reader io.Reader, writer io.WriteCloser, handler LineHandler) (<-chan bool) {
 	done := make(chan bool)
 	go func(){ 
 		TeeCloser(reader, writer, handler)
@@ -89,7 +94,6 @@ func AsyncTeeCloser(reader io.Reader, writer io.WriteCloser, handler func(string
 var SHELL = "bash -c"
 var PREFIX = "stdbuf -i0 -oL -eL"
 
-type LineHandler func(string)
 type Cmd struct {
 	*exec.Cmd
 
@@ -100,8 +104,8 @@ type Cmd struct {
 	Handler LineHandler
 
 	Stdin io.WriteCloser
-	Stdout io.Reader
-	Stderr io.Reader
+	Stdout io.ReadCloser
+	Stderr io.ReadCloser
 
 	//Next PipedCmd
 
@@ -144,7 +148,7 @@ func (this *Cmd) Run(stdin ...io.Reader) error {
 	// kill children when killed...
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	//cmd.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGKILL}
-	// prvent children from zombifiying when killed...
+	// prevent children from zombifiying when killed...
 	signal.Ignore(syscall.SIGCHLD)
 
 	// i/o...
@@ -183,6 +187,10 @@ func (this *Cmd) Kill() error {
 	defer this.__reset()
 	if this.Cmd == nil {
 		return errors.New(".Kill(..): no command running.") }
+	// XXX
+	this.Stdin.Close()
+	this.Stdout.Close()
+	this.Stderr.Close()
 	this.Process.Release()
 	//return syscall.Kill(-this.Process.Pid, syscall.SIGKILL) }
 	return this.Process.Kill() }

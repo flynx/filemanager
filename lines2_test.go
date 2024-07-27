@@ -6,11 +6,61 @@ import (
 	"strings"
 	"strconv"
 	"fmt"
+	"sync"
 
 	"github.com/stretchr/testify/assert"
 )
 
 
+func TestLinesBufferAppendTrim(t *testing.T){
+	buf := LinesBuffer{}
+
+	i := buf.Append("a", "b", "c")
+
+	assert.Equal(t, i, 2, 
+		".Append(..): wrong length, got: %v expected: %v", i, 2)
+
+	buf.Append(4, 5, 6)
+
+	assert.Equal(t, len(buf.Lines), buf.Length, 
+		".Append(..): wrong length, got: %v", len(buf.Lines))
+
+	buf.Reset()
+
+	assert.Equal(t, buf.Length, 0, 
+		".Reset(): length not 0: %v", buf.Length)
+
+	buf.Append("1\n2")
+	buf.Append(3)
+
+	assert.Equal(t, buf.Length, 3, 
+		".Append(..): wrong length, got: %v", buf.Length)
+
+	buf.Trim()
+
+	assert.Equal(t, buf.Length, len(buf.Lines), 
+		".Trim(): wrong length, got: %v", buf.Length)
+
+	buf.Reset()
+
+	// XXX need a better test...
+	wg := sync.WaitGroup{}
+	lines := 0
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func(){
+			buf.Append("a", "b", "c")
+			buf.Append(4, 5, 6)
+			lines += 6
+			wg.Done() }() }
+
+	wg.Wait()
+
+	assert.Equal(t, buf.Length, lines, 
+		".Append(..): async: wrong length, got: %v expected: %v", buf.Length, lines)
+
+	//fmt.Println("---", buf.String())
+}
 func TestLinesBuffer(t *testing.T){
 	buf := LinesBuffer{}
 
@@ -22,13 +72,13 @@ func TestLinesBuffer(t *testing.T){
 
 	// XXX this is the same as Append(..) test -- generalize...
 	t.Run("Push", func(t *testing.T){
-		buf.Push(s)
+		buf.Append(s)
 		assert.Equal(t, buf.String(), s, "Push failed")
-		buf.Push(s)
+		buf.Append(s)
 		assert.Equal(t, buf.String(), s +"\n"+ s, "Push failed")
-		buf.Push(s, s)
+		buf.Append(s, s)
 		assert.Equal(t, buf.String(), strings.Join([]string{s,s,s,s}, "\n"), "Push failed")
-		buf.Push()
+		buf.Append()
 		assert.Equal(t, buf.String(), strings.Join([]string{s,s,s,s}, "\n"), "Push failed")
 	})
 
@@ -50,6 +100,7 @@ func TestLinesBuffer(t *testing.T){
 		assert.Equal(t, buf.String(), "", "Clear failed")
 	})
 
+	/* XXX
 	t.Run("Write", func(t *testing.T){
 		buf.Clear()
 		buf.Append(s, s, s)
@@ -57,6 +108,7 @@ func TestLinesBuffer(t *testing.T){
 		buf.Write(s)
 		assert.Equal(t, buf.String(), s, "Write failed")
 	})
+	//*/
 }
 
 func TestTeplateExpansion(t *testing.T){
@@ -124,7 +176,7 @@ func TestTeplateExpansion(t *testing.T){
 	// lines...
 	lines.Clear()
 	test("$LINES", lines.makeEnv(), "0")
-	lines.Write("A\nB\nC")
+	lines.Append("A\nB\nC")
 	test("$LINES", lines.makeEnv(), "3")
 
 	// %TEST
