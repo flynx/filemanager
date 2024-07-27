@@ -1011,8 +1011,16 @@ func (this *UI) HandleMouse(col, row int, pressed []string) Result {
 				// XXX this seems to be broken by handleScrollLimits()...
 				//		...either change .Index or add support for scrolling past it...
 				this.Lines.RowOffset = 
-					int((float64(row - this.Lines.Top - top_offset) / float64(this.Lines.Rows() - 1)) * 
-					float64(len(this.Lines.Lines) - this.Lines.Rows()))
+					int(
+						(float64(row - this.Lines.Top - top_offset) / 
+							float64(this.Lines.Rows() - 1)) * 
+						float64(len(this.Lines.Lines) - this.Lines.Rows()))
+				i := this.Lines.RowOffset + int(float64(this.Lines.Rows() - 1) / 2)
+				if i < 0 {
+					i = 0 }
+				if this.Lines.Index < this.Lines.RowOffset || 
+						this.Lines.Index > this.Lines.RowOffset + this.Lines.Height {
+					this.Lines.Index = i }
 				this.Draw()
 			// call click handler...
 			} else {
