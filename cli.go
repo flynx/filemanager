@@ -970,6 +970,7 @@ func (this *UI) HandleKey(key string) Result {
 			return res } }
 	return Missing }
 // XXX add zone key handling...
+// XXX BUG: scrollbar not clickable...
 func (this *UI) HandleMouse(col, row int, pressed []string) Result {
 	button := pressed[len(pressed)-1]
 	switch button {
@@ -1007,6 +1008,8 @@ func (this *UI) HandleMouse(col, row int, pressed []string) Result {
 			if this.Lines.Scrollable() && 
 					col == this.Lines.Left + this.Lines.Width - 1 {
 				//log.Println("    SCROLLBAR")
+				// XXX this seems to be broken by handleScrollLimits()...
+				//		...either change .Index or add support for scrolling past it...
 				this.Lines.RowOffset = 
 					int((float64(row - this.Lines.Top - top_offset) / float64(this.Lines.Rows() - 1)) * 
 					float64(len(this.Lines.Lines) - this.Lines.Rows()))
@@ -1242,7 +1245,7 @@ func (this *UI) ReadFromCmd(cmds ...string) chan bool {
 
 	return this.ReadFrom(c.Stdout) }
 
-func (this *UI) AppendDirect(str string) *UI {
+func (this *UI) AppendDirect(str string) int {
 	this.__appending.Lock()
 	defer this.__appending.Unlock()
 
@@ -1264,7 +1267,7 @@ func (this *UI) AppendDirect(str string) *UI {
 	} else if this.__index == i {
 		this.Lines.Index = i }
 
-	return this }
+	return i }
 
 func (this *UI) Append(str string) *UI {
 	if this.Transformer != nil {
@@ -1337,8 +1340,10 @@ func (this *UI) TransformCmd(cmds ...string) *UI {
 		return this }
 	c, err := Pipe(cmd,
 		func(str string) bool {
-			this.AppendDirect(str)
+			i := this.AppendDirect(str)
 			this.Refresh() 
+			if this.Lines.Length <= i {
+				return false }
 			return true })
 	if err != nil {
 		log.Fatal(err) }
