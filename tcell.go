@@ -150,6 +150,7 @@ type Tcell struct {
 
 	Lines *Lines `no-flag:"true"`
 
+	// XXX this is not seen by flags...
 	FocusAction bool `long:"focus-action" description:"if not set the focusing click will be ignored"`
 
 	// caches...
@@ -235,32 +236,33 @@ func (this *Tcell) Loop(ui *UI) Result {
 		updateGeometry().
 		Draw()
 
+	just_started := true
 	skip := false
 	for {
 		this.Show()
 
 		evt := this.PollEvent()
 
-		if skip {
-			skip = false
-			continue }
-
 		switch evt := evt.(type) {
 			// geometry...
 			case *tcell.EventResize:
+				skip = false
 				ui.
 					updateGeometry().
 					Draw()
-			/*/ XXX this behaves erratically...
+			// XXX this behaves erratically...
+			//		...seems that if the switch is too fast skipping will not work...
 			case *tcell.EventFocus:
 				//log.Println("Focus:", focus)
 				//focus := evt.Focused
-				// skip first interaction after focus...
-				if ! this.FocusAction {
+				// skip first mouse interaction after focus...
+				if ! just_started && 
+						! this.FocusAction {
 					skip = true }
-			//*/
+				just_started = false
 			// keys...
 			case *tcell.EventKey:
+				skip = false
 				key_handled := false
 				for _, key := range TcellEvent2Keys(*evt) {
 					res := ui.HandleKey(strings.Join(key, "+"))
@@ -283,6 +285,9 @@ func (this *Tcell) Loop(ui *UI) Result {
 					return OK }
 			// mouse...
 			case *tcell.EventMouse:
+				if skip {
+					skip = false
+					continue }
 				col, row := evt.Position()
 				for _, key := range TcellEvent2Mouse(*evt) {
 					res := ui.HandleMouse(col, row, key)

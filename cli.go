@@ -546,6 +546,10 @@ type UI struct {
 	Select string `short:"s" long:"select" value-name:"ACTION" env:"SELECT" description:"Action to execute on item select"`
 	Reject string `short:"r" long:"reject" value-name:"ACTION" env:"REJECT" description:"Action to execute on reject"`
 
+	// XXX revise naming...
+	// XXX this is not seen by tcell...
+	//FocusAction bool `long:"focus-action" description:"if not set the focusing click will be ignored"`
+
 	Lines *Lines `group:"Chrome"`
 
 	Actions *Actions `no-flag:"true"`
