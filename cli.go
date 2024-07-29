@@ -970,7 +970,6 @@ func (this *UI) HandleKey(key string) Result {
 			return res } }
 	return Missing }
 // XXX add zone key handling...
-// XXX BUG: scrollbar not clickable...
 func (this *UI) HandleMouse(col, row int, pressed []string) Result {
 	button := pressed[len(pressed)-1]
 	switch button {
@@ -1183,7 +1182,6 @@ func (this *UI) Loop() Result {
 
 // XXX need a clean way to stop runinng commands....
 //		,,,this is not clean yet...
-// XXX this does not kill the child process sometimes....
 func (this *UI) StopRunning() {
 	if this.Cmd != nil {
 		this.Cmd.Kill()
@@ -1276,7 +1274,6 @@ func (this *UI) AppendDirect(str string) int {
 		this.Lines.Index = i }
 
 	return i }
-
 func (this *UI) Append(str string) *UI {
 	if this.Transformer != nil {
 		_, err := this.Transformer.Write(str +"\n")

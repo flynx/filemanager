@@ -150,6 +150,8 @@ type Tcell struct {
 
 	Lines *Lines `no-flag:"true"`
 
+	FocusAction bool `long:"focus-action" description:"if not set the focusing click will be ignored"`
+
 	// caches...
 	// NOTE: in normal use-cases the stuff cached here is static and 
 	//		there should never be any leakage, if there is then something 
@@ -233,10 +235,15 @@ func (this *Tcell) Loop(ui *UI) Result {
 		updateGeometry().
 		Draw()
 
+	skip := false
 	for {
 		this.Show()
 
 		evt := this.PollEvent()
+
+		if skip {
+			skip = false
+			continue }
 
 		switch evt := evt.(type) {
 			// geometry...
@@ -244,6 +251,14 @@ func (this *Tcell) Loop(ui *UI) Result {
 				ui.
 					updateGeometry().
 					Draw()
+			/*/ XXX this behaves erratically...
+			case *tcell.EventFocus:
+				//log.Println("Focus:", focus)
+				//focus := evt.Focused
+				// skip first interaction after focus...
+				if ! this.FocusAction {
+					skip = true }
+			//*/
 			// keys...
 			case *tcell.EventKey:
 				key_handled := false
@@ -279,7 +294,8 @@ func (this *Tcell) Loop(ui *UI) Result {
 					if res != OK {
 						return res } 
 					ui.Draw()
-					break } } }
+					break } 
+		} }
 	return OK }
 func (this *Tcell) Stop() {
 	screen := this.Screen
