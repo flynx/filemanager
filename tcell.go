@@ -244,18 +244,22 @@ func (this *Tcell) Loop(ui *UI) Result {
 		evt := this.PollEvent()
 
 		switch evt := evt.(type) {
-			// geometry...
+			// resize...
 			case *tcell.EventResize:
 				skip = false
 				ui.
 					updateGeometry().
 					Draw()
+			// focus...
 			// XXX this behaves erratically...
 			//		...seems that if the switch is too fast skipping will not work...
+			// XXX is the focus event guaranteed to precede the click 
+			//		that focused the window??
 			case *tcell.EventFocus:
 				//log.Println("Focus:", focus)
 				//focus := evt.Focused
 				// skip first mouse interaction after focus...
+				// NOTE: we are ignoring focus change on startup (just_started)...
 				if ! just_started && 
 						! this.FocusAction {
 					skip = true }
@@ -276,7 +280,7 @@ func (this *Tcell) Loop(ui *UI) Result {
 					key_handled = true
 					ui.Draw()
 					break }
-				// do not check for deafults on keys we handled...
+				// do not check for defaults on keys we handled...
 				if key_handled {
 					continue }
 				// defaults...
@@ -299,8 +303,7 @@ func (this *Tcell) Loop(ui *UI) Result {
 					if res != OK {
 						return res } 
 					ui.Draw()
-					break } 
-		} }
+					break } } }
 	return OK }
 func (this *Tcell) Stop() {
 	screen := this.Screen
