@@ -541,6 +541,7 @@ type UI struct {
 	Focus string `short:"f" long:"focus" value-name:"[N|STR]" env:"FOCUS" description:"Line number / line to focus"`
 	//FocusRow int `long:"focus-row" value-name:"N" env:"FOCUS_ROW" description:"Screen line number of focused line"`
 	//FocusCmd string `long:"focus-cmd" value-name:"CMD" env:"FOCUS_CMD" description:"Focus command"`
+	JumpToFocus bool `long:"jump-to-focus" description:"If set jump to focus as soon as it is loaded without scrolling"`
 
 	// Quick actions...
 	Select string `short:"s" long:"select" value-name:"ACTION" env:"SELECT" description:"Action to execute on item select"`
@@ -548,7 +549,8 @@ type UI struct {
 
 	// XXX revise naming...
 	// XXX this is not seen by tcell...
-	//FocusAction bool `long:"focus-action" description:"if not set the focusing click will be ignored"`
+	//FocusAction bool `long:"focus-action" description:"If not set the focusing click will be ignored"`
+
 
 	Lines *Lines `group:"Chrome"`
 
@@ -559,7 +561,7 @@ type UI struct {
 	KeyAliases KeyAliases
 	KeybindingsDefaults Keybindings
 	Keybindings Keybindings `short:"k" long:"key" value-name:"KEY:ACTION" description:"Bind key to action"`
-	KeybindingsNoDefaults bool `long:"no-key-defaults" description:"do not set default keybindings"`
+	KeybindingsNoDefaults bool `long:"no-key-defaults" description:"Do not set default keybindings"`
 
 	// Geometry
 	//
@@ -1186,8 +1188,9 @@ func (this *UI) Loop() Result {
 	return this.Renderer.Loop(this) }
 
 // XXX need a clean way to stop runinng commands....
-//		,,,this is not clean yet...
-func (this *UI) StopRunning() {
+//		...this is not clean yet...
+// XXX rename...
+func (this *UI) KillRunning() {
 	if this.Cmd != nil {
 		this.Cmd.Kill()
 		this.Cmd = nil }
@@ -1273,9 +1276,19 @@ func (this *UI) AppendDirect(str string) int {
 				} else {
 					this.__selection[j] = "" } } } }
 	if this.__focus != "" &&
-			this.__focus == txt {
+			(this.__focus == txt ||
+				// XXX regexp???
+				strings.Contains(txt, this.__focus)) {
+		this.__focus = ""
+		this.__index = -1
 		this.Lines.Index = i
 	} else if this.__index == i {
+		this.__index = -1
+		this.Lines.Index = i 
+	// move focus down untill we reach a target...
+	} else if ! this.JumpToFocus &&
+			(this.__focus != "" || 
+				this.__index >= 0) {
 		this.Lines.Index = i }
 
 	return i }
@@ -1298,7 +1311,7 @@ func (this *UI) Append(str string) *UI {
 func (this *UI) Update() Result {
 	if this.__stdin_read {
 		return OK }
-	// XXX if this is used .StopRunning() becomdes not relevant... (???)
+	// XXX if this is used .KillRunning() becomdes not relevant... (???)
 	if ! this.__updating.TryLock(){
 		return OK }
 	done := make(chan bool)
@@ -1307,12 +1320,20 @@ func (this *UI) Update() Result {
 	// XXX this should clear the pipes but sometimes we get leftovers of 
 	//		running/killed commands...
 	// XXX is this relevant with .__updating ???
-	this.StopRunning()
+	this.KillRunning()
 	//
 	this.__selection = slices.Clone(this.Lines.Selected())
 	this.__focus = this.Lines.Current()
-	// XXX
 	this.__index = -1
+	// get focus from flag (initial run)...
+	if this.Focus != "" {
+		i, err := strconv.Atoi(this.Focus)
+		if err != nil {
+			this.__focus = this.Focus
+		} else {
+			this.__focus = ""
+			this.__index = i-1 }
+		this.Focus = "" }
 	this.Lines.Spinner.Start()
 	// file...
 	if this.Files.Input != "" {
