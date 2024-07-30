@@ -227,6 +227,7 @@ func (this *Tcell) Init() {
 // XXX might be fun to indirect this, i.e. add a global workspace manager
 //		that would pass events to clients/windows and handle their draw 
 //		order...
+// XXX focus handling is not 100% yet -- revise if it's better to remove it?
 func (this *Tcell) Loop(ui *UI) Result {
 	defer this.Finalize()
 	this.Init()
