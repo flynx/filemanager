@@ -1320,6 +1320,7 @@ func (this *UI) Update() Result {
 	// XXX this should clear the pipes but sometimes we get leftovers of 
 	//		running/killed commands...
 	// XXX is this relevant with .__updating ???
+	//		....yes, and the race is still here...
 	this.KillRunning()
 	//
 	this.__selection = slices.Clone(this.Lines.Selected())
