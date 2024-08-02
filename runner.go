@@ -187,10 +187,21 @@ func (this *Cmd) Kill() error {
 	defer this.__reset()
 	if this.Cmd == nil {
 		return errors.New(".Kill(..): no command running.") }
-	// XXX
-	this.Stdin.Close()
-	this.Stdout.Close()
-	this.Stderr.Close()
+	// XXX not sure if we need this...
+	ignorePanic := func(f func()){
+		defer func(){
+			recover() }()
+		f() }
+	ignorePanic(func(){
+		this.Stdin.Close() })
+	ignorePanic(func(){
+		this.Stdout.Close() })
+	ignorePanic(func(){
+		this.Stderr.Close() })
+	//this.Stdin.Close()
+	//this.Stdout.Close()
+	//this.Stderr.Close()
+	ignorePanic(func(){
 	this.Process.Release()
 	//return syscall.Kill(-this.Process.Pid, syscall.SIGKILL) }
 	return this.Process.Kill() }
