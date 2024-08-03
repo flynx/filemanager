@@ -1190,14 +1190,13 @@ func (this *UI) Loop() Result {
 func (this *UI) KillRunning() {
 	//log.Println("KILL")
 	if this.Transformer != nil {
-		this.Transformer.Close()
+		this.Transformer.Close() // XXX do we need thid???
 		this.Transformer.Kill()
 		this.Transformer = nil } 
 	if this.Cmd != nil {
 		this.Cmd.Kill()
 		this.Cmd = nil } }
 
-// XXX need stop scanner on command kill... 
 func (this *UI) ReadFrom(reader io.Reader) chan bool {
 	// keep only one read running at a time...
 	if ! this.__reading.TryLock() {
@@ -1220,6 +1219,7 @@ func (this *UI) ReadFrom(reader io.Reader) chan bool {
 		if i < len(this.Lines.Lines) {
 			this.Lines.Lines = this.Lines.Lines[:i] } }()
 	return running }
+// XXX can we stop this??? 
 func (this *UI) ReadFromFile(filename ...string) chan bool {
 	name := this.Files.Input
 	if len(filename) > 0 {
