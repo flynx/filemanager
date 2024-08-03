@@ -1188,7 +1188,7 @@ func (this *UI) Loop() Result {
 //		...this is not clean yet...
 // XXX rename...
 func (this *UI) KillRunning() {
-	log.Println("KILL")
+	//log.Println("KILL")
 	if this.Transformer != nil {
 		this.Transformer.Close()
 		this.Transformer.Kill()
@@ -1197,9 +1197,8 @@ func (this *UI) KillRunning() {
 		this.Cmd.Kill()
 		this.Cmd = nil } }
 
-// XXX need to make next update cancel running ???)
+// XXX need stop scanner on command kill... 
 func (this *UI) ReadFrom(reader io.Reader) chan bool {
-	log.Println("  ReadFrom(..)")
 	// keep only one read running at a time...
 	if ! this.__reading.TryLock() {
 		return this.__read_running }
@@ -1212,13 +1211,8 @@ func (this *UI) ReadFrom(reader io.Reader) chan bool {
 		defer this.__reading.Unlock()
 		defer close(running) 
 		i := 0 
-		//i := len(this.Lines.Lines)
 		scanner := bufio.NewScanner(reader)
 		for scanner.Scan() {
-			// XXX we got a reset...
-			//if len(this.Lines.Lines) == 0 && i > 0 {
-			//	log.Println("!!!!!!!!!!! RESET?", i, len(this.Lines.Lines))
-			//	break }
 			txt := scanner.Text()
 			this.Append(txt) 
 			i++ } 
@@ -1253,7 +1247,18 @@ func (this *UI) ReadFromCmd(cmds ...string) chan bool {
 		c := make(chan bool)
 		defer close(c)
 		return c }
+	/* XXX need to stop the scanner if .Cmd is killed...
 	c, err := Run(cmd, nil)
+	/*/
+	var err error
+	var c *Cmd
+	c, err = Run(cmd, 
+		// XXX is this a good way to stop???
+		func(str string) bool {
+			if this.Cmd != c {
+				return false }
+			return true })
+	//*/
 	this.Cmd = c
 	go func(){
 		c.Wait()
@@ -1374,11 +1379,15 @@ func (this *UI) TransformCmd(cmds ...string) *UI {
 		cmd = cmds[0] }
 	if len(cmd) == 0 {
 		return this }
-	c, err := Pipe(cmd,
+	var err error
+	var c *PipedCmd
+	c, err = Pipe(cmd,
 		func(str string) bool {
+			// stop if .Transformer killed/reset...
+			if this.Transformer != c {
+				return false }
 			i := this.AppendDirect(str)
 			this.Refresh() 
-			log.Println("  transform", this.Transformer)
 			if this.Lines.Length <= i {
 				return false }
 			return true })
@@ -1405,6 +1414,7 @@ func NewUI(l ...Lines) *UI {
 
 
 
+// XXX BUG holding ctrl-r sometimes breaks things -- race???
 // XXX need to separate out stderr to the original tty as it messes up 
 //		ui + keep it redirectable... 
 func main(){
@@ -1413,15 +1423,19 @@ func main(){
 	if lines.HandleArgs() == Exit {
 		return }
 
-	// XXX DEBUG: seems that we are getting output after the commands 
+	/* XXX DEBUG: seems that we are getting output after the commands 
 	//		are killed...
 	//		...the question is where in the stack is this buffered???
 	//		XXX seems that the issue is in NewScanner() buffering things...
+	//			locations:
+	//				.TransformCmd(..) -- DONE
+	//				.ReadFromCmd(..) -> .ReadFrom(..) -- DONE???
 	go func(){
 		time.Sleep(time.Millisecond * 20)
 		lines.KillRunning()
 		//lines.Lines.Reset()
 	}()
+	//*/
 
 	//lines.TransformCmd("sed 's/$/|/'")
 	// NOTE: ls flags that trigger stat make things really slow (-F, sorting, ...etc)

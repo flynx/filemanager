@@ -2,7 +2,7 @@
 package main
 
 import (
-	"log"
+	//"log"
 	"fmt"
 	//"os"
 	"os/exec"
@@ -197,7 +197,7 @@ func (this *Cmd) Kill() error {
 	ignorePanicClose(this.Stdin)
 	ignorePanicClose(this.Stdout)
 	ignorePanicClose(this.Stderr)
-	log.Println("  -> kill:", this.Code)
+	//log.Println("  -> kill:", this.Code)
 	/*/
 	this.Stdin.Close()
 	this.Stdout.Close()
