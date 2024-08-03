@@ -2,7 +2,7 @@
 package main
 
 import (
-	//"log"
+	"log"
 	"fmt"
 	//"os"
 	"os/exec"
@@ -188,20 +188,21 @@ func (this *Cmd) Kill() error {
 	if this.Cmd == nil {
 		return errors.New(".Kill(..): no command running.") }
 	// XXX not sure if we need this...
-	ignorePanic := func(f func()){
+	ignorePanicClose := func(b io.Closer) error {
 		defer func(){
 			recover() }()
-		f() }
-	ignorePanic(func(){
-		this.Stdin.Close() })
-	ignorePanic(func(){
-		this.Stdout.Close() })
-	ignorePanic(func(){
-		this.Stderr.Close() })
-	//this.Stdin.Close()
-	//this.Stdout.Close()
-	//this.Stderr.Close()
-	ignorePanic(func(){
+		if b == nil {
+			return nil }
+		return b.Close() }
+	ignorePanicClose(this.Stdin)
+	ignorePanicClose(this.Stdout)
+	ignorePanicClose(this.Stderr)
+	log.Println("  -> kill:", this.Code)
+	/*/
+	this.Stdin.Close()
+	this.Stdout.Close()
+	this.Stderr.Close()
+	//*/
 	this.Process.Release()
 	//return syscall.Kill(-this.Process.Pid, syscall.SIGKILL) }
 	return this.Process.Kill() }
@@ -267,6 +268,7 @@ func Pipe(code string, handler ...LineHandler) (*PipedCmd, error) {
 		this.Wait()
 		w.Close() }()
 	return &this, nil }
+
 
 
 // vim:set ts=4 sw=4 nowrap :

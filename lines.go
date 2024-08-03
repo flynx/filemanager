@@ -344,6 +344,7 @@ func (this *LinesBuffer) String() string {
 	return strings.Join(lines, "\n") }
 
 func (this *LinesBuffer) Reset() *LinesBuffer {
+	log.Println("  LinesBuffer.Reset()")
 	this.Length = 0
 	return this }
 func (this *LinesBuffer) Trim() *LinesBuffer {
