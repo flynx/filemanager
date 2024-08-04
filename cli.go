@@ -26,6 +26,7 @@ import (
 	"strconv"
 	"slices"
 	"maps"
+	//"regexp"
 
 	"github.com/jessevdk/go-flags"
 )
@@ -616,10 +617,14 @@ type UI struct {
 	//		there should never be any leakage, if there is then something 
 	//		odd is going on.
 	__float_cache map[string]float64
+	__updating_float_cache sync.Mutex
 	//__int_cache map[string]int
 }
 
 func (this *UI) ResetCache() *UI {
+	this.__updating_float_cache.Lock()
+	defer this.__updating_float_cache.Unlock()
+
 	this.__float_cache = nil
 	//this.__int_cache = nil
 	this.Renderer.ResetCache()
@@ -637,6 +642,9 @@ func (this *UI) updateGeometry() *UI {
 	// XXX should this be more generic???
 	// XXX revise the error case...
 	cachedFloat := func(str string) float64 {
+		this.__updating_float_cache.Lock()
+		defer this.__updating_float_cache.Unlock()
+
 		if this.__float_cache == nil {
 			this.__float_cache = map[string]float64{} }
 		v, ok := this.__float_cache[str]
@@ -799,6 +807,7 @@ func (this *UI) Refresh() *UI {
 	return this }
 
 // XXX not done yet...
+//var isVarCommand = regexp.MustCompile(`^\s*[a-zA-Z_]+=`)
 func (this *UI) HandleAction(actions string) Result {
 	// XXX make split here a bit more cleaver:
 	//		- support ";"
@@ -860,7 +869,7 @@ func (this *UI) HandleAction(actions string) Result {
 			if slices.Contains(prefix, '|') {
 				stdin.Write([]byte(this.Lines.Lines[this.Lines.Index].text)) }
 
-			// call the command...
+			// @ <CMD> -- call the command...
 			var err error
 			var stdout *io.ReadCloser//bytes.Buffer
 			lines := []string{}
@@ -875,7 +884,7 @@ func (this *UI) HandleAction(actions string) Result {
 				log.Println("Error:", err)
 				return Fail }
 
-			// list output...
+			// < <CMD> -- list output...
 			// XXX keep selection and current item and screen position 
 			//		relative to current..
 			if slices.Contains(prefix, '<') {
@@ -905,10 +914,10 @@ func (this *UI) HandleAction(actions string) Result {
 				scanner := bufio.NewScanner(*stdout)
 				for scanner.Scan() {
 					lines = append(lines, scanner.Text()) } }
-			// output to stdout...
+			// > <CMD> -- output to stdout...
 			if slices.Contains(prefix, '>') {
 				STDOUT += strings.Join(lines, "\n") + "\n" }
-			// output to env...
+			// ! <CMD> -- output to env...
 			if slices.Contains(prefix, '!') {
 				for _, str := range lines {
 					if strings.TrimSpace(str) == "" ||

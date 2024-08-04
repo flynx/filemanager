@@ -159,7 +159,7 @@ type Tcell struct {
 	//		there should never be any leakage, if there is then something 
 	//		odd is going on.
 	__style_cache map[string]tcell.Style
-	__updating_cache sync.Mutex
+	__updating_style_cache sync.Mutex
 }
 
 func (this *Tcell) ResetCache() {
@@ -177,17 +177,15 @@ func (this *Tcell) ResetCache() {
 //		...i.e. {"yellow", "foreground"} will set both colors to yellow...
 // XXX need a way to get default style without .Lines.GetStyle(..)...
 func (this *Tcell) style2TcellStyle(style_name string, style Style) tcell.Style {
+	this.__updating_style_cache.Lock()
+	defer this.__updating_style_cache.Unlock()
 	// cache...
 	if this.__style_cache == nil {
-		this.__updating_cache.Lock()
-		this.__style_cache = map[string]tcell.Style{}
-		this.__updating_cache.Unlock() }
+		this.__style_cache = map[string]tcell.Style{} }
 	s, ok := this.__style_cache[style_name]
 	if ok {
 		return s }
 	cache := func(s tcell.Style) tcell.Style {
-		this.__updating_cache.Lock()
-		defer this.__updating_cache.Unlock()
 		this.__style_cache[style_name] = s 
 		return s }
 
@@ -197,9 +195,7 @@ func (this *Tcell) style2TcellStyle(style_name string, style Style) tcell.Style 
 		// XXX need to move this out of here...
 		_, s := this.Lines.GetStyle("default")
 		base = Style2TcellStyle(s) 
-		this.__updating_cache.Lock()
-		this.__style_cache["default"] = base
-		this.__updating_cache.Unlock() }
+		this.__style_cache["default"] = base }
 
 	return cache(
 		Style2TcellStyle(style, base)) }

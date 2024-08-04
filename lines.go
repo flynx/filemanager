@@ -638,6 +638,8 @@ func (this *Lines) GetStyle(style string) (string, Style) {
 	return theme.GetStyle(style) }
 
 // XXX add support for escape sequences...
+// XXX will we ever need to expand tabs with the .Filler character???
+//		...currently tabs are expanded with ' '
 func (this *Lines) makeSection(str string, width int, rest ...string) (string, bool) {
 	fill := ' '
 	if len(rest) >= 1 {
@@ -672,10 +674,12 @@ func (this *Lines) makeSection(str string, width int, rest ...string) (string, b
 	// NOTE: this can legally get longer than width if it contains escape 
 	//		sequeces...
 	output := []rune(strings.Repeat(" ", width))
+	//output := []rune(strings.Repeat(string(fill), width))
 	for i := 0 ; i < width; i++ {
 		r := fill
 		// blanks...
 		if blanks > 0 {
+			r = ' '
 			blanks--
 			offset--
 		// runes...
@@ -702,8 +706,8 @@ func (this *Lines) makeSection(str string, width int, rest ...string) (string, b
 			//*/
 			// tab -- offset output to next tabstop... 
 			if r == '\t' { 
-				blanks = tab - (i % tab) - 1 
-				continue } }
+				r = ' '
+				blanks = tab - (i % tab) - 1 } }
 		// set the rune...
 		output[i] = r }
 	return string(output), 
