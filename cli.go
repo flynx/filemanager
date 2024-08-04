@@ -1437,12 +1437,6 @@ func main(){
 	}()
 	//*/
 
-	//lines.TransformCmd("sed 's/$/|/'")
-	// NOTE: ls flags that trigger stat make things really slow (-F, sorting, ...etc)
-	//lines.ReadFromCmd("ls")
-	//lines.ReadFromCmd("echo .. ; ls -t --group-directories-first ~/Pictures/Instagram/")
-	//lines.ReadFromCmd("echo .. ; ls --group-directories-first ~/Pictures/Instagram/ARCHIVE/")
-
 	//lines.Width = "50%"
 	//lines.Align = []string{"right"}
 
