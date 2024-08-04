@@ -24,10 +24,13 @@ type Spinner struct {
 
 	running int
 	starting sync.Mutex
+	tick sync.Mutex
 
 	interval time.Time
 }
 func (this *Spinner) String() string {
+	this.tick.Lock()
+	defer this.tick.Unlock()
 	if this.running <= 0 {
 		return "" } 
 	frames := this.Frames
@@ -65,6 +68,7 @@ func (this *Spinner) StopAll() *Spinner {
 // XXX should this draw the whole screen???
 //		...might be nice to be able to only update the chrome (title/status)
 func (this *Spinner) Step() string {
+	this.tick.Lock()
 	if this.running <= 0 {
 		return "" }
 	frames := this.Frames
@@ -73,6 +77,7 @@ func (this *Spinner) Step() string {
 	this.State++
 	if this.State >= len([]rune(frames)) {
 		this.State = 0 }
+	this.tick.Unlock()
 	// XXX should this draw the whole screen???
 	//ACTIONS.Refresh()
 	return this.String() }

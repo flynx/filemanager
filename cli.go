@@ -1188,9 +1188,9 @@ func (this *UI) Loop() Result {
 //		...this is not clean yet...
 // XXX rename...
 func (this *UI) KillRunning() {
-	//log.Println("KILL")
 	if this.Transformer != nil {
-		this.Transformer.Close() // XXX do we need thid???
+		// XXX do we need thid???
+		this.Transformer.Close()
 		this.Transformer.Kill()
 		this.Transformer = nil } 
 	if this.Cmd != nil {
@@ -1213,6 +1213,7 @@ func (this *UI) ReadFrom(reader io.Reader) chan bool {
 		scanner := bufio.NewScanner(reader)
 		for scanner.Scan() {
 			txt := scanner.Text()
+			log.Println("---", txt)
 			this.Append(txt) 
 			i++ } 
 		// trim lines...
@@ -1345,6 +1346,7 @@ func (this *UI) Update() Result {
 			this.__index = i-1 }
 		this.Focus = "" }
 	this.Lines.Spinner.Start()
+
 	// file...
 	if this.Files.Input != "" {
 		done = this.ReadFromFile()
@@ -1360,6 +1362,7 @@ func (this *UI) Update() Result {
 			log.Fatal(err) }
 		if stat.Mode() & os.ModeNamedPipe != 0 {
 			done = this.ReadFrom(os.Stdin) } } 
+
 	go func(){
 		<-done
 		this.__updating.Unlock()
@@ -1414,7 +1417,9 @@ func NewUI(l ...Lines) *UI {
 
 
 
-// XXX BUG holding ctrl-r sometimes breaks things -- race???
+// XXX BUG: this sometimes crashes:
+//			ls | ./lines
+//		running the same thing via -c seems ok...
 // XXX need to separate out stderr to the original tty as it messes up 
 //		ui + keep it redirectable... 
 func main(){
@@ -1422,20 +1427,6 @@ func main(){
 	lines := NewUI()
 	if lines.HandleArgs() == Exit {
 		return }
-
-	/* XXX DEBUG: seems that we are getting output after the commands 
-	//		are killed...
-	//		...the question is where in the stack is this buffered???
-	//		XXX seems that the issue is in NewScanner() buffering things...
-	//			locations:
-	//				.TransformCmd(..) -- DONE
-	//				.ReadFromCmd(..) -> .ReadFrom(..) -- DONE???
-	go func(){
-		time.Sleep(time.Millisecond * 20)
-		lines.KillRunning()
-		//lines.Lines.Reset()
-	}()
-	//*/
 
 	//lines.Width = "50%"
 	//lines.Align = []string{"right"}

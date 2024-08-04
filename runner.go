@@ -112,14 +112,24 @@ type Cmd struct {
 	Done <- chan bool
 	__done chan bool
 
+	// XXX do we actually need this???
+	__resetting sync.Mutex
+	__state_change sync.Mutex
 }
 func (this *Cmd) __reset(){
+	this.__resetting.Lock()
+	defer this.__resetting.Unlock()
 	this.Cmd = nil 
 	this.Stdin = nil 
-	close(this.__done) }
+	if this.__done != nil {
+		close(this.__done) 
+		this.__done = nil } }
 
 
 func (this *Cmd) Run(stdin ...io.Reader) error {
+	this.__state_change.Lock()
+	defer this.__state_change.Unlock()
+
 	if this.Cmd != nil {
 		return errors.New(".Run(..): previous command not done.") }
 
@@ -184,6 +194,8 @@ func (this *Cmd) Wait() error {
 	<-this.Done
 	return nil }
 func (this *Cmd) Kill() error {
+	this.__state_change.Lock()
+	defer this.__state_change.Unlock()
 	defer this.__reset()
 	if this.Cmd == nil {
 		return errors.New(".Kill(..): no command running.") }
