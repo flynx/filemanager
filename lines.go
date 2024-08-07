@@ -16,6 +16,35 @@ import (
 )
 
 
+
+// Helpers...
+//
+
+// collect escape sequence...
+//
+// see: 
+//	https://gist.github.com/fnky/458719343aabd01cfb17a3a4f7296797 
+func CollectANSIEscSeq(runes []rune, i int) []rune {
+	if len(runes) == 0 || 
+			i >= len(runes) ||
+			runes[i] != '\x1B' {
+		return []rune{} }
+	runes = runes[i:]
+	// collect the sequence...
+	seq := []rune{ runes[0] }
+	commands := "HfABCDEFGnsuJKmhlp"
+	if runes[1] != '[' {
+		commands = "M78" }
+	i = 1
+	for i < len(runes) { 
+		seq = append(seq, runes[i]) 
+		if strings.ContainsRune(commands, runes[i]) {
+			break }
+		i++ } 
+	return seq }
+
+
+
 // Spinner...
 //
 type Spinner struct {
@@ -602,6 +631,8 @@ type Lines struct {
 	SpanMinSize int `long:"span-min" value-name:"N" default:"8" description:"Minimum span size"`
 	SpanNoExtend bool
 
+	IgnoreANSIEscapeSeq bool `long:"ignore-ansi-seq" description:"Ignore ANSI Escape Sequances"`
+
 	TabSize int `long:"tab-size" value-name:"N" default:"8" description:"Tab size"`
 
 	Theme Theme `long:"theme" value-name:"NAME:[STYLE,]FGCOLOR[,BGCOLOR]" description:"Set theme color"`
@@ -638,8 +669,7 @@ func (this *Lines) GetStyle(style string) (string, Style) {
 	return theme.GetStyle(style) }
 
 // XXX add support for escape sequences...
-// XXX will we ever need to expand tabs with the .Filler character???
-//		...currently tabs are expanded with ' '
+// NOTE: tabs are always expanded with ' '...
 func (this *Lines) makeSection(str string, width int, rest ...string) (string, bool) {
 	fill := ' '
 	if len(rest) >= 1 {
@@ -658,61 +688,45 @@ func (this *Lines) makeSection(str string, width int, rest ...string) (string, b
 	if width == 0 {
 		//expand = false
 		width = len(runes) }
-	//keep_non_printable := false
 
-	// offset from i to printed rune index in runes...
-	offset := 0
-	// number of blanks to print from current position...
-	// NOTE: to draw N blanks:
-	//		- set blanks to N
-	//		- either
-	//			- decrement i -- will draw a blank on current position... 
-	//			- continue
-	//		- or:
-	//			- skip to this.drawCell(..)
-	blanks := 0
+	keep_non_printable := false
+	if ! this.IgnoreANSIEscapeSeq {
+		keep_non_printable = true }
+
 	// NOTE: this can legally get longer than width if it contains escape 
-	//		sequeces...
+	//		sequeces (i.e. keep_non_printable is true)...
 	output := []rune(strings.Repeat(" ", width))
-	//output := []rune(strings.Repeat(string(fill), width))
-	for i := 0 ; i < width; i++ {
+	i, o := 0, 0
+	for ; o < len(output); i, o = i+1, o+1 {
 		r := fill
-		// blanks...
-		if blanks > 0 {
-			r = ' '
-			blanks--
-			offset--
-		// runes...
-		} else {
-			// get the rune...
-			if i + offset < len(runes) {
-				r = runes[i + offset] }
-			/* XXX
+		// get the rune...
+		if i < len(runes) {
+			r = runes[i] }
+
+		switch r {
 			// escape sequences...
-			// XXX add option to keep/remove escape sequences...
-			if r == '\x1B' {
-				seq := []rune{}
-
-				// XXX
-
-				// XXX if width was 0 and we are not including these we need 
-				//		to truncate the output...
-				if expand && keep_non_printable {
-					output = append(output, make([]rune, len(seq))...) 
-					width += len(seq)
+			case '\x1B' :
+				seq := CollectANSIEscSeq(runes, i)
+				if keep_non_printable {
+					// extend output to accommodate later removal of escape sequence...
+					output = append(output, []rune(strings.Repeat(" ", len(seq)))...)
+				// remove escape sequence...
 				} else {
-					output = output[:len(output)-len(seq)] 
-					width -= len(seq) } }
-			//*/
+					i += len(seq) - 1
+					o-- 
+					continue }
 			// tab -- offset output to next tabstop... 
-			if r == '\t' { 
-				r = ' '
-				blanks = tab - (i % tab) - 1 } }
+			case '\t':
+				d := tab - (o % tab) 
+				o += d
+				continue }
+
 		// set the rune...
-		output[i] = r }
+		output[o] = r }
+	
 	return string(output), 
 		// overflow...
-		len(runes) - offset > width }
+		i < len(runes) }
 func (this *Lines) parseSizes(str string, width int, sep int) []int {
 	str = strings.TrimSpace(str)
 	min_size := this.SpanMinSize

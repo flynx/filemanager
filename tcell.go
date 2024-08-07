@@ -203,8 +203,19 @@ func (this *Tcell) drawCells(col, row int, str string, style_name string, style 
 	if style_name == "EOL" {
 		return }
 	s := this.style2TcellStyle(style_name, style)
-	for i, r := range []rune(str) {
-		this.SetContent(col+i, row, r, nil, s) } }
+	runes := []rune(str)
+	offset := 0
+	for i := 0; i < len(runes); i++ {
+		r := runes[i]
+		// handle escape sequences/styles...
+		if r == '\x1B' {
+			seq := CollectANSIEscSeq(runes, i)
+			// XXX handle colors...
+			// XXX
+			offset += len(seq)
+			i += len(seq) - 1 
+			continue }
+		this.SetContent(col+i-offset, row, r, nil, s) } }
 
 func (this *Tcell) Fill(style Style) {
 	this.Screen.Fill(' ', this.style2TcellStyle("background", style)) }
