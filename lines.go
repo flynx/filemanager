@@ -668,7 +668,9 @@ func (this *Lines) GetStyle(style string) (string, Style) {
 		theme = THEME }
 	return theme.GetStyle(style) }
 
-// XXX add support for escape sequences...
+// XXX for some reason overflow is triggered before the last char iin line in:
+//			$ go run . -c 'ls --color=yes ~/Pictures/' -t "sed 's/$/|/'" 2> log || (sleep 5 && reset)
+//		...is there a non-printable we missed???
 // NOTE: tabs are always expanded with ' '...
 func (this *Lines) makeSection(str string, width int, rest ...string) (string, bool) {
 	fill := ' '
@@ -703,6 +705,7 @@ func (this *Lines) makeSection(str string, width int, rest ...string) (string, b
 		if i < len(runes) {
 			r = runes[i] }
 
+		// XXX do we handle \n, \r, and \0
 		switch r {
 			// escape sequences...
 			case '\x1B' :
