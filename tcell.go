@@ -4,6 +4,7 @@ package main
 import (
 	"slices"
 	"strings"
+	"strconv"
 	"unicode"
 	"log"
 	"syscall"
@@ -199,6 +200,54 @@ func (this *Tcell) style2TcellStyle(style_name string, style Style) tcell.Style 
 
 	return cache(
 		Style2TcellStyle(style, base)) }
+
+var ANSI_SGR = map[string]string{
+	// XXX
+}
+// 3-4 but color...
+var ANSI_COLOR = map[string]string{
+	"0": "black",
+	"1": "red",
+	"2": "green",
+	"3": "yellow",
+	"4": "blue",
+	"5": "magenta",
+	"6": "cyan",
+	"7": "white",
+}
+var ANSI_COLOR_PREFIX = map[string]string{
+	"3": "fg",
+	"4": "bg",
+	"9": "bright-fg",
+	"10": "bright-bg",
+}
+// 8-bit color...
+// XXX
+// 24-bit color...
+// XXX
+func ansi2color(parts ...string) string {
+	if parts[0] == "38" || parts[0] == "48" {
+		// palette / 8-bit...
+		if parts[1] == "5" {
+			// XXX
+		// RGB / 24-bit...
+		} else if parts[1] == "2" {
+			// XXX
+		}
+	// 4-bit...
+	} else {
+		for _, p := range parts {
+			// param...
+			if x, ok := ANSI_SGR[p]; ok {
+				// XXX
+			// color...
+			} else {
+				// XXX
+			}
+		}
+	}
+}
+
 func (this *Tcell) drawCells(col, row int, str string, style_name string, style Style) int {
 	if style_name == "EOL" {
 		return 0 }
@@ -219,9 +268,15 @@ func (this *Tcell) drawCells(col, row int, str string, style_name string, style 
 				if len(c) == 1 && c[0] == "0" {
 					cur = base
 				// parse color...
-				} else {
-					// XXX
+				} else if len(c) == 2 {
 					log.Println("===", c)
+					// XXX wrong...
+					fg, _ := strconv.Atoi(c[0])
+					//bg, _ := strconv.Atoi(c[1])
+					cur = cur.
+						Foreground(tcell.PaletteColor(fg))//.
+						//Background(tcell.PaletteColor(bg)) 
+					//*/
 				} }
 			offset += len(seq)
 			i += len(seq) - 1 
