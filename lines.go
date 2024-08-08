@@ -544,7 +544,7 @@ func (this *LinesBuffer) Active() []string {
 //		...don't tell me that a Go-y solution is passing function pointers))))
 // XXX revise name... 
 type CellsDrawer interface {
-	drawCells(col, row int, str string, style_name string, style Style)
+	drawCells(col, row int, str string, style_name string, style Style) int
 }
 
 
@@ -893,6 +893,7 @@ func (this *Lines) makeSections(str, span string, width int, sep_size int, rest 
 			if min_size == 0 {
 				min_size = SPAN_MIN_SIZE }
 			section := doSection(sections[len(sections)-1], 0)
+			// XXX need to account for ANSI escape sequences...
 			l := len([]rune(section[0]))
 			if l <= 0 {
 				l = min_size }
@@ -1259,42 +1260,35 @@ func (this *Lines) expandTemplate(str string, env Env) string {
 
 	return expand(ast) }
 
-func (this *Lines) drawCells(col, row int, str string, style string) {
+func (this *Lines) drawCells(col, row int, str string, style string) int {
 	if this.CellsDrawer != nil {
 		n, s := this.GetStyle(style)
-		this.CellsDrawer.drawCells(col, row, str, n, s)
+		return this.CellsDrawer.drawCells(col, row, str, n, s)
 	} else {
-		fmt.Print(str) } }
+		fmt.Print(str) 
+		// XXX account for ANSI escape sequences...
+		return len([]rune(str)) } }
 func (this *Lines) drawLine(col, row int, sections []string, style string) *Lines {
 	overflow := string(OVERFLOW_INDICATOR)
 	if len(this.OverflowIndicator) != 0 {
 		overflow = string([]rune(this.OverflowIndicator)[0]) }
-
-	// helper: length in runes...
-	runes := func(s string) int {
-		return len([]rune(s)) }
 
 	// add offset...
 	col += this.Left
 	row += this.Top
 
 	// draw...
-	this.drawCells(col, row, sections[0], "border")
-	col += runes(sections[0])
+	col += this.drawCells(col, row, sections[0], "border")
 	i := 1
 	for ; i < len(sections)-2; i+=2 {
 		section, sep := sections[i], sections[i+1]
-		this.drawCells(col, row, section, style +"-text")
-		col += runes(sections[i])
+		col += this.drawCells(col, row, section, style +"-text")
 		if sep == overflow {
-			this.drawCells(col, row, sep, style +"-overflow")
+			col += this.drawCells(col, row, sep, style +"-overflow")
 		} else {
-			this.drawCells(col, row, sep, style +"-separator") }
-		col += runes(sections[i+1]) }
-	this.drawCells(col, row, sections[i], style +"-text")
-	col += runes(sections[i])
-	this.drawCells(col, row, sections[i+1], "border")
-	col += runes(sections[i+1])
+			col += this.drawCells(col, row, sep, style +"-separator") } }
+	col += this.drawCells(col, row, sections[i], style +"-text")
+	col += this.drawCells(col, row, sections[i+1], "border")
 	// let the .drawCells(..) know the line is done...
 	// NOTE: this is here to help the overloading code handle/ignore 
 	//		newlines... 

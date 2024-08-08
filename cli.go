@@ -495,7 +495,7 @@ func (this *Actions) Exit() Result {
 // Renderer...
 //
 type Renderer interface {
-	drawCells(col, row int, str string, style_name string, style Style)
+	drawCells(col, row int, str string, style_name string, style Style) int
 
 	ResetCache()
 

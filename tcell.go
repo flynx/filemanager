@@ -199,10 +199,12 @@ func (this *Tcell) style2TcellStyle(style_name string, style Style) tcell.Style 
 
 	return cache(
 		Style2TcellStyle(style, base)) }
-func (this *Tcell) drawCells(col, row int, str string, style_name string, style Style){
+func (this *Tcell) drawCells(col, row int, str string, style_name string, style Style) int {
 	if style_name == "EOL" {
-		return }
-	s := this.style2TcellStyle(style_name, style)
+		return 0 }
+	c := 0
+	base := this.style2TcellStyle(style_name, style)
+	cur := base
 	runes := []rune(str)
 	offset := 0
 	for i := 0; i < len(runes); i++ {
@@ -211,11 +213,22 @@ func (this *Tcell) drawCells(col, row int, str string, style_name string, style 
 		if r == '\x1B' {
 			seq := CollectANSIEscSeq(runes, i)
 			// XXX handle colors...
-			// XXX
+			if seq[len(seq)-1] == 'm' {
+				c := strings.Split(string(seq[2:len(seq)-1]), ";")
+				// reset...
+				if len(c) == 1 && c[0] == "0" {
+					cur = base
+				// parse color...
+				} else {
+					// XXX
+					log.Println("===", c)
+				} }
 			offset += len(seq)
 			i += len(seq) - 1 
 			continue }
-		this.SetContent(col+i-offset, row, r, nil, s) } }
+		this.SetContent(col+i-offset, row, r, nil, cur)
+		c++ }
+	return c }
 
 func (this *Tcell) Fill(style Style) {
 	this.Screen.Fill(' ', this.style2TcellStyle("background", style)) }
