@@ -221,22 +221,25 @@ var ANSI_COLOR_PREFIX = map[string]string{
 	"9": "fg-bright",
 	"10": "bg-bright",
 }
-// XXX this is not done yet...
+// XXX SGR this is not done yet...
 func ansi2style(style tcell.Style, parts ...string) tcell.Style {
 	if parts[0] == "38" || parts[0] == "48" {
 		var color tcell.Color
+		atoi := func(s string) int {
+			i, err := strconv.Atoi(s)
+			if err != nil {
+				log.Println("ansi2style(..): can't parse color:", s) }
+			return i }
 		// palette / 8-bit...
 		if parts[1] == "5" {
-			// XXX handle errors...
-			n, _ := strconv.Atoi(parts[2])
-			color = tcell.PaletteColor(n)
+			color = tcell.PaletteColor(
+				atoi(parts[2]))
 		// RGB / 24-bit...
 		} else if parts[1] == "2" {
-			// XXX handle errors...
-			r, _ := strconv.Atoi(parts[2])
-			g, _ := strconv.Atoi(parts[3])
-			b, _ := strconv.Atoi(parts[4])
-			color = tcell.NewRGBColor(int32(r), int32(g), int32(b)) }
+			color = tcell.NewRGBColor(
+				int32(atoi(parts[2])), 
+				int32(atoi(parts[3])), 
+				int32(atoi(parts[4]))) }
 		if parts[0] == "38" {
 			style = style.Foreground(color)
 		} else if parts[0] == "48" {
@@ -250,13 +253,15 @@ func ansi2style(style tcell.Style, parts ...string) tcell.Style {
 				style = style.Bold(true)
 			// param...
 			} else if x, ok := ANSI_SGR[p]; ok {
-				// XXX
+				// XXX see: https://en.wikipedia.org/wiki/ANSI_escape_code
 				log.Println("SGR:", x)
 			// color...
 			} else {
 				color := ANSI_COLOR[string(p[len(p)-1])]
 				prefix := strings.Split(ANSI_COLOR_PREFIX[string(p[:len(p)-1])], "-")
-				// XXX we are ignoring brightness...
+				if len(prefix) > 1 && 
+						string(prefix[1]) == "bright" {
+					color += 8 }
 				if string(prefix[0]) == "fg" {
 					style = style.Foreground(color)
 				} else {

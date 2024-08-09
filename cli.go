@@ -1283,7 +1283,7 @@ func (this *UI) AppendDirect(str string) int {
 
 	i := this.Lines.Append(str) 
 
-	row := this.Lines.Lines[i]
+	row := &this.Lines.Lines[i]
 	txt := row.Text
 	if this.__selection != nil {
 		for j, s := range this.__selection {
@@ -1308,7 +1308,6 @@ func (this *UI) AppendDirect(str string) int {
 			(this.__focus != "" || 
 				this.__index >= 0) {
 		this.Lines.Index = i }
-
 	return i }
 func (this *UI) Append(str string) *UI {
 	if this.Transformer != nil {
@@ -1334,13 +1333,10 @@ func (this *UI) Update() Result {
 		return OK }
 	done := make(chan bool)
 	close(done)
+
 	// drop eerything already running...
-	// XXX this should clear the pipes but sometimes we get leftovers of 
-	//		running/killed commands...
-	// XXX is this relevant with .__updating ???
-	//		....yes, and the race is still here...
 	this.KillRunning()
-	//
+	
 	this.__selection = slices.Clone(this.Lines.Selected())
 	this.__focus = this.Lines.Current()
 	this.__index = -1
@@ -1425,21 +1421,18 @@ func NewUI(l ...Lines) *UI {
 
 
 
-// XXX BUG: selection highlighting is overwritten by ansi escape seq...
-// XXX BUG: restoring selection on ctrl-r broken...
-//			go run . -c 'ls --color=yes' -t "sed 's/$/|/' | sed 's/$/moo/'" 2> log || (sleep 5 && reset)
 // XXX BUG: this at certain point adds a split in empty space...
 //			go run . -c 'ls --color=yes ~/Pictures/' -t "grep --color=yes 'jpg'" 2> log || (sleep 5 && reset)
+//		this seems to be triggered by an overflow in the last line...
+// XXX BUG: pipes in -r seem not to work...
+//			go run . -c 'ls --color=yes' -t "sed 's/$/|/' | sed 's/$/moo/'" 2> log || (sleep 5 && reset)
 // XXX need to separate out stderr to the original tty as it messes up 
 //		ui + keep it redirectable... 
 func main(){
-	//* XXX stub...
 	lines := NewUI()
+
 	if lines.HandleArgs() == Exit {
 		return }
-
-	//lines.Width = "50%"
-	//lines.Align = []string{"right"}
 
 	os.Exit(
 		toExitCode(

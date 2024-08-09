@@ -1390,6 +1390,10 @@ func (this *Lines) Draw() *Lines {
 		if r < len(this.Lines) {
 			line = this.Lines[r]
 			text = string([]rune(line.Text)[this.ColOffset:]) 
+			// pre-style -- strip ansi escape codes from selected/current lines...
+			if line.Selected ||
+					row == this.Index - this.RowOffset + top_line {
+				text = string(StripANSIEscSeq([]rune(text))) }
 		// no lines left -- generate template for empty lines...
 		} else if ! this.SpanNoExtend {
 			s := this.SpanMarker
@@ -1439,8 +1443,6 @@ func (this *Lines) Draw() *Lines {
 		if row == this.Index - this.RowOffset + top_line {
 			style = "current" } 
 		if line.Selected {
-			for i, section := range sections {
-				sections[i] = string(StripANSIEscSeq([]rune(section))) }
 			if style == "current" {
 				style = "current-selected"
 			} else {
