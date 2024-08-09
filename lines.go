@@ -17,12 +17,13 @@ import (
 
 
 
-// Helpers...
+// ANSI escape codes...
 //
 
-// collect escape sequence...
+// Collect escape sequence...
 //
 // see: 
+//	https://en.wikipedia.org/wiki/ANSI_escape_code	
 //	https://gist.github.com/fnky/458719343aabd01cfb17a3a4f7296797 
 func CollectANSIEscSeq(runes []rune, i int) []rune {
 	if len(runes) == 0 || 
@@ -42,6 +43,9 @@ func CollectANSIEscSeq(runes []rune, i int) []rune {
 			break }
 		i++ } 
 	return seq }
+
+// Strip out escape sequences...
+//
 func StripANSIEscSeq(runes []rune) []rune {
 	output := slices.Grow([]rune{}, len(runes))
 	i := 0
