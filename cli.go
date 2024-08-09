@@ -1404,7 +1404,7 @@ func (this *UI) TransformCmd(cmds ...string) *UI {
 	return this }
 
 
-// XXX should this take Lines ot Settings???
+// XXX should this take Lines or Settings???
 func NewUI(l ...Lines) *UI {
 	var lines Lines
 	if len(l) == 0 {
@@ -1424,10 +1424,15 @@ func NewUI(l ...Lines) *UI {
 // XXX BUG: this at certain point adds a split in empty space...
 //			go run . -c 'ls --color=yes ~/Pictures/' -t "grep --color=yes 'jpg'" 2> log || (sleep 5 && reset)
 //		this seems to be triggered by an overflow in the last line...
-// XXX BUG: pipes in -r seem not to work...
-//			go run . -c 'ls --color=yes' -t "sed 's/$/|/' | sed 's/$/moo/'" 2> log || (sleep 5 && reset)
+// XXX add ability to set terminal title...
 // XXX need to separate out stderr to the original tty as it messes up 
 //		ui + keep it redirectable... 
+//
+// NOTE: if piping several commands together (in -t) does not produce any 
+//		results, either try the commands in line-buffered mode (grep's 
+//		--line-buffered, sed's -u, ...) or use "stdbuf -oL <cmd>"
+//		see:
+//			https://unix.stackexchange.com/questions/25372/how-to-turn-off-stdout-buffering-in-a-pipe
 func main(){
 	lines := NewUI()
 
