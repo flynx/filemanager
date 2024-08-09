@@ -42,6 +42,16 @@ func CollectANSIEscSeq(runes []rune, i int) []rune {
 			break }
 		i++ } 
 	return seq }
+func StripANSIEscSeq(runes []rune) []rune {
+	output := slices.Grow([]rune{}, len(runes))
+	i := 0
+	for ; i < len(runes); i++ {
+		if runes[i] == '\x1B' {
+			seq := CollectANSIEscSeq(runes, i)
+			i += len(seq)-1 
+			continue }
+		output = append(output, runes[i]) }
+	return output }
 
 
 
@@ -698,12 +708,20 @@ func (this *Lines) makeSection(str string, width int, rest ...string) (string, b
 	// NOTE: this can legally get longer than width if it contains escape 
 	//		sequeces (i.e. keep_non_printable is true)...
 	output := []rune(strings.Repeat(" ", width))
+	terminated := false
 	i, o := 0, 0
 	for ; o < len(output); i, o = i+1, o+1 {
 		r := fill
 		// get the rune...
 		if i < len(runes) {
-			r = runes[i] }
+			r = runes[i] 
+		// no more runes -> reset color...
+		} else if ! terminated {
+			terminated = true
+			// reset color at end of line...
+			s := []rune("\x1B[0m")
+			output = slices.Insert(output, o, s...) 
+			o += len(s) }
 
 		// XXX do we handle \n, \r, and \0
 		switch r {
@@ -1417,6 +1435,8 @@ func (this *Lines) Draw() *Lines {
 		if row == this.Index - this.RowOffset + top_line {
 			style = "current" } 
 		if line.Selected {
+			for i, section := range sections {
+				sections[i] = string(StripANSIEscSeq([]rune(section))) }
 			if style == "current" {
 				style = "current-selected"
 			} else {

@@ -1222,7 +1222,6 @@ func (this *UI) ReadFrom(reader io.Reader) chan bool {
 		scanner := bufio.NewScanner(reader)
 		for scanner.Scan() {
 			txt := scanner.Text()
-			log.Println("---", txt)
 			this.Append(txt) 
 			i++ } 
 		// trim lines...
@@ -1426,9 +1425,11 @@ func NewUI(l ...Lines) *UI {
 
 
 
-// XXX BUG: this sometimes crashes:
-//			ls | ./lines
-//		running the same thing via -c seems ok...
+// XXX BUG: selection highlighting is overwritten by ansi escape seq...
+// XXX BUG: restoring selection on ctrl-r broken...
+//			go run . -c 'ls --color=yes' -t "sed 's/$/|/' | sed 's/$/moo/'" 2> log || (sleep 5 && reset)
+// XXX BUG: this at certain point adds a split in empty space...
+//			go run . -c 'ls --color=yes ~/Pictures/' -t "grep --color=yes 'jpg'" 2> log || (sleep 5 && reset)
 // XXX need to separate out stderr to the original tty as it messes up 
 //		ui + keep it redirectable... 
 func main(){

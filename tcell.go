@@ -205,48 +205,63 @@ var ANSI_SGR = map[string]string{
 	// XXX
 }
 // 3-4 but color...
-var ANSI_COLOR = map[string]string{
-	"0": "black",
-	"1": "red",
-	"2": "green",
-	"3": "yellow",
-	"4": "blue",
-	"5": "magenta",
-	"6": "cyan",
-	"7": "white",
+var ANSI_COLOR = map[string]tcell.Color {
+	"0": tcell.GetColor("black"),
+	"1": tcell.GetColor("red"),
+	"2": tcell.GetColor("green"),
+	"3": tcell.GetColor("yellow"),
+	"4": tcell.GetColor("blue"),
+	"5": tcell.GetColor("magenta"),
+	"6": tcell.GetColor("cyan"),
+	"7": tcell.GetColor("white"),
 }
 var ANSI_COLOR_PREFIX = map[string]string{
 	"3": "fg",
 	"4": "bg",
-	"9": "bright-fg",
-	"10": "bright-bg",
+	"9": "fg-bright",
+	"10": "bg-bright",
 }
-// 8-bit color...
-// XXX
-// 24-bit color...
-// XXX
-func ansi2color(parts ...string) string {
+// XXX this is not done yet...
+func ansi2style(style tcell.Style, parts ...string) tcell.Style {
 	if parts[0] == "38" || parts[0] == "48" {
+		var color tcell.Color
 		// palette / 8-bit...
 		if parts[1] == "5" {
-			// XXX
+			// XXX handle errors...
+			n, _ := strconv.Atoi(parts[2])
+			color = tcell.PaletteColor(n)
 		// RGB / 24-bit...
 		} else if parts[1] == "2" {
-			// XXX
-		}
+			// XXX handle errors...
+			r, _ := strconv.Atoi(parts[2])
+			g, _ := strconv.Atoi(parts[3])
+			b, _ := strconv.Atoi(parts[4])
+			color = tcell.NewRGBColor(int32(r), int32(g), int32(b)) }
+		if parts[0] == "38" {
+			style = style.Foreground(color)
+		} else if parts[0] == "48" {
+			style = style.Background(color) }
 	// 4-bit...
 	} else {
 		for _, p := range parts {
+			if p == "00" {
+				style = style.Normal()
+			} else if p == "01" {
+				style = style.Bold(true)
 			// param...
-			if x, ok := ANSI_SGR[p]; ok {
+			} else if x, ok := ANSI_SGR[p]; ok {
 				// XXX
+				log.Println("SGR:", x)
 			// color...
 			} else {
-				// XXX
-			}
-		}
-	}
-}
+				color := ANSI_COLOR[string(p[len(p)-1])]
+				prefix := strings.Split(ANSI_COLOR_PREFIX[string(p[:len(p)-1])], "-")
+				// XXX we are ignoring brightness...
+				if string(prefix[0]) == "fg" {
+					style = style.Foreground(color)
+				} else {
+					style = style.Background(color) } } } }
+	return style }
 
 func (this *Tcell) drawCells(col, row int, str string, style_name string, style Style) int {
 	if style_name == "EOL" {
@@ -269,15 +284,7 @@ func (this *Tcell) drawCells(col, row int, str string, style_name string, style 
 					cur = base
 				// parse color...
 				} else if len(c) == 2 {
-					log.Println("===", c)
-					// XXX wrong...
-					fg, _ := strconv.Atoi(c[0])
-					//bg, _ := strconv.Atoi(c[1])
-					cur = cur.
-						Foreground(tcell.PaletteColor(fg))//.
-						//Background(tcell.PaletteColor(bg)) 
-					//*/
-				} }
+					cur = ansi2style(base, c...) } }
 			offset += len(seq)
 			i += len(seq) - 1 
 			continue }
