@@ -273,6 +273,7 @@ func (this *Tcell) drawCells(col, row int, str string, style_name string, style 
 		return 0 }
 	c := 0
 	base := this.style2TcellStyle(style_name, style)
+	prev := []tcell.Style{}
 	cur := base
 	runes := []rune(str)
 	offset := 0
@@ -285,12 +286,21 @@ func (this *Tcell) drawCells(col, row int, str string, style_name string, style 
 			if seq[len(seq)-1] == 'm' {
 				c := strings.Split(string(seq[2:len(seq)-1]), ";")
 				// reset...
-				if len(c) == 1 && 
-						(c[0] == "0" || 
-							c[0] == "") {
-					cur = base
+				if len(c) == 1 {
+					// reset...
+					if c[0] == "0" {
+						cur = base
+					// pop last...
+					} else if c[0] == "" {
+						if len(prev) > 0 {
+							cur = prev[len(prev)-1]
+							prev = prev[:len(prev)-1]
+						// nothing to pop...
+						} else {
+							cur = base } }
 				// color...
 				} else if len(c) == 2 {
+					prev = append(prev, cur)
 					cur = ansi2style(base, c...) } }
 			offset += len(seq)
 			i += len(seq) - 1 

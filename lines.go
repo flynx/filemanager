@@ -684,6 +684,7 @@ func (this *Lines) GetStyle(style string) (string, Style) {
 
 // XXX for some reason overflow is triggered before the last char iin line in:
 //			$ go run . -c 'ls --color=yes ~/Pictures/' -t "sed 's/$/|/'" 2> log || (sleep 5 && reset)
+//		but if we simply echo something all is correct...
 //		...is there a non-printable we missed???
 // NOTE: tabs are always expanded with ' '...
 func (this *Lines) makeSection(str string, width int, rest ...string) (string, bool) {
