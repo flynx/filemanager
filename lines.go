@@ -645,7 +645,7 @@ type Lines struct {
 	SpanMinSize int `long:"span-min" value-name:"N" default:"8" description:"Minimum span size"`
 	SpanNoExtend bool
 
-	IgnoreANSIEscapeSeq bool `long:"ignore-ansi-seq" description:"Ignore ANSI Escape Sequances"`
+	ANSIEscapeSeq string `long:"ansi-seq" choice:"handle" choice:"hide" choice:"show" default:"handle" description:"Sets how ANSI Escape Sequances are handled"`
 
 	TabSize int `long:"tab-size" value-name:"N" default:"8" description:"Tab size"`
 
@@ -705,12 +705,8 @@ func (this *Lines) makeSection(str string, width int, rest ...string) (string, b
 		//expand = false
 		width = len(runes) }
 
-	keep_non_printable := false
-	if ! this.IgnoreANSIEscapeSeq {
-		keep_non_printable = true }
-
 	// NOTE: this can legally get longer than width if it contains escape 
-	//		sequeces (i.e. keep_non_printable is true)...
+	//		sequeces (i.e. this.ANSIEscapeSeq != "hide")...
 	output := []rune(strings.Repeat(" ", width))
 	terminated := false
 	i, o := 0, 0
@@ -732,9 +728,13 @@ func (this *Lines) makeSection(str string, width int, rest ...string) (string, b
 			// escape sequences...
 			case '\x1B' :
 				seq := CollectANSIEscSeq(runes, i)
-				if keep_non_printable {
+				if this.ANSIEscapeSeq != "hide" {
+					// show escape sequence...
+					if this.ANSIEscapeSeq == "show" {
+						r = '␛'
 					// extend output to accommodate later removal of escape sequence...
-					output = append(output, []rune(strings.Repeat(" ", len(seq)))...)
+					} else {
+						output = append(output, []rune(strings.Repeat(" ", len(seq)))...) }
 				// remove escape sequence...
 				} else {
 					i += len(seq) - 1
