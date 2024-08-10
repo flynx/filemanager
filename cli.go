@@ -860,6 +860,7 @@ func (this *UI) HandleAction(actions string) Result {
 				delete(ENV, name) 
 				continue } }
 		// <PREFIX><CMD>...
+		// XXX is this a "for" or an "if"???
 		for strings.ContainsRune(prefixes, rune(code[0])) {
 			prefix = append(prefix, rune(code[0]))
 			code = strings.TrimSpace(string(code[1:])) }

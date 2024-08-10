@@ -62,7 +62,7 @@ func StripANSIEscSeq(runes []rune) []rune {
 // Spinner...
 //
 type Spinner struct {
-	Frames string `long:"spinner" value-name:"THEME|STR" default:"><" description:"Spinner frames"`
+	Frames string `long:"spinner" value-name:"THEME|STR" default:"><" env:"SPINNER" description:"Spinner frames"`
 	State int
 
 	running int
@@ -627,9 +627,9 @@ type Lines struct {
 
 	// column spanning...
 	// NOTE: values of 0 are swapped for .SpanMinSize
-	SpanMode string `long:"span" value-name:"STR" description:"Span columns"`
-	SpanModeTitle string `long:"span-title" value-name:"STR" default:"*,3" description:"Span title columns"`
-	SpanModeStatus string `long:"span-status" value-name:"STR" description:"Span status columns"`
+	SpanMode string `long:"span" value-name:"STR" env:"SPAN" description:"Span columns"`
+	SpanModeTitle string `long:"span-title" value-name:"STR" env:"SPAN_TITLE" default:"*,3" description:"Span title columns"`
+	SpanModeStatus string `long:"span-status" value-name:"STR" env:"SPAN_STATUS" description:"Span status columns"`
 	// cache...
 	// XXX do we need to cache multiple values???
 	__SpanMode_cache struct {
@@ -639,19 +639,19 @@ type Lines struct {
 		value []int
 	}
 	SpanMarker string
-	SpanSeparator string `long:"span-separator" value-name:"C" default:"│" description:"Span separator"`
+	SpanSeparator string `long:"span-separator" value-name:"C" default:"│" env:"SPAN_SEP" description:"Span separator"`
 	// defaults to: SPAN_MIN_SIZE
 	// NOTE: this affects only % and * spans, explicit spans are not changed.
-	SpanMinSize int `long:"span-min" value-name:"N" default:"8" description:"Minimum span size"`
+	SpanMinSize int `long:"span-min" value-name:"N" default:"8" env:"SPAN_MIN_SIZE" description:"Minimum span size"`
 	SpanNoExtend bool
+
+	Spinner Spinner
 
 	ANSIEscapeSeq string `long:"ansi-seq" choice:"handle" choice:"hide" choice:"show" default:"handle" description:"Sets how ANSI Escape Sequances are handled"`
 
-	TabSize int `long:"tab-size" value-name:"N" default:"8" description:"Tab size"`
+	TabSize int `long:"tab-size" value-name:"N" default:"8" env:"TAB" description:"Tab size"`
 
 	Theme Theme `long:"theme" value-name:"NAME:[STYLE,]FGCOLOR[,BGCOLOR]" description:"Set theme color"`
-
-	Spinner Spinner
 }
 
 func (this *Lines) Rows() int {
