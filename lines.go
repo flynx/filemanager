@@ -995,6 +995,9 @@ func (this *Lines) makeSections(str, span string, width int, sep_size int, rest 
 //		...currently it is not possible to do so...
 // XXX make sure to handle/trim lines ending in escape sequences correctly 
 //		when embedding overflow indicator...
+//		...trimming part of a sequence off is unlikely to be a big issue 
+//		as we trimming e sequence will remove it's command and we 
+//		ignore/remove unknown and malformed sequences...
 func (this *Lines) makeSectionChrome(str, span string, width int, rest ...string) []string {
 	separator := this.SpanSeparator
 	if len(rest) >= 1 {
