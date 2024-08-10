@@ -723,7 +723,6 @@ func (this *Lines) makeSection(str string, width int, rest ...string) (string, b
 			output = slices.Insert(output, o, s...) 
 			o += len(s) }
 
-		// XXX do we handle \n, \r, and \0
 		switch r {
 			// escape sequences...
 			case '\x1B' :
@@ -744,7 +743,15 @@ func (this *Lines) makeSection(str string, width int, rest ...string) (string, b
 			case '\t':
 				d := tab - (o % tab) 
 				o += d
-				continue }
+				continue 
+			// special chars...
+			// XXX use a decode table...
+			//case '\0' :
+			//	r = '␀'
+			case '\n' :
+				r = '␤'
+			case '\r' :
+				r = '␍' }
 
 		// set the rune...
 		output[o] = r }
