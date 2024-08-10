@@ -4,7 +4,6 @@
 %: %.go
 	GOOS=linux \
 		go build -o $@ $<
-#		go build -o $@ $<
 
 %.exe: %.go
 	GOOS=windows \

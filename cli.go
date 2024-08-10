@@ -1422,6 +1422,8 @@ func NewUI(l ...Lines) *UI {
 
 
 
+// XXX BUG: opening a file sometimes breaks:
+//			go run . tcell.go
 // XXX BUG: this at certain point adds a split in empty space...
 //			go run . -c 'ls --color=yes ~/Pictures/' -t "grep --color=yes 'jpg'" 2> log || (sleep 5 && reset)
 //		this seems to be triggered by an overflow in the last line...

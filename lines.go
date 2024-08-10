@@ -969,6 +969,9 @@ func (this *Lines) makeSections(str, span string, width int, sep_size int, rest 
 				res = append(res, overflow) }
 		} else if sizes[i] > 0 {
 			res = append(res, doSection(getSection(i), sizes[i])...) } }
+	// minimal section...
+	if len(res) == 0 {
+		return []string{"", ""} }
 	return res }
 //
 //	.makeSectionChrome(<str>, <span>, <width>[, <left_border>, <right_border>[, <filler>]])
