@@ -1,4 +1,6 @@
 
+GO_FILES := $(wildcard *.go)
+
 
 
 %: %.go
