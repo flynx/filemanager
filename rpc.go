@@ -1,5 +1,5 @@
 
-package lines
+package main
 
 import (
 )

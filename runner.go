@@ -225,6 +225,7 @@ func (this *Cmd) Restart(stdin ...io.Reader) error {
 // NOTE: this pipes .Stdout to the next command...
 func (this *Cmd) PipeTo(code string, handler ...LineHandler) (*PipedCmd, error) {
 	piped := PipedCmd{}
+	// XXX can't set this declaratively for some reason...
 	piped.Code = code
 	if len(handler) > 0 {
 		piped.Handler = handler[0] }
@@ -234,16 +235,23 @@ func (this *Cmd) PipeTo(code string, handler ...LineHandler) (*PipedCmd, error) 
 	return &piped, nil }
 
 
-func Run(code string, handler ...LineHandler) (*Cmd, error) {
+//
+//	Run(<code>[, <io.Reader>][, <LineHandler>])
+//		-> *Cmd, error
+//
+func Run(code string, rest ...any) (*Cmd, error) {
 	this := Cmd{}
+	// XXX can't set this declaratively for some reason...
 	this.Code = code
-	if len(handler) > 0 {
-		this.Handler = handler[0] }
+	for _, r := range rest {
+		switch r.(type) {
+			case LineHandler:
+				this.Handler = r.(LineHandler)
+			case io.Reader:
+				this.Cmd.Stdin = r.(io.Reader) } }
 	if err := this.Run(); err != nil {
 		return &this, err }
 	return &this, nil }
-
-
 
 
 // XXX Q: should we separate Cmd and PipedCmd???
@@ -269,6 +277,7 @@ func (this *PipedCmd) Close() {
 
 func Pipe(code string, handler ...LineHandler) (*PipedCmd, error) {
 	this := PipedCmd{}
+	// XXX can't set this declaratively for some reason...
 	this.Code = code
 	if len(handler) > 0 {
 		this.Handler = handler[0] }
