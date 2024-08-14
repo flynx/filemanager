@@ -507,7 +507,7 @@ type Renderer interface {
 	Loop(this *UI) Result
 	Stop()
 	// XXX
-	Finalize()
+	//Finalize()
 }
 
 

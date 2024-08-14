@@ -13,9 +13,9 @@ GO_FILES := $(wildcard *.go)
 
 
 
-windows: lines.exe
+windows: lines.exe $(GO_FILES)
 
-linux: lines
+linux: lines $(GO_FILES)
 
 
 
