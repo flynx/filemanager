@@ -21,7 +21,7 @@ import (
 	"io"
 	"bufio"
 	"runtime"
-	//"bytes"
+	"bytes"
 	"strings"
 	"strconv"
 	"slices"
@@ -505,6 +505,8 @@ type Renderer interface {
 	Refresh()
 	Setup(lines *Lines)
 	Loop(this *UI) Result
+	Suspend()
+	Resume()
 	Stop()
 	// XXX
 	//Finalize()
@@ -824,6 +826,7 @@ func (this *UI) HandleAction(actions string) Result {
 			if i < len(parts) + 1 {
 				parts = append(parts[:i+1], parts[i+2:]...) } 
 			i-- } }
+	//var env Env
 	for _, action := range parts {
 		action = strings.TrimSpace(action)
 		if len(action) == 0 {
@@ -840,11 +843,13 @@ func (this *UI) HandleAction(actions string) Result {
 		//		XXX & <CMD>		- async command (XXX not implemented...)
 		// NOTE: commands can be combined.
 		// NOTE: if prefix combined with <NAME>=<CMD> it must come after "="
-		/* XXX
 		prefixes := "@!<>|"
-		prefix := []rune{}
+		// XXX a bit mask would be even faster than this but not sure if 
+		//		it would be as readable...
+		prefix := map[rune]bool{}
 		code := action
 		name := ""
+		/* XXX
 		// <NAME>=<CMD>...
 		if isVarCommand.Match([]byte(action)) {
 			parts := regexp.MustCompile("=").Split(action, 2)
@@ -859,68 +864,82 @@ func (this *UI) HandleAction(actions string) Result {
 							strings.ContainsRune(prefixes, rune(action[0])))){
 				delete(ENV, name) 
 				continue } }
+		//*/
 		// <PREFIX><CMD>...
 		// NOTE: there can be multiple prefixes...
 		for strings.ContainsRune(prefixes, rune(code[0])) {
-			prefix = append(prefix, rune(code[0]))
+			prefix[rune(code[0])] = true
 			code = strings.TrimSpace(string(code[1:])) }
 		if name != "" || 
 				len(prefix) > 0 {
 			var stdin bytes.Buffer
 			// "|" -> current line to stdin...
-			if slices.Contains(prefix, '|') {
-				stdin.Write([]byte(this.Lines.Lines[this.Lines.Index].text)) }
+			if prefix['|'] {
+				stdin.Write([]byte(this.Lines.Lines[this.Lines.Index].Text)) }
 
-			// @ <CMD> -- call the command...
+			var cmd *Cmd
 			var err error
-			var stdout *io.ReadCloser//bytes.Buffer
-			lines := []string{}
-			if slices.Contains(prefix, '@') {
-				// XXX make this async...
-				err = callAtCommand(code, stdin)
+
+			// @ <CMD> -- interactive command...
+			// XXX still broken...
+			//		- interactive input is odd...
+			//		- non-interactive commands require a ctrl-d to return...
+			//		- ctrl-c quits lines -- should not...
+			if prefix['@'] {
+				if len(prefix) > 1 {
+					log.Printf(".HandleAction(..): Error: %#v: can't use \"@\" with other prefixes.\n", action)
+					return Fail }
+				// XXX for some reason Run() + <-cmd.Done here break -- investigate!!
+				//cmd, err = Run(code, stdin)
+				//<-cmd.Done
+				cmd = &Cmd{}
+				cmd.Code = code
+				// XXX env...
+
+				// init and run...
+				// XXX tee stdout to buffer to be handled by other prefixes...
+				// XXX shoild we guard this???
+				cmd.__state_change.Lock()
+				defer cmd.__state_change.Unlock()
+				if err = cmd.Init(os.Stdin, os.Stdout, os.Stderr); err != nil {
+					log.Println(".HandleAction(..): Error:", err)
+					return Fail }
+				defer cmd.Reset()
+				this.Renderer.Suspend()
+				/* XXX do we need this here???
+				// kill children when killed...
+				this.Cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+				//this.Cmd.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGKILL}
+				// prevent children from zombifiying when killed...
+				signal.Ignore(syscall.SIGCHLD)
+				//*/
+				if err = cmd.Cmd.Run(); err != nil {
+					// "waitid: no child processes" -> ignore...
+					// XXX not sure why we are getting this -- investigate...
+					if e, ok := err.(*os.SyscallError); ok && e.Syscall == "waitid" {
+						//log.Printf("ERR: %v: %#v\n", action, err) 
+						err = nil } } 
+				this.Renderer.Resume() 
+				// XXX remove this when teeing  output...
+				return OK
+
+			// normal background command...
 			} else {
-				cmd := goCallCommand(code, &stdin)
-				err = cmd.Error
-				stdout = cmd.Stdout }
+				cmd, err = Run(code, stdin) }
 			if err != nil {
 				log.Println("Error:", err)
 				return Fail }
-
+			
 			// < <CMD> -- list output...
-			// XXX keep selection and current item and screen position 
-			//		relative to current..
-			if slices.Contains(prefix, '<') {
-				scanner := bufio.NewScanner(*stdout)
-				// XXX should this be a goroutine/async???
-				// XXX do the spinner....
-				//this.Lines = LinesBuffer{}
-				this.Lines.Lock()
-				this.Lines.Clear()
-				for scanner.Scan() {
-					//// update screen as soon as we reach selection and 
-					//// just after we fill the screen...
-					//if len(this.Lines.Lines) == this.Lines.Index || 
-					//		len(this.Lines.Lines) == CURRENT_ROW + this.Lines.RowOffset {
-					//	this.Lines.Unlock() }
-					line := scanner.Text()
-					lines = append(lines, line)
-					this.Lines.Push(line) } 
-				if len(this.Lines.Lines) == 0 {
-					this.Lines.Push("") } 
-				this.Lines.Unlock()
-				if FOCUS_CMD != "" {
-					// XXX set focus...
-				}
-			// collect output data...
-			} else if(stdout != nil) {
-				scanner := bufio.NewScanner(*stdout)
-				for scanner.Scan() {
-					lines = append(lines, scanner.Text()) } }
+			if prefix['<'] {
+				this.ReadFrom(cmd.Stdout) }
+
+			/* XXX
 			// > <CMD> -- output to stdout...
-			if slices.Contains(prefix, '>') {
+			if prefix['>'] {
 				STDOUT += strings.Join(lines, "\n") + "\n" }
 			// ! <CMD> -- output to env...
-			if slices.Contains(prefix, '!') {
+			if prefix['!'] {
 				for _, str := range lines {
 					if strings.TrimSpace(str) == "" ||
 							! isVarCommand.Match([]byte(str)) {
@@ -933,14 +952,14 @@ func (this *UI) HandleAction(actions string) Result {
 			// handle env...
 			if name != "" {
 				if name == "STDOUT" {
-					if ! slices.Contains(prefix, '>') {
+					if ! prefix['>'] {
 						STDOUT += strings.Join(lines, "\n") + "\n" }
 				} else {
 					ENV[name] = strings.Join(lines, "\n") } }
 
+		//*/
 		// ACTION...
 		} else {
-		//*/
 			method := reflect.ValueOf(this.Actions).MethodByName(action)
 			// test if action exists....
 			if ! method.IsValid() {
@@ -953,7 +972,7 @@ func (this *UI) HandleAction(actions string) Result {
 				// XXX
 			}
 			if value != OK {
-				return value } } //}
+				return value } } }
 	return OK }
 func (this *UI) HandleKey(key string) Result {
 	aliases := this.KeyAliases

@@ -116,7 +116,7 @@ type Cmd struct {
 	__resetting sync.Mutex
 	__state_change sync.Mutex
 }
-func (this *Cmd) __reset(){
+func (this *Cmd) Reset(){
 	this.__resetting.Lock()
 	defer this.__resetting.Unlock()
 	this.Cmd = nil 
@@ -125,10 +125,16 @@ func (this *Cmd) __reset(){
 		close(this.__done) 
 		this.__done = nil } }
 
-
-func (this *Cmd) Run(stdin ...io.Reader) error {
-	this.__state_change.Lock()
-	defer this.__state_change.Unlock()
+func (this *Cmd) Init(streams ...any) error {
+	var stdin io.Reader
+	if len(streams) >= 1 {
+		stdin = streams[0].(io.Reader) }
+	var stdout io.WriteCloser
+	if len(streams) >= 2 {
+		stdout = streams[1].(io.WriteCloser) }
+	var stderr io.WriteCloser
+	if len(streams) >= 3 {
+		stderr = streams[2].(io.WriteCloser) }
 
 	if this.Cmd != nil {
 		return errors.New(".Run(..): previous command not done.") }
@@ -155,48 +161,78 @@ func (this *Cmd) Run(stdin ...io.Reader) error {
 		cmd = exec.Command(s[0], append(s[1:], prefix +" "+ this.Code)...) }
 	this.Cmd = cmd
 
-	// kill children when killed...
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
-	//cmd.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGKILL}
-	// prevent children from zombifiying when killed...
-	signal.Ignore(syscall.SIGCHLD)
-
-	// i/o...
+	// stdin...
 	// XXX there are instances where we can want stdout to be a buffer 
 	//		instead of a pipe...
 	//		...for example a pipe makes the case where we do not read/pipe
 	//		stdout allot more complicated...
-	if len(stdin) > 0 {
-		this.Cmd.Stdin = stdin[0] }
-	if p, err := cmd.StdoutPipe(); err == nil {
+	if stdin != nil {
+		this.Cmd.Stdin = stdin }
+	// stdout...
+	// XXX should we check if handler is also set an tee???
+	if stdout != nil {
+		this.Cmd.Stdout = stdout
+		if this.Stdout == nil {
+			this.Stdout = stdout.(io.ReadCloser) }
+	} else if p, err := cmd.StdoutPipe(); err == nil {
 		this.Stdout = p
 	} else {
 		return err }
-	if p, err := cmd.StderrPipe(); err == nil {
+	// stderr...
+	if stderr != nil {
+		this.Cmd.Stderr = stderr
+		if this.Stderr == nil {
+			this.Stderr = stderr.(io.ReadCloser) }
+	} else if p, err := cmd.StderrPipe(); err == nil {
 		this.Stderr = p
 	} else {
 		return err }
 
-	// handle the output...
-	src := this.Stdout
-	r, w := io.Pipe()
-	this.Stdout = r
-	go func(){
-		TeeCloser(src, w, this.Handler)
-		// we've been killed...
-		if this.Cmd == nil {
-			return }
-		this.Cmd.Wait()
-		this.__reset() }() 
+	return nil }
+func (this *Cmd) Run(streams ...any) error {
+	this.__state_change.Lock()
+	defer this.__state_change.Unlock()
+
+	// init...
+	if err := this.Init(streams...); err != nil {
+		return err }
+
+	// kill children when killed...
+	this.Cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	//this.Cmd.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGKILL}
+	// prevent children from zombifiying when killed...
+	signal.Ignore(syscall.SIGCHLD)
+
+	// handle the output (tee stdout)...
+	if this.Handler != nil {
+		src := this.Stdout
+		r, w := io.Pipe()
+		this.Stdout = r
+		go func(){
+			TeeCloser(src, w, this.Handler)
+			// we've been killed...
+			if this.Cmd == nil {
+				return }
+			this.Cmd.Wait()
+			this.Reset() }() 
+	// no handler -- cleanup...
+	// XXX
+	} else {
+		go func(){
+			this.Cmd.Wait()
+			// XXX this for some reason breaks interactive commands (this.Cmd = nil)...
+			//this.Reset() 
+		}() }
 
 	return this.Cmd.Start() }
+
 func (this *Cmd) Wait() error {
 	<-this.Done
 	return nil }
 func (this *Cmd) Kill() error {
 	this.__state_change.Lock()
 	defer this.__state_change.Unlock()
-	defer this.__reset()
+	defer this.Reset()
 	if this.Cmd == nil {
 		return errors.New(".Kill(..): no command running.") }
 	// XXX not sure if we need this...
@@ -218,7 +254,7 @@ func (this *Cmd) Kill() error {
 	this.Process.Release()
 	//return syscall.Kill(-this.Process.Pid, syscall.SIGKILL) }
 	return this.Process.Kill() }
-func (this *Cmd) Restart(stdin ...io.Reader) error {
+func (this *Cmd) Restart(stdin ...any) error {
 	this.Kill()
 	return this.Run(stdin...) }
 

@@ -413,6 +413,10 @@ func (this *Tcell) Loop(ui *UI) Result {
 					ui.Draw()
 					break } } }
 	return OK }
+func (this *Tcell) Suspend() {
+	this.Screen.Suspend() }
+func (this *Tcell) Resume() {
+	this.Screen.Resume() }
 func (this *Tcell) Stop() {
 	screen := this.Screen
 	_, ok := screen.Tty()
