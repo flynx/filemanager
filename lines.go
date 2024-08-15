@@ -1055,7 +1055,7 @@ func (this *Lines) makeSectionChrome(str, span string, width int, rest ...string
 			sections[i] = string(s[:len(s)-1]) } } 
 	return append([]string{ border_l }, sections...) }
 
-func (this *Lines) makeEnv() Env {
+func (this *Lines) MakeEnv() Env {
 	fill := " "
 	if this.Filler != 0 {
 		fill = string(this.Filler) }
@@ -1357,7 +1357,7 @@ func (this *Lines) Draw() *Lines {
 	if ! this.TitleDisabled || 
 			border != "" {
 		top_line = 1
-		env = this.makeEnv()
+		env = this.MakeEnv()
 		if border != "" {
 			corner_l = string([]rune(border)[1])
 			corner_r = string([]rune(border)[3]) 
@@ -1467,7 +1467,7 @@ func (this *Lines) Draw() *Lines {
 	// status...
 	if ! this.StatusDisabled {
 		if len(env) == 0 {
-			env = this.makeEnv() }
+			env = this.MakeEnv() }
 		if border != "" {
 			corner_l = string([]rune(border)[5])
 			corner_r = string([]rune(border)[7])

@@ -808,6 +808,13 @@ func (this *UI) Refresh() *UI {
 		this.__refresh_pending.TryLock() }
 	return this }
 
+/* XXX
+func makeCallEnv(cmd *Cmd, env Env) []string {
+	for k, v := range env {
+		env = append(env, k +"="+ v) }
+	return append(cmd.Cmd.Environ(), env...) }
+//*/
+
 // XXX not done yet...
 //var isVarCommand = regexp.MustCompile(`^\s*[a-zA-Z_]+=`)
 func (this *UI) HandleAction(actions string) Result {
@@ -826,7 +833,7 @@ func (this *UI) HandleAction(actions string) Result {
 			if i < len(parts) + 1 {
 				parts = append(parts[:i+1], parts[i+2:]...) } 
 			i-- } }
-	//var env Env
+
 	for _, action := range parts {
 		action = strings.TrimSpace(action)
 		if len(action) == 0 {
@@ -836,10 +843,10 @@ func (this *UI) HandleAction(actions string) Result {
 		//		<NAME>=<CMD>	- command stdout read into env variable
 		//		@ <CMD>			- simple/interactive command
 		//		   					NOTE: this uses os.Stdout...
-		//		! <CMD>			- stdout treated as env variables, one per line
+		//		| <CMD>			- active line(s) passed to stdin
 		//		< <CMD>			- stdout read into buffer
-		//		> <CMD>			- stdout printed to lines stdout
-		//		| <CMD>			- current line passed to stdin
+		//		> <CMD>			- lines written to command stdin
+		//		! <CMD>			- stdout treated as env variables, one per line
 		//		XXX & <CMD>		- async command (XXX not implemented...)
 		// NOTE: commands can be combined.
 		// NOTE: if prefix combined with <NAME>=<CMD> it must come after "="
@@ -872,13 +879,19 @@ func (this *UI) HandleAction(actions string) Result {
 			code = strings.TrimSpace(string(code[1:])) }
 		if name != "" || 
 				len(prefix) > 0 {
-			var stdin bytes.Buffer
-			// "|" -> current line to stdin...
-			if prefix['|'] {
-				stdin.Write([]byte(this.Lines.Lines[this.Lines.Index].Text)) }
-
 			var cmd *Cmd
 			var err error
+
+			stdin := &bytes.Buffer{}
+			// NOTE: we are looping to keep prefix order...
+			for k, v := range prefix {
+				// active line(s) to stdin...
+				if k == '|' && v {
+					stdin.Write([]byte(
+						strings.Join(this.Lines.Active(), "\n") + "\n")) }
+				// all lines to stdin...
+				if k == '>' && v {
+					stdin.Write([]byte(this.Lines.String() + "\n")) } }
 
 			// @ <CMD> -- interactive command...
 			// XXX still broken...
@@ -886,15 +899,14 @@ func (this *UI) HandleAction(actions string) Result {
 			//		- non-interactive commands require a ctrl-d to return...
 			//		- ctrl-c quits lines -- should not...
 			if prefix['@'] {
-				if len(prefix) > 1 {
-					log.Printf(".HandleAction(..): Error: %#v: can't use \"@\" with other prefixes.\n", action)
+				if prefix['<'] {
+					log.Printf(".HandleAction(..): Error: %#v: can't combine \"@\" with \">\".\n", action)
 					return Fail }
 				// XXX for some reason Run() + <-cmd.Done here break -- investigate!!
 				//cmd, err = Run(code, stdin)
 				//<-cmd.Done
 				cmd = &Cmd{}
 				cmd.Code = code
-				// XXX env...
 
 				// init and run...
 				// XXX tee stdout to buffer to be handled by other prefixes...
@@ -904,6 +916,11 @@ func (this *UI) HandleAction(actions string) Result {
 				if err = cmd.Init(os.Stdin, os.Stdout, os.Stderr); err != nil {
 					log.Println(".HandleAction(..): Error:", err)
 					return Fail }
+				// XXX env
+				env := cmd.Cmd.Environ()
+				for k, v := range this.Lines.MakeEnv() {
+					env = append(env, k +"="+ v) }
+				cmd.Cmd.Env = env
 				defer cmd.Reset()
 				this.Renderer.Suspend()
 				/* XXX do we need this here???
@@ -913,19 +930,32 @@ func (this *UI) HandleAction(actions string) Result {
 				// prevent children from zombifiying when killed...
 				signal.Ignore(syscall.SIGCHLD)
 				//*/
+				//* XXX can't yet cleanly pass stdin to an interactive command...
+				//		this:
+				//			-c ls --key='m:@> less'
+				//		should be equivalent to:
+				//			ls | less
+				//		workaraoud:
+				//			--key='m:@ echo $LINES | ./lines'
+				//		...doing io.Copy() between .Start() and .Wait() 
+				//		does not work...
+				if stdin != nil {
+					// XXX need to feed stdin.Bytes() into cmd...
+					// XXX
+				}
+				//*/
 				if err = cmd.Cmd.Run(); err != nil {
 					// "waitid: no child processes" -> ignore...
 					// XXX not sure why we are getting this -- investigate...
 					if e, ok := err.(*os.SyscallError); ok && e.Syscall == "waitid" {
-						//log.Printf("ERR: %v: %#v\n", action, err) 
 						err = nil } } 
 				this.Renderer.Resume() 
-				// XXX remove this when teeing  output...
-				return OK
+				// XXX remove this when teeing output...
+				return OK }
+
 
 			// normal background command...
-			} else {
-				cmd, err = Run(code, stdin) }
+			cmd, err = Run(code, stdin)
 			if err != nil {
 				log.Println("Error:", err)
 				return Fail }
@@ -1314,6 +1344,9 @@ func (this *UI) AppendDirect(str string) int {
 					this.__selection = this.__selection[1:]
 				} else {
 					this.__selection[j] = "" } } } }
+	// XXX add ability to select from multiple matches...
+	//		- closest to index
+	//		- context (+/- n lines around)
 	if this.__focus != "" &&
 			(this.__focus == txt ||
 				// XXX regexp???
@@ -1346,6 +1379,8 @@ func (this *UI) Append(str string) *UI {
 //		in remains of the interupted output in the current buffer...
 //		to reproduce:
 //			press ctrl-r in fast succession
+// XXX ASAP if there are multiple lines with same text (e.g. empty lines)
+//		select the closest to the current position...
 func (this *UI) Update() Result {
 	if this.__stdin_read {
 		return OK }

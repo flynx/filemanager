@@ -2,7 +2,7 @@
 package main
 
 import (
-	//"log"
+	"log"
 	"fmt"
 	//"os"
 	"os/exec"
@@ -127,13 +127,16 @@ func (this *Cmd) Reset(){
 
 func (this *Cmd) Init(streams ...any) error {
 	var stdin io.Reader
-	if len(streams) >= 1 {
+	if len(streams) >= 1 && 
+			streams[0] != nil {
 		stdin = streams[0].(io.Reader) }
 	var stdout io.WriteCloser
-	if len(streams) >= 2 {
+	if len(streams) >= 2 && 
+			streams[1] != nil {
 		stdout = streams[1].(io.WriteCloser) }
 	var stderr io.WriteCloser
-	if len(streams) >= 3 {
+	if len(streams) >= 3 && 
+			streams[2] != nil {
 		stderr = streams[2].(io.WriteCloser) }
 
 	if this.Cmd != nil {
@@ -276,6 +279,7 @@ func (this *Cmd) PipeTo(code string, handler ...LineHandler) (*PipedCmd, error) 
 //		-> *Cmd, error
 //
 func Run(code string, rest ...any) (*Cmd, error) {
+	var stdin io.Reader
 	this := Cmd{}
 	// XXX can't set this declaratively for some reason...
 	this.Code = code
@@ -284,8 +288,14 @@ func Run(code string, rest ...any) (*Cmd, error) {
 			case LineHandler:
 				this.Handler = r.(LineHandler)
 			case io.Reader:
-				this.Cmd.Stdin = r.(io.Reader) } }
-	if err := this.Run(); err != nil {
+				stdin = r.(io.Reader) 
+			case []string:
+				this.Env = r.([]string)
+			default:
+				// XXX handle error...
+				log.Println("Error")
+		} }
+	if err := this.Run(stdin); err != nil {
 		return &this, err }
 	return &this, nil }
 
