@@ -2,7 +2,7 @@
 package main
 
 import (
-	"log"
+	//"log"
 	"fmt"
 	//"os"
 	"os/exec"
@@ -173,20 +173,16 @@ func (this *Cmd) Init(args ...any) error {
 	} else {
 		s := strings.Fields(shell)
 		cmd = exec.Command(s[0], append(s[1:], prefix +" "+ this.Code)...) }
+
+	this.Cmd = cmd
+
 	// env...
 	if env != nil {
 		cmd.Env = env }
-	this.Cmd = cmd
-
 	// stdin...
-	// XXX there are instances where we can want stdout to be a buffer 
-	//		instead of a pipe...
-	//		...for example a pipe makes the case where we do not read/pipe
-	//		stdout allot more complicated...
 	if stdin != nil {
 		cmd.Stdin = stdin }
 	// stdout...
-	// XXX should we check if handler is also set an tee???
 	if stdout != nil {
 		cmd.Stdout = stdout
 		if this.Stdout == nil {
@@ -269,9 +265,9 @@ func (this *Cmd) Kill() error {
 	this.Process.Release()
 	//return syscall.Kill(-this.Process.Pid, syscall.SIGKILL) }
 	return this.Process.Kill() }
-func (this *Cmd) Restart(stdin ...any) error {
+func (this *Cmd) Restart(args ...any) error {
 	this.Kill()
-	return this.Run(stdin...) }
+	return this.Run(args...) }
 
 // NOTE: this pipes .Stdout to the next command...
 func (this *Cmd) PipeTo(code string, handler ...LineHandler) (*PipedCmd, error) {
@@ -287,14 +283,14 @@ func (this *Cmd) PipeTo(code string, handler ...LineHandler) (*PipedCmd, error) 
 
 
 //
-//	Run(<code>[, <io.Reader>][, <LineHandler>])
+//	Run(<code>[, <io.Reader>][, <env>][, <LineHandler>])
 //		-> *Cmd, error
 //
 func Run(code string, rest ...any) (*Cmd, error) {
 	var stdin io.Reader
 	var env []string
 	this := Cmd{}
-	// XXX can't set this declaratively for some reason...
+	// XXX can't set this declaratively via Cmd{ Code: .. } for some reason...
 	this.Code = code
 	for _, r := range rest {
 		switch r.(type) {
@@ -304,9 +300,9 @@ func Run(code string, rest ...any) (*Cmd, error) {
 				stdin = r.(io.Reader) 
 			case []string:
 				env = r.([]string)
-			default:
-				// XXX handle error...
-				log.Println("Error")
+			// XXX handle error...
+			//default:
+			//	log.Println("Error")
 		} }
 	if err := this.Run(stdin, env); err != nil {
 		return &this, err }
@@ -334,9 +330,13 @@ func (this *PipedCmd) Close() {
 	this.Stdin.Close() }
 
 
+// XXX should this be the same as Run(..)
+// XXX for some magical reason replacing LineHandler with any in args and 
+//		casting to LineHandler in the test does not work...
+//		...this prevents us from reusing the code from Run...
 func Pipe(code string, handler ...LineHandler) (*PipedCmd, error) {
 	this := PipedCmd{}
-	// XXX can't set this declaratively for some reason...
+	// XXX can't set this declaratively via Cmd{ Code: .. } for some reason...
 	this.Code = code
 	if len(handler) > 0 {
 		this.Handler = handler[0] }
