@@ -834,6 +834,11 @@ func (this *UI) HandleAction(actions string) Result {
 				parts = append(parts[:i+1], parts[i+2:]...) } 
 			i-- } }
 
+	makeEnv := func(env []string) []string {
+		for k, v := range this.Lines.MakeEnv() {
+			env = append(env, k +"="+ v) }
+		return env }
+
 	for _, action := range parts {
 		action = strings.TrimSpace(action)
 		if len(action) == 0 {
@@ -916,11 +921,7 @@ func (this *UI) HandleAction(actions string) Result {
 				if err = cmd.Init(os.Stdin, os.Stdout, os.Stderr); err != nil {
 					log.Println(".HandleAction(..): Error:", err)
 					return Fail }
-				// XXX env
-				env := cmd.Cmd.Environ()
-				for k, v := range this.Lines.MakeEnv() {
-					env = append(env, k +"="+ v) }
-				cmd.Cmd.Env = env
+				cmd.Cmd.Env = makeEnv(os.Environ())
 				defer cmd.Reset()
 				this.Renderer.Suspend()
 				/* XXX do we need this here???
@@ -955,7 +956,8 @@ func (this *UI) HandleAction(actions string) Result {
 
 
 			// normal background command...
-			cmd, err = Run(code, stdin)
+			// XXX update env...
+			cmd, err = Run(code, stdin, makeEnv(os.Environ()))
 			if err != nil {
 				log.Println("Error:", err)
 				return Fail }
@@ -1328,6 +1330,7 @@ func (this *UI) ReadFromCmd(cmds ...string) chan bool {
 
 	return this.ReadFrom(c.Stdout) }
 
+// XXX handle multiple matches better (see below)
 func (this *UI) AppendDirect(str string) int {
 	this.__appending.Lock()
 	defer this.__appending.Unlock()

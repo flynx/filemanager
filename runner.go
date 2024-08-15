@@ -14,6 +14,7 @@ import (
 	//"time"
 	"strings"
 	"bytes"
+	"slices"
 	"errors"
 )
 
@@ -125,19 +126,29 @@ func (this *Cmd) Reset(){
 		close(this.__done) 
 		this.__done = nil } }
 
-func (this *Cmd) Init(streams ...any) error {
+//
+//	.Init([<stdin>[, <stdout>[, <stderr>]]][, <env>])
+//		-> error
+//
+func (this *Cmd) Init(args ...any) error {
+	// env...
+	var env []string
+	for i, e := range args {
+		if v, ok := e.([]string); ok {
+			env = v
+			args = slices.Delete(args, i, i+1) } }
 	var stdin io.Reader
-	if len(streams) >= 1 && 
-			streams[0] != nil {
-		stdin = streams[0].(io.Reader) }
+	if len(args) >= 1 && 
+			args[0] != nil {
+		stdin = args[0].(io.Reader) }
 	var stdout io.WriteCloser
-	if len(streams) >= 2 && 
-			streams[1] != nil {
-		stdout = streams[1].(io.WriteCloser) }
+	if len(args) >= 2 && 
+			args[1] != nil {
+		stdout = args[1].(io.WriteCloser) }
 	var stderr io.WriteCloser
-	if len(streams) >= 3 && 
-			streams[2] != nil {
-		stderr = streams[2].(io.WriteCloser) }
+	if len(args) >= 3 && 
+			args[2] != nil {
+		stderr = args[2].(io.WriteCloser) }
 
 	if this.Cmd != nil {
 		return errors.New(".Run(..): previous command not done.") }
@@ -163,6 +174,9 @@ func (this *Cmd) Init(streams ...any) error {
 		s := strings.Fields(shell)
 		cmd = exec.Command(s[0], append(s[1:], prefix +" "+ this.Code)...) }
 	this.Cmd = cmd
+
+	if env != nil {
+		cmd.Env = env }
 
 	// stdin...
 	// XXX there are instances where we can want stdout to be a buffer 
@@ -280,6 +294,7 @@ func (this *Cmd) PipeTo(code string, handler ...LineHandler) (*PipedCmd, error) 
 //
 func Run(code string, rest ...any) (*Cmd, error) {
 	var stdin io.Reader
+	var env []string
 	this := Cmd{}
 	// XXX can't set this declaratively for some reason...
 	this.Code = code
@@ -290,12 +305,12 @@ func Run(code string, rest ...any) (*Cmd, error) {
 			case io.Reader:
 				stdin = r.(io.Reader) 
 			case []string:
-				this.Env = r.([]string)
+				env = r.([]string)
 			default:
 				// XXX handle error...
 				log.Println("Error")
 		} }
-	if err := this.Run(stdin); err != nil {
+	if err := this.Run(stdin, env); err != nil {
 		return &this, err }
 	return &this, nil }
 
