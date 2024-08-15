@@ -131,7 +131,7 @@ func (this *Cmd) Reset(){
 //		-> error
 //
 func (this *Cmd) Init(args ...any) error {
-	// env...
+	// parse args...
 	var env []string
 	for i, e := range args {
 		if v, ok := e.([]string); ok {
@@ -154,7 +154,7 @@ func (this *Cmd) Init(args ...any) error {
 		return errors.New(".Run(..): previous command not done.") }
 
 	done := make(chan bool)
-	// XXX these two are needed to have different types (ro vs rw)
+	// NOTE: these two are needed to have different types (ro vs rw)
 	this.__done = done
 	this.Done = done
 
@@ -173,10 +173,10 @@ func (this *Cmd) Init(args ...any) error {
 	} else {
 		s := strings.Fields(shell)
 		cmd = exec.Command(s[0], append(s[1:], prefix +" "+ this.Code)...) }
-	this.Cmd = cmd
-
+	// env...
 	if env != nil {
 		cmd.Env = env }
+	this.Cmd = cmd
 
 	// stdin...
 	// XXX there are instances where we can want stdout to be a buffer 
@@ -184,11 +184,11 @@ func (this *Cmd) Init(args ...any) error {
 	//		...for example a pipe makes the case where we do not read/pipe
 	//		stdout allot more complicated...
 	if stdin != nil {
-		this.Cmd.Stdin = stdin }
+		cmd.Stdin = stdin }
 	// stdout...
 	// XXX should we check if handler is also set an tee???
 	if stdout != nil {
-		this.Cmd.Stdout = stdout
+		cmd.Stdout = stdout
 		if this.Stdout == nil {
 			this.Stdout = stdout.(io.ReadCloser) }
 	} else if p, err := cmd.StdoutPipe(); err == nil {
@@ -197,7 +197,7 @@ func (this *Cmd) Init(args ...any) error {
 		return err }
 	// stderr...
 	if stderr != nil {
-		this.Cmd.Stderr = stderr
+		cmd.Stderr = stderr
 		if this.Stderr == nil {
 			this.Stderr = stderr.(io.ReadCloser) }
 	} else if p, err := cmd.StderrPipe(); err == nil {
@@ -206,12 +206,12 @@ func (this *Cmd) Init(args ...any) error {
 		return err }
 
 	return nil }
-func (this *Cmd) Run(streams ...any) error {
+func (this *Cmd) Run(args ...any) error {
 	this.__state_change.Lock()
 	defer this.__state_change.Unlock()
 
 	// init...
-	if err := this.Init(streams...); err != nil {
+	if err := this.Init(args...); err != nil {
 		return err }
 
 	// kill children when killed...
@@ -233,13 +233,11 @@ func (this *Cmd) Run(streams ...any) error {
 			this.Cmd.Wait()
 			this.Reset() }() 
 	// no handler -- cleanup...
-	// XXX
 	} else {
 		go func(){
 			this.Cmd.Wait()
 			// XXX this for some reason breaks interactive commands (this.Cmd = nil)...
-			//this.Reset() 
-		}() }
+			this.Reset() }() }
 
 	return this.Cmd.Start() }
 
