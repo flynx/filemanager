@@ -1,14 +1,4 @@
-/*
-* XXX split this into two parts:
-*		- tcell -- DONE
-*			- drawing
-*			- event loop
-*		- generic
-*			- config
-*			- cli
-*			- key/click handlers
-*		- actions (???)
-*/
+
 package main
 
 import (
@@ -508,8 +498,6 @@ type Renderer interface {
 	Suspend()
 	Resume()
 	Stop()
-	// XXX
-	//Finalize()
 }
 
 
