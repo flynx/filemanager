@@ -161,6 +161,9 @@ type Tcell struct {
 	//		odd is going on.
 	__style_cache map[string]tcell.Style
 	__updating_style_cache sync.Mutex
+
+	// XXX PAUSE
+	__paused sync.Mutex
 }
 
 func (this *Tcell) ResetCache() {
@@ -349,7 +352,24 @@ func (this *Tcell) Loop(ui *UI) Result {
 	for {
 		this.Show()
 
+		/* XXX PAUSE: need to drop cached events if paused or stop event handling altogether...
+		//		...it seams that the event's are buffered and handled wen we resume rather
+		//		than when they are triggered -- could we use timestamps to drop events???
+		this.__paused.Lock()
+		this.__paused.Unlock()
+		//*/
+
 		evt := this.PollEvent()
+
+		/* XXX PAUSE
+		// skip events when paused...
+		if this.__paused.TryLock(){
+			this.__paused.Unlock()
+		} else {
+			log.Println("skip")
+			continue }
+		log.Println("evt")
+		//*/
 
 		switch evt := evt.(type) {
 			// resize...
@@ -415,8 +435,24 @@ func (this *Tcell) Loop(ui *UI) Result {
 	return OK }
 func (this *Tcell) Suspend() {
 	this.Screen.Suspend() }
+/* XXX PAUSE
+func (this *Tcell) Pause() {
+	if ! this.__paused.TryLock() {
+		return }
+}
+func (this *Tcell) Resume() {
+	// Suspended...
+	if this.__paused.TryLock() {
+		this.__paused.Unlock()
+		this.Screen.Resume() 
+	// paused...
+	} else {
+		this.__paused.Unlock()
+		this.Refresh() } }
+/*/
 func (this *Tcell) Resume() {
 	this.Screen.Resume() }
+//*/
 func (this *Tcell) Stop() {
 	screen := this.Screen
 	_, ok := screen.Tty()

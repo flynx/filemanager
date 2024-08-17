@@ -496,6 +496,9 @@ type Renderer interface {
 	Setup(lines *Lines)
 	Loop(this *UI) Result
 	Suspend()
+	/* XXX PAUSE
+	Pause()
+	//*/
 	Resume()
 	Stop()
 }
@@ -507,12 +510,8 @@ type Renderer interface {
 
 var REFRESH_INTERVAL = time.Millisecond * 15
 
-// XXX renmae...
 type UI struct {
 	Renderer `no-flag:"true"`
-
-	// XXX watch/update on input filechange (.Files.Input)...
-	//WatchFile bool
 
 	ListCommand string `short:"c" long:"cmd" value-name:"CMD" env:"CMD" description:"List command"`
 	Cmd *Cmd
@@ -523,6 +522,10 @@ type UI struct {
 
 	// XXX like transform but use output for selection...
 	//SelectionCommand string `short:"e" long:"selection" value-name:"ACTION" env:"REJECT" description:"Command to filter selection from input"`
+
+	// XXX watch/update on input filechange (.Files.Input)...
+	//WatchFile bool `short:"w" long:"watch" description:"Watch file for changes"`
+
 
 	// NOTE: these only affect startup -- set .Index and .RowOffset...
 	// XXX these need a uniform startup-load mechanic done...
@@ -911,7 +914,15 @@ func (this *UI) HandleAction(actions string) Result {
 					return Fail }
 				cmd.Cmd.Env = makeEnv(os.Environ())
 				defer cmd.Reset()
+				//* XXX do we need this???
+				//		...seems that we do not need to fully suspend but
+				//		we do need to pause the event loop...
 				this.Renderer.Suspend()
+				/*/
+				// XXX PAUSE need to stop event queue...
+				log.Println("PAUSE")
+				this.Renderer.Pause()
+				//*/
 				/* XXX do we need this here???
 				// kill children when killed...
 				this.Cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
@@ -1231,8 +1242,19 @@ func (this *UI) HandleArgs() Result {
 	// load data...
 	this.Update()
 	return OK }
+/* XXX PAUSE
+func (this *UI) Loop() Result {
+	var res Result
+	done := make(chan bool)
+	go func(){
+		res = this.Renderer.Loop(this) 
+		close(done) }()
+	<-done
+	return res }
+/*/
 func (this *UI) Loop() Result {
 	return this.Renderer.Loop(this) }
+//*/
 
 // XXX need a clean way to stop runinng commands....
 //		...this is not clean yet...
@@ -1468,6 +1490,9 @@ func NewUI(l ...Lines) *UI {
 
 
 
+// XXX BUG? there seem to be problems with less detecting correct terminal 
+//		height in:
+//			go run . -c ls -s '@ less $TEXT' 2> log
 // XXX BUG: this at certain point adds a split in empty space...
 //			go run . -c 'ls --color=yes ~/Pictures/' -t "grep --color=yes 'jpg'" 2> log || (sleep 5 && reset)
 //		this seems to be triggered by an overflow in the last line...
