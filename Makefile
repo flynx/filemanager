@@ -1,21 +1,32 @@
 
-GO_FILES := $(wildcard *.go)
+GO_TESTS := $(wildcard *_test.go)
+
+GO_FILES := $(filter-out $(GO_TESTS), $(wildcard *.go))
 
 
+##%: %.go
+##	GOOS=linux \
+##		go build -o $@ $<
+##
+##%.exe: %.go
+##	GOOS=windows \
+##		go build -o $@ $<
 
-%: %.go
+
+lines: $(GO_FILES)
 	GOOS=linux \
-		go build -o $@ $<
+		go build -o $@ $?
+	strip $@
 
-%.exe: %.go
+lines.exe: $(GO_FILES)
 	GOOS=windows \
-		go build -o $@ $<
+		go build -o $@ $?
+	strip $@
 
 
+windows: lines.exe
 
-windows: lines.exe $(GO_FILES)
-
-linux: lines $(GO_FILES)
+linux: lines
 
 
 
