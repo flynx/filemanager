@@ -611,7 +611,7 @@ type Lines struct {
 	// Format: 
 	//		"│┌─┐│└─┘"
 	//		 01234567
-	Border string `long:"border" value-name:"THEME|STR" env:"BORDER" default:"│┌─┐│└─┘" description:"Set border chars"`
+	Border string `long:"border" value-name:"[THEME|STR]" env:"BORDER" default:"│┌─┐│└─┘" description:"Set border chars"`
 
 	OverflowIndicator string `long:"overflow-indicator" value-name:"C" default:"}" description:"Overflow indicator char"`
 	OverflowOverBorder bool
@@ -627,7 +627,7 @@ type Lines struct {
 
 	// column spanning...
 	// NOTE: values of 0 are swapped for .SpanMinSize
-	SpanMode string `long:"span" value-name:"STR" env:"SPAN" description:"Span columns"`
+	SpanMode string `long:"span" value-name:"[STR|fit-right|none]" env:"SPAN" description:"Span columns"`
 	SpanModeTitle string `long:"span-title" value-name:"STR" env:"SPAN_TITLE" default:"*,3" description:"Span title columns"`
 	SpanModeStatus string `long:"span-status" value-name:"STR" env:"SPAN_STATUS" description:"Span status columns"`
 	// cache...
@@ -888,18 +888,24 @@ func (this *Lines) parseSizes(str string, width int, sep int) []int {
 			size += width - total }
 		sizes[i] = size }
 	return sizes }
+func (this *Lines) splitSections(str string) []string {
+	if this.SpanMode == "none" {
+		return []string{ str } }
+	marker := this.SpanMarker
+	if marker == "" {
+		marker = SPAN_MARKER }
+	return strings.Split(str, marker) }
 func (this *Lines) makeSections(str, span string, width int, sep_size int, rest ...string) []string {
 	// defaults...
 	if span == "default" {
 		span = this.SpanMode }
-	marker := this.SpanMarker
-	if marker == "" {
-		marker = SPAN_MARKER }
+	if span == "none" {
+		span = "*" }
 	overflow := string(OVERFLOW_INDICATOR)
 	if len(this.OverflowIndicator) != 0 {
 		overflow = string([]rune(this.OverflowIndicator)[0]) }
 
-	sections := strings.Split(str, marker)
+	sections := this.splitSections(str)
 
 	skip := false
 	doSection := func(str string, width int) []string {
@@ -1068,11 +1074,7 @@ func (this *Lines) MakeEnv() Env {
 	var text, text_left, text_right string
 	if i < l {
 		text = this.Lines[i].Text
-		marker := this.SpanMarker
-		if marker == "" {
-			marker = SPAN_MARKER }
-		// XXX might be a good idea to support basic arrays.. (???)
-		sections := strings.Split(text, marker)
+		sections := this.splitSections(text)
 		text_left = sections[0]
 		if len(sections) > 1 {
 			text_right = sections[len(sections)-1] } }
@@ -1196,9 +1198,6 @@ var varPattern = regexp.MustCompile(
 // XXX better error handling...
 // XXX should we abstract out os.Getenv(..) ???
 func (this *Lines) expandTemplate(str string, env Env) string {
-	marker := this.SpanMarker
-	if marker == "" {
-		marker = SPAN_MARKER }
 	placeholders := PLACEHOLDERS 
 	if this.Placeholders != nil {
 		placeholders = *this.Placeholders }
@@ -1431,6 +1430,7 @@ func (this *Lines) Draw() *Lines {
 					s = scrollbar_bg } }
 			sections = this.makeSectionChrome(
 				text, 
+				// XXX should this be: this.SpanMode,
 				"default",
 				this.Width - len([]rune(border_l)) - len([]rune(s)),
 				this.SpanSeparator, "", "")
@@ -1450,6 +1450,7 @@ func (this *Lines) Draw() *Lines {
 		} else {
 			sections = this.makeSectionChrome(
 				text, 
+				// XXX should this be: this.SpanMode,
 				"default",
 				this.Width, 
 				this.SpanSeparator, border_l, border_r) }
