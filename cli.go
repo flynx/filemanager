@@ -626,7 +626,10 @@ func (this *UI) ResetCache() *UI {
 // XXX TCELL uses .Screen.Size()
 func (this *UI) updateGeometry() *UI {
 	var err error
+	// NOTE: this can produce 0's id .Renderer is not ready yet...
 	W, H := this.Renderer.Size()
+	if W <= 0 || H <= 0 {
+		return this }
 	Width, Height := this.Width, this.Height
 	Align := this.Align
 	if len(Align) == 0 {

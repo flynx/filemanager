@@ -708,7 +708,6 @@ func (this *Lines) makeSection(str string, width int, rest ...string) (string, b
 
 	// NOTE: this can legally get longer than width if it contains escape 
 	//		sequeces (i.e. this.ANSIEscapeSeq != "hide")...
-	// XXX BUG? we sometimes break here with negative width -- race???...
 	output := []rune(strings.Repeat(" ", width))
 	terminated := false
 	i, o := 0, 0
@@ -1028,6 +1027,10 @@ func (this *Lines) makeSectionChrome(str, span string, width int, rest ...string
 		border_l = string([]rune(border)[0])
 		border_r = string([]rune(border)[4])
 		width -= 2 }
+	if width < 0 {
+		// XXX if we get here then something odd is going on...
+		log.Fatal("ERR: makeSectionChrome(..): drawing zero or negative width")
+		width = 0 }
 	// XXX BUG: looks like this yiels the same results with sep_size of 0 an 1...
 	sections := this.makeSections(str, span, width, len([]rune(separator)), rest...)
 	// NOTE: we are skipping the last section as it already places the
@@ -1336,6 +1339,8 @@ func (this *Lines) drawLine(col, row int, sections []string, style string) *Line
 
 // NOTE: this adds $F to the env containing the current fill character.
 func (this *Lines) Draw() *Lines {
+	if this.Width <= 0 || this.Height <= 0 {
+		return this }
 	overflow := string(OVERFLOW_INDICATOR)
 	if len(this.OverflowIndicator) != 0 {
 		overflow = string([]rune(this.OverflowIndicator)[0]) }
