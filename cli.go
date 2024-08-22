@@ -16,7 +16,7 @@ import (
 	"strconv"
 	"slices"
 	"maps"
-	//"regexp"
+	"regexp"
 
 	"github.com/jessevdk/go-flags"
 )
@@ -810,7 +810,7 @@ func makeCallEnv(cmd *Cmd, env Env) []string {
 //*/
 
 // XXX not done yet...
-//var isVarCommand = regexp.MustCompile(`^\s*[a-zA-Z_]+=`)
+var isVarCommand = regexp.MustCompile(`^\s*[a-zA-Z_]+=`)
 func (this *UI) HandleAction(actions string) Result {
 	// XXX make split here a bit more cleaver:
 	//		- support ";"
@@ -855,20 +855,19 @@ func (this *UI) HandleAction(actions string) Result {
 		prefix := map[rune]bool{}
 		code := action
 		name := ""
-		/* XXX
+		//* XXX REVISE
 		// <NAME>=<CMD>...
 		if isVarCommand.Match([]byte(action)) {
-			parts := regexp.MustCompile("=").Split(action, 2)
-			name, action = parts[0], parts[1] 
+			parts := strings.SplitN(action, "=", 2)
+			name, action = strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])
 			// <NAME>= -> remove from env...
-			action = strings.TrimSpace(action)
 			if name != "" && 
 					(action == "" ||
 						// prevent "<NAME>=<PREFIX>" with empty command 
 						// from messing going through the whole call dance...
 						(len(action) == 1 &&
 							strings.ContainsRune(prefixes, rune(action[0])))){
-				delete(ENV, name) 
+				delete(this.Lines.Env, name) 
 				continue } }
 		//*/
 		// <PREFIX><CMD>...
