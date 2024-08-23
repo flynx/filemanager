@@ -605,7 +605,7 @@ type Lines struct {
 	// chrome...
 	Title string `long:"title" value-name:"TEXT" default:" $TEXT_LEFT |%F%S%F" env:"TITLE" description:"Title line"`
 	TitleDisabled bool `long:"no-title" description:"Disable title line"`
-	Status string `long:"status" value-name:"TEXT" default:"|${SELECTED:!*}${SELECTED:+($SELECTED)}%F $LINE/$LINES" env:"STATUS" description:"Status line"`
+	Status string `long:"status" value-name:"TEXT" default:"|${SELECTED:!*}${SELECTED:+($SELECTED)}%F $LINE/$LINES " env:"STATUS" description:"Status line"`
 	StatusDisabled bool `long:"no-status" description:"Disable status line"`
 
 	// Format: 
@@ -887,8 +887,9 @@ func (this *Lines) parseSizes(str string, width int, sep int) []int {
 			size += width - total }
 		sizes[i] = size }
 	return sizes }
-func (this *Lines) splitSections(str string) []string {
-	if this.SpanMode == "none" {
+func (this *Lines) splitSections(str string, split ...bool) []string {
+	if len(split) > 0 && 
+			! split[0] {
 		return []string{ str } }
 	marker := this.SpanMarker
 	if marker == "" {
@@ -896,15 +897,17 @@ func (this *Lines) splitSections(str string) []string {
 	return strings.Split(str, marker) }
 func (this *Lines) makeSections(str, span string, width int, sep_size int, rest ...string) []string {
 	// defaults...
+	split := true
 	if span == "default" {
 		span = this.SpanMode }
 	if span == "none" {
+		split = false
 		span = "*" }
 	overflow := string(OVERFLOW_INDICATOR)
 	if len(this.OverflowIndicator) != 0 {
 		overflow = string([]rune(this.OverflowIndicator)[0]) }
 
-	sections := this.splitSections(str)
+	sections := this.splitSections(str, split)
 
 	skip := false
 	doSection := func(str string, width int) []string {
@@ -1077,7 +1080,7 @@ func (this *Lines) MakeEnv() Env {
 	var text, text_left, text_right string
 	if i < l {
 		text = this.Lines[i].Text
-		sections := this.splitSections(text)
+		sections := this.splitSections(text, this.SpanMode != "none")
 		text_left = sections[0]
 		if len(sections) > 1 {
 			text_right = sections[len(sections)-1] } }

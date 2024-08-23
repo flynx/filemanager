@@ -981,16 +981,18 @@ func (this *UI) HandleAction(actions string) Result {
 					if len(res) != 2 {
 						continue }
 					ENV[strings.TrimSpace(res[0])] = strings.TrimSpace(res[1]) } }
+			//*/
 
-			// handle env...
+			/*/ XXX handle env...
 			if name != "" {
-				if name == "STDOUT" {
-					if ! prefix['>'] {
-						STDOUT += strings.Join(lines, "\n") + "\n" }
-				} else {
-					ENV[name] = strings.Join(lines, "\n") } }
+				this.Lines.Env[name] = strings.Join(lines, "\n") }
+				//if name == "STDOUT" {
+				//	if ! prefix['>'] {
+				//		STDOUT += strings.Join(lines, "\n") + "\n" }
+				//} else {
+				//	this.Lines.Env[name] = strings.Join(lines, "\n") } }
+			//*/
 
-		//*/
 		// ACTION...
 		} else {
 			method := reflect.ValueOf(this.Actions).MethodByName(action)

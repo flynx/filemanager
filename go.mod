@@ -1,6 +1,6 @@
 module lines
 
-go 1.21.9
+go 1.22
 
 require (
 	github.com/gdamore/tcell/v2 v2.7.4
