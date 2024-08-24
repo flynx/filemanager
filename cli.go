@@ -1,3 +1,36 @@
+/*
+
+XXX need a way to run multiple instances at the same time:
+		- in-process (single focus)
+			- controller
+				- handle events
+					- pass to drawers (chanel)
+				- change focus
+			- pane*
+		- process-process
+			- controller-pane*
+				- handle connections (http)
+				- handle events
+					- receive (http)
+					- pass (chanel -> http?)
+				- change focus
+	This means we need:
+		- single event handler / drawer per process (tcell)
+			- message commands to pane (channel)
+		- multiple panes per process (lines)
+		- a way to organize panes
+			- vsplit / hsplit / grid? (pane)
+				- acts like a pane
+				- handles open/close/arrange pane commands
+				- handles focus commands (clicks, tab, ...)
+				- proxies input to focused pane
+			- remote (pane)
+				- acts like a pane
+				- maintains list of connected panes
+				- proxies input to remote panes
+					(multicast or specific???)
+
+*/
 
 package main
 
