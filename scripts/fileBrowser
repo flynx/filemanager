@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+#APP=${APP:-go run .}
+APP=${APP:-go run old/lines.go}
+
 DIR=${1:-`pwd`}
 
 #PAGER=${PAGER:-"less"}
@@ -13,7 +16,7 @@ PAGER=${PAGER:-"bat --paging=always"}
 # XXX need to sanatize file names -- quotes will break things...
 DIR="$DIR" \
 PAGER="$PAGER" \
-	go run lines.go \
+	${APP} \
 		-l debug.log \
 		-c 'echo ".." ; \
 			ls \
