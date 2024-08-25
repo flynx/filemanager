@@ -14,6 +14,7 @@ XXX need a way to run multiple instances at the same time:
 					- receive (http)
 					- pass (chanel -> http?)
 				- change focus
+
 	This means we need:
 		- single event handler / drawer per process (tcell)
 			- message commands to pane (channel)
