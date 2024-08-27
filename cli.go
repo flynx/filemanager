@@ -551,6 +551,10 @@ type UI struct {
 	Cmd *Cmd
 	// NOTE: this is not the same as filtering the input as it will be 
 	//		done lazily when the line reaches view.
+	// XXX add abbility to chain these -- use slices...
+	//		...to do this we need Lines to be able to handle several 
+	//		waves of updates at the same time...
+	//		...another way to do this is to chain updates per line --  rewrite???
 	TransformCommand string `short:"t" long:"transform" value-name:"CMD" env:"TRANSFORM" description:"Row transform command"`
 	Transformer *PipedCmd
 
