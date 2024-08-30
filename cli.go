@@ -555,6 +555,9 @@ type UI struct {
 	//		...to do this we need Lines to be able to handle several 
 	//		waves of updates at the same time...
 	//		...another way to do this is to chain updates per line --  rewrite???
+	//		...or should we go the same approach as in v1 -- a .PopulateCommand
+	//		that would be called when a line is already populated to update 
+	//		(still requires multiwrite to buffer)
 	TransformCommand string `short:"t" long:"transform" value-name:"CMD" env:"TRANSFORM" description:"Row transform command"`
 	Transformer *PipedCmd
 
