@@ -377,6 +377,7 @@ type LinesBuffer struct {
 	__writing sync.Mutex
 }
 // Editing...
+//
 func (this *LinesBuffer) Clear() *LinesBuffer {
 	this.Lines = []Row{}
 	this.Index = 0
@@ -411,6 +412,11 @@ func (this *LinesBuffer) Append(strs ...any) int {
 			case io.Reader:
 				l = -1
 				defer this.__writing.Unlock() 
+			case []byte:
+				lst := strings.Split(string(in.([]byte)), "\n")
+				strs[i] = lst
+				if l >= 0 {
+					l += len(lst) }
 			case string:
 				lst := strings.Split(in.(string), "\n")
 				strs[i] = lst
@@ -468,9 +474,24 @@ func (this *LinesBuffer) Append(strs ...any) int {
 			break } }
 
 	return i-1 }
-
 // XXX do we need .Write(..)
+// XXX HACK: no error handling...
+func (this *LinesBuffer) Write(b []byte) (int, error) {
+	this.Clear()
+	this.Append(string(b))
+	return len(b), nil }
 
+
+// XXX
+type Transformer func(string)string
+// XXX this should account for blocking transformers...
+func (this *LinesBuffer) Transform(transformer Transformer) *LinesBuffer {
+	// XXX
+	return this }
+
+
+// High-level...
+//
 func (this *LinesBuffer) Current() string {
 	if len(this.Lines) == 0 {
 		return "" }
