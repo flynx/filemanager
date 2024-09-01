@@ -359,11 +359,14 @@ type Env map[string]string
 //
 type Row struct {
 	Selected BoolToggle
-	Transformed bool
+	Transformed int
 	Populated bool
 	Text string
 }
 
+
+// XXX
+type Transformer func(string)string
 
 
 // LinesBuffer
@@ -374,7 +377,11 @@ type LinesBuffer struct {
 	Index int
 	Length int
 
+	// XXX
+	Transformers []Transformer
+
 	__writing sync.Mutex
+	__transforming sync.Mutex
 }
 // Editing...
 //
@@ -481,13 +488,45 @@ func (this *LinesBuffer) Write(b []byte) (int, error) {
 	this.Append(string(b))
 	return len(b), nil }
 
-
-// XXX
-type Transformer func(string)string
-// XXX this should account for blocking transformers...
+// XXX not sure about the transformer API yet...
 func (this *LinesBuffer) Transform(transformer Transformer) *LinesBuffer {
-	// XXX
+	//this.transformers = append(this.transformers, transformer)
 	return this }
+// XXX this should account for blocking transformers...
+//		i.e. if a tranformer blocks it should block all the higher number
+//		transformers from passing it while all lower number transformers 
+//		should procede...
+func (this *LinesBuffer) triggerTransform() {
+	if ! this.__transforming.TryLock() {
+		return }
+	defer this.__transforming.Unlock()
+
+	wg := sync.WaitGroup{}
+	prev := make(chan string)
+	in := prev
+	for level, transform := range this.Transformers {
+		// XXX need to maintain write position per transformer...
+		// XXX this should be extrnally resettable...
+		i := 0
+		in := prev
+		out := make(chan string)
+		prev = out
+		wg.Add(1)
+		go func(){
+			defer wg.Done()
+			for str := <-in {
+				out <- transform(str)
+				this.__writing.Lock()
+				this.Lines[i].Text = out
+				// XXX is this needed???
+				this.Lines[i].Transformed = level
+				this.__writing.Unlock() } }{} }
+
+	// feed the chain...
+	for i, row := range this.Lines {
+		in <- row.Text }
+
+	wg.Wait() }
 
 
 // High-level...
