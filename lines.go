@@ -496,6 +496,7 @@ func (this *LinesBuffer) Transform(transformer Transformer) *LinesBuffer {
 //		i.e. if a tranformer blocks it should block all the higher number
 //		transformers from passing it while all lower number transformers 
 //		should procede...
+// XXX should the transformr stack be editable???
 func (this *LinesBuffer) triggerTransform() {
 	if ! this.__transforming.TryLock() {
 		return }
@@ -527,7 +528,6 @@ func (this *LinesBuffer) triggerTransform() {
 		in <- row.Text }
 
 	wg.Wait() }
-
 
 // High-level...
 //
