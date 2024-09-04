@@ -3,6 +3,7 @@
 # 	- basic automation
 # 	- dependency tracking
 # 	- build tuning
+# 	- CI/CD (???)
 #
 
 GO_TESTS := $(wildcard *_test.go)
