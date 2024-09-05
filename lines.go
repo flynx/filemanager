@@ -497,7 +497,8 @@ func (this *LinesBuffer) Transform(transformer Transformer) *LinesBuffer {
 //		transformers from passing it while all lower number transformers 
 //		should procede...
 // XXX should the transformr stack be editable/viewable???
-//		...IMHO a fully traversable memory model is as good as data-as-code...
+//		...IMHO a fully traversable memory model is as good as 
+//		data-as-code but we need to think about isolation/security...
 func (this *LinesBuffer) triggerTransform() {
 	if ! this.__transforming.TryLock() {
 		return }
