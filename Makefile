@@ -23,6 +23,9 @@ lines.exe: $(GO_FILES)
 	strip $@
 
 
+test:
+	go test
+
 
 windows: lines.exe
 
