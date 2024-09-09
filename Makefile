@@ -23,16 +23,20 @@ lines.exe: $(GO_FILES)
 	strip $@
 
 
+
+.PHONY: windows
+windows: lines.exe
+
+.PHONY: linux
+linux: lines
+
+.PHONY: test
 test:
 	go test
 
 
-windows: lines.exe
 
-linux: lines
-
-
-
+.PHONY: clean
 clean:
 	rm -f lines lines.exe
 
