@@ -497,8 +497,6 @@ func (this *LinesBuffer) Transform(transformer Transformer) *LinesBuffer {
 //		transformers from passing it while all lower number transformers 
 //		should procede...
 // XXX should the transformr stack be editable/viewable (api)???
-//		...IMHO a fully traversable memory model is as good as 
-//		data-as-code but we need to think about isolation/security...
 func (this *LinesBuffer) triggerTransform() {
 	if ! this.__transforming.TryLock() {
 		return }
@@ -517,18 +515,20 @@ func (this *LinesBuffer) triggerTransform() {
 		wg.Add(1)
 		go func(){
 			defer wg.Done()
-			for str := <-in {
+			for true {
+				str, ok := <-in
+				if ! ok {
+					break }
 				out <- transform(str)
 				this.__writing.Lock()
-				this.Lines[i].Text = out
+				this.Lines[i].Text = <-out
 				// XXX is this needed???
 				this.Lines[i].Transformed = level
-				this.__writing.Unlock() } }{} }
+				this.__writing.Unlock() } }() }
 
 	// feed the chain...
-	for i, row := range this.Lines {
+	for _, row := range this.Lines {
 		in <- row.Text }
-
 	wg.Wait() }
 
 // High-level...
