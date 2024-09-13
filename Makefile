@@ -1,10 +1,3 @@
-# XXX do we need this for a Go project?
-# 	...most likely yes:
-# 	- basic automation
-# 	- dependency tracking
-# 	- build tuning
-# 	- CI/CD (???)
-#
 
 GO_TESTS := $(wildcard *_test.go)
 
