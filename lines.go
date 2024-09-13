@@ -497,6 +497,7 @@ func (this *LinesBuffer) Transform(transformer Transformer) *LinesBuffer {
 //		transformers from passing it while all lower number transformers 
 //		should procede...
 // XXX should the transformr stack be editable/viewable (api)???
+// XXX needs a rethink....
 func (this *LinesBuffer) triggerTransform() {
 	if ! this.__transforming.TryLock() {
 		return }
