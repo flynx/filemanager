@@ -1,6 +1,17 @@
 
 package main
 
+import (
+	"fmt"
+	//"log"
+	"io"
+	"strings"
+	"slices"
+	"bufio"
+	"sync"
+)
+
+
 
 // XXX
 type Transformer func(string)string
