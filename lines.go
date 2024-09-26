@@ -130,57 +130,6 @@ func (this *Spinner) Done() *Spinner {
 
 
 
-// Togglers...
-//
-// XXX add a multi toggle...
-type Toggler interface {
-	Toggle(bool) bool
-}
-type Togglable interface {
-	Next()
-	On()
-	Off()
-}
-type BoolTogglable interface {
-	Togglable
-	Toggle(Toggle)
-}
-type MultiTogglable interface {
-	Togglable
-	Prev()
-}
-
-
-type Toggle int
-const (
-	Next Toggle = iota
-	On
-	Off
-)
-func (this Toggle) Toggle(in bool) bool {
-	if this == Next {
-		return ! in
-	} else if this == On {
-		return true }
-	return false }
-
-
-type BoolToggle bool
-func (this BoolToggle) Toggle(mode Toggle) BoolToggle {
-	if mode == Next {
-		return this.Next()
-	} else if mode == On {
-		return true }
-	return false }
-func (this BoolToggle) Next() BoolToggle {
-	return ! this }
-func (this BoolToggle) On() BoolToggle {
-	return true }
-func (this BoolToggle) Off() BoolToggle {
-	return false }
-
-
-
 // Theme...
 //
 type Style []string
@@ -352,17 +301,6 @@ var SPINNER_THEME = map[string]string {
 
 
 type Env map[string]string
-
-
-
-// Row
-//
-type Row struct {
-	Selected BoolToggle
-	Transformed int
-	Populated bool
-	Text string
-}
 
 
 
