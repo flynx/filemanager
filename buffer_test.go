@@ -13,7 +13,7 @@ import (
 
 
 
-func TestLinesBufferAppendTrim(t *testing.T){
+func TestAppendTrim(t *testing.T){
 	buf := LinesBuffer{}
 
 	i := buf.Append("a", "b", "c")
@@ -62,7 +62,7 @@ func TestLinesBufferAppendTrim(t *testing.T){
 
 	//fmt.Println("---", buf.String())
 }
-func TestLinesBuffer(t *testing.T){
+func TestBase(t *testing.T){
 	buf := LinesBuffer{}
 
 	t.Run("String", func(t *testing.T){
@@ -112,6 +112,9 @@ func TestLinesBuffer(t *testing.T){
 	//*/
 }
 
+func TestTransform(t *testing.T){
+	// XXX
+}
 
 
 // vim:set ts=4 sw=4 :

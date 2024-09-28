@@ -15,6 +15,7 @@ import (
 
 // Togglers...
 //
+// XXX should this be a separate module???
 // XXX add a multi toggle...
 type Toggler interface {
 	Toggle(bool) bool
@@ -92,6 +93,7 @@ type LinesBuffer struct {
 	__writing sync.Mutex
 	__transforming sync.Mutex
 }
+
 // Editing...
 //
 func (this *LinesBuffer) Clear() *LinesBuffer {
