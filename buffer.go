@@ -201,7 +201,7 @@ func (this *LinesBuffer) Write(b []byte) (int, error) {
 
 // XXX not sure about the transformer API yet...
 func (this *LinesBuffer) Transform(transformer Transformer) *LinesBuffer {
-	//this.transformers = append(this.transformers, transformer)
+	this.Transformers = append(this.Transformers, transformer)
 	return this }
 // XXX this should account for blocking transformers...
 //		i.e. if a tranformer blocks it should block all the higher number
