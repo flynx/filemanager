@@ -5,7 +5,7 @@ import (
 	"testing"
 	"strings"
 	//"strconv"
-	//"fmt"
+	"fmt"
 	"sync"
 
 	"github.com/stretchr/testify/assert"
@@ -113,7 +113,37 @@ func TestBase(t *testing.T){
 }
 
 func TestTransform(t *testing.T){
-	// XXX
+	buf := LinesBuffer{}
+
+	buf.Write([]byte(
+`one
+two
+three
+four`))
+
+	fmt.Println(buf.String())
+
+	buf.Transform(func(s string, res TransformerCallback) {
+		res(fmt.Sprint(s, " a"))
+		// XXX append new item after "two"
+		//if s == "two" {
+		//	res("new")
+		//}
+	})
+	buf.Transform(func(s string, res TransformerCallback) {
+		// skip "three .."
+		if strings.HasPrefix(s, "three") {
+			return
+		}
+		res(fmt.Sprint(s, " b"))
+	})
+	buf.Transform(func(s string, res TransformerCallback) {
+		res(fmt.Sprint(s, " c"))
+	})
+
+	buf.transform()
+
+	fmt.Println(buf.String())
 }
 
 

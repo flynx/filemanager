@@ -76,7 +76,8 @@ type Row struct {
 
 
 // XXX
-type Transformer func(string)string
+type TransformerCallback func(string)
+type Transformer func(string, TransformerCallback)
 
 
 // LinesBuffer
@@ -199,6 +200,7 @@ func (this *LinesBuffer) Write(b []byte) (int, error) {
 	this.Append(string(b))
 	return len(b), nil }
 
+
 // XXX not sure about the transformer API yet...
 func (this *LinesBuffer) Transform(transformer Transformer) *LinesBuffer {
 	this.Transformers = append(this.Transformers, transformer)
@@ -209,6 +211,7 @@ func (this *LinesBuffer) Transform(transformer Transformer) *LinesBuffer {
 //		should procede...
 // XXX should the transformr stack be editable/viewable (api)???
 // XXX needs a rethink....
+/* XXX
 func (this *LinesBuffer) triggerTransform() {
 	if ! this.__transforming.TryLock() {
 		return }
@@ -242,6 +245,101 @@ func (this *LinesBuffer) triggerTransform() {
 	for _, row := range this.Lines {
 		in <- row.Text }
 	wg.Wait() }
+//*/
+
+// XXX stub...
+//
+// Transform/skip:
+//
+//	.transform():
+//				  +----handler2----+     +--handler1<-+
+//                v                |     v            |
+//			ccccccc----(skipped)----bbbbbb--(skipped)--aaaaa
+//            .     .               .    .          .   .
+//                 .     .          .    .       .   .
+//                      .     .     .    .    .   .
+//                           .     ..    ..   .
+//	.String():               cccccccbbbbbbaaaaa
+//
+//	XXX on each handler we need to know:
+//		- where the next item will be written -- .Transform < level
+//		- where the last item was read from -- .Transform == -1
+//	XXX the problem with the above is that each handler can both add and 
+//		skip items in the list and this we can't use a single buffer 
+//		without needing to insert sections...
+//		...this is a non-issue if we prevent adding new items...
+//
+//
+// Transform/skip/insert:
+//
+//	.transform():
+//		    	  +----handler2----+
+//		          v                |     +--handler1<-+
+//          ccccccc-- -  -         |     v            |
+//			------------------------bbbbbb-- -  -     |
+//			-------------------------------------------aaaaa
+//            .     .               .    .          .   .
+//                 .     .          .    .       .   .
+//                      .     .     .    .    .   .
+//                           .     ..    ..   .
+//	.String():               cccccccbbbbbbaaaaa
+//
+//
+//
+// XXX need to:
+//		- make this work with adding new transformers
+//			-> start the transformer when it was added...
+//		- handle .Write() / .Clear() correctly...
+func (this *LinesBuffer) transform() *LinesBuffer {
+	// XXX prevent multiple starts...
+
+	lock := sync.Mutex{}
+	next := make(chan bool)
+	handleNext := func(){
+		lock.Lock()
+		defer lock.Unlock()
+		close(next)
+		next = make(chan bool) }
+
+	levels := map[int]int{}
+	// XXX make each transformer async...
+	for level, transformer := range this.Transformers {
+		if _, ok := levels[level]; ! ok {
+			levels[level] = 0 }
+		l := 0
+		for i, _ := range this.Lines {
+			row := &this.Lines[i]
+			// wait for items to transform...
+			for row.Transformed != level {
+				<-next }
+			done := false
+			// item read but not yet written...
+			row.Transformed = -1
+			transformer(
+				row.Text,
+				func(s string){
+					// prevent insertion of extra items...
+					if done {
+						return }
+					done = true
+					i := levels[level]
+					row := &this.Lines[i]
+					row.Text = s
+					row.Transformed = level+1
+					levels[level]++
+					l++ 
+					handleNext() }) }
+		this.Length = l
+		this.Trim() }
+
+	return this }
+
+func (this *LinesBuffer) _String() string {
+	// XXX
+	return ""
+}
+
+
 
 // High-level...
 //
