@@ -284,8 +284,6 @@ func (this *LinesBuffer) triggerTransform() {
 //                           .     ..    ..   .
 //	.String():               cccccccbbbbbbaaaaa
 //
-//
-//
 // XXX need to:
 //		- make this work with adding new transformers
 //			-> start the transformer when it was added...
