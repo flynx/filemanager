@@ -294,6 +294,7 @@ func (this *LinesBuffer) triggerTransform() {
 //			while data is available... 
 func (this *LinesBuffer) transform() *LinesBuffer {
 	// XXX prevent multiple starts...
+	// XXX
 
 	lock := sync.Mutex{}
 	next := make(chan bool)
