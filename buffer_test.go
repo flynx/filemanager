@@ -112,6 +112,25 @@ func TestBase(t *testing.T){
 	//*/
 }
 
+
+
+type T struct {
+	__wait chan bool
+	__f func(string)string
+}
+func (this *T) Write(str string) (*T) {
+	return this }
+func (this *T) Wait() (*T) {
+	<-this.__wait
+	return this }
+func NewT(f func(string)string) *T {
+	t := T{}
+	t.__f = f
+	t.__wait = make(chan bool)
+	return t }
+
+
+
 func TestTransform(t *testing.T){
 	buf := LinesBuffer{}
 
