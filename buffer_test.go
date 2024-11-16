@@ -119,14 +119,18 @@ type T struct {
 	__f func(string)string
 }
 func (this *T) Write(str string) (*T) {
+	// XXX
 	return this }
 func (this *T) Wait() (*T) {
 	<-this.__wait
 	return this }
 func NewT(f func(string)string) *T {
-	t := T{}
+	t := &T{}
 	t.__f = f
 	t.__wait = make(chan bool)
+
+
+
 	return t }
 
 
