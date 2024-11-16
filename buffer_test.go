@@ -130,6 +130,11 @@ func (this *T) Wait() (*T) {
 	return this }
 // XXX can't infer level from 0'th element as it can still be waiting 
 //		for the last transform to write...
+// XXX move to .Transform(..)
+//		- start multiple handlers
+//		- stop/restart
+//		- cleanup
+// XXX need to make this restartable...
 func NewT(rows []Row, level int, f Transformer) *T {
 	this := &T{}
 
