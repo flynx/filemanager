@@ -4,6 +4,7 @@ package main
 import (
 	"testing"
 	"strings"
+	"slices"
 	//"strconv"
 	"fmt"
 	"sync"
@@ -113,10 +114,13 @@ func TestBase(t *testing.T){
 }
 
 
+//type TransformerCallback func(string)
+//type Transformer func(string, TransformerCallback)
 
+// XXX need this to be able to auto-restart on rows reset...
 type T struct {
 	__wait chan bool
-	__f func(string)string
+	__inserting sync.Mutex
 }
 func (this *T) Write(str string) (*T) {
 	// XXX
@@ -124,14 +128,87 @@ func (this *T) Write(str string) (*T) {
 func (this *T) Wait() (*T) {
 	<-this.__wait
 	return this }
-func NewT(f func(string)string) *T {
-	t := &T{}
-	t.__f = f
-	t.__wait = make(chan bool)
+// XXX can't infer level from 0'th element as it can still be waiting 
+//		for the last transform to write...
+func NewT(rows []Row, level int, f Transformer) *T {
+	this := &T{}
 
+	// XXX set this once...
+	this.__wait = make(chan bool)
 
+	to := 0
+	// NOTE: we do not care about callback(..) call order here -- sequencing 
+	//		callback(..) calls should be done by f(..)
+	var callback func(string)
+	callback = func(s string){
+		// XXX handle reset...
+		// XXX
 
-	return t }
+		// NOTE: we guard against inserts only as they can shift stuff 
+		//		around and mess up indexes...
+		inserting := false
+		if this.__inserting.TryLock() {
+			defer this.__inserting.Unlock()
+		} else {
+			inserting = true }
+
+		// XXX revise...
+		//		...race?: can this be overwritten and cause a race?
+		defer close(this.__wait)
+		this.__wait = make(chan bool)
+
+		// handle shifts done by higher level transforms...
+		for len(rows) < to && 
+				rows[to].Transformed == level {
+			to++ }
+		if len(rows) < to {
+			// XXX we outran the tail -> list truncated...
+			// XXX should this be a panic???
+			panic("list truncated...") }
+		// append new elements...
+		if len(rows) == to {
+			// XXX ROWS
+			rows = append(rows, 
+				Row{
+					Transformed: -level,
+					Populated: true,
+				}) }
+		// insert the new element...
+		if rows[to].Transformed != -level {
+			// wait for other inserts to finixh...
+			if inserting {
+				// NOTE: this is used to wait/block till other inserts 
+				//		are done only, thus the immediate unlock...
+				this.__inserting.Lock()
+				this.__inserting.Unlock() 
+				// NOTE: we can't trust indexes at this point so we need 
+				//		to do a clean retry... (XXX)
+				callback(s) 
+				return }
+			// NOTE: this can be needed if callback is called more than 
+			//		once per f(..) call growing the output...
+			// XXX ROWS
+			rows = slices.Insert(rows, to, Row{
+				Transformed: level-1,
+				Populated: true,
+			}) }
+		rows[to].Text = s
+		rows[to].Transformed = level 
+		to++ }
+
+	// feed rows to f(..)
+	for i:=0 ; i < len(rows); i++ {
+		// XXX handle reset...
+		// XXX
+		row := rows[i]
+		// wait till a new value is available...
+		for row.Transformed < level-1 {
+			<-this.__wait }
+		// mark row as read but not yet transformed...
+		rows[i].Transformed = -level
+		f(row.Text, callback) }
+
+	return this }
 
 
 
