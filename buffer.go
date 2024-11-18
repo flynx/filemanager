@@ -93,6 +93,10 @@ type LinesBuffer struct {
 
 	__writing sync.Mutex
 	__transforming sync.Mutex
+
+	// XXX EXPERIMENTAL...
+	__wait chan bool
+	__inserting sync.Mutex
 }
 
 // Editing...
@@ -106,6 +110,8 @@ func (this *LinesBuffer) Clear() *LinesBuffer {
 func (this *LinesBuffer) String() string {
 	lines := []string{}
 	for i, line := range this.Lines {
+		if ! line.Populated {
+			continue }
 		if i >= this.Length {
 			break }
 		lines = append(lines, line.Text) }
@@ -162,7 +168,10 @@ func (this *LinesBuffer) Append(strs ...any) int {
 		// the list has been trimmed...
 		if this.Length < i {
 			return false }
-		row := Row{ Text: s }
+		row := Row{
+			Text: s,
+			Populated: true,
+		}
 		if i < len(this.Lines) {
 			this.Lines[i] = row
 		// NOTE: since we are adding line-by-line there is not chance 
@@ -339,10 +348,12 @@ func (this *LinesBuffer) transform() *LinesBuffer {
 	return this }
 
 
+/*
 func (this *LinesBuffer) _String() string {
 	// XXX
 	return ""
 }
+//*/
 
 
 
