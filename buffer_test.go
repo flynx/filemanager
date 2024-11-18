@@ -116,36 +116,47 @@ func TestBase(t *testing.T){
 }
 
 
-//type TransformerCallback func(string)
-//type Transformer func(string, TransformerCallback)
+func (this *LinesBuffer) waitForTransform() *LinesBuffer {
+	if this.__wait == nil {
+		this.__wait = make(chan bool) }
+	<-this.__wait
+	return this }
+func (this *LinesBuffer) didTransform() *LinesBuffer {
+	if this.__wait != nil {
+		defer close(this.__wait) }
+	this.__wait = make(chan bool)
+	return this }
 
-// XXX can't infer level from 0'th element as it can still be waiting 
-//		for the last transform to write...
+
 // XXX move to .Transform(..)
 //		- start multiple handlers
 //		- stop/restart
 //		- cleanup
-// XXX need to make this restartable...
+// XXX currently this supports skipping/filtering of input but will not 
+//		allow expansion (i.e. multiple calls to callback(..))
+// XXX TODO:
+//		- cleanup stage -- remove .Populated == false and trim to .Length...
+//		- restartable on .Append(..)
+//		- resettable on .Write(..)
 func (this *LinesBuffer) _Transform(transformer Transformer) *LinesBuffer {
 
 	// XXX do we need this???
 	this.Transformers = append(this.Transformers, transformer)
 	level := len(this.Transformers)
 
-	// XXX set this once...
-	if this.__wait == nil {
-		this.__wait = make(chan bool) }
-
 	// NOTE: we do not care about callback(..) call order here -- sequencing 
 	//		callback(..) calls should be done by transformer(..)
-	// XXX need to subtract skips from .length...
-	//		...the problem is that we can count the skips once per-level 
-	//		but need to subtract the skips from .Lines.length once per 
-	//		skip (regardless of level)...
 	to := 0
+	seen := -1
 	length := this.Length
 	callback := func(from int) (func(string)){
 		return func(s string){
+			// XXX remove this restriction...
+			//		...handle inserts...
+			if seen == from {
+				panic("multiple calls to callback(..) not supported.") }
+			seen = to
+
 			// handle skips...
 			if from != to {
 				length = len(this.Lines) - (from - to) 
@@ -166,15 +177,6 @@ func (this *LinesBuffer) _Transform(transformer Transformer) *LinesBuffer {
 				inserting = true }
 			//*/
 
-			// XXX revise...
-			//		...race?: can this be overwritten and cause a race?
-			// XXX UGLY...
-			defer func(){
-				if this.__wait != nil {
-					defer close(this.__wait) 
-					this.__wait = make(chan bool) } }()
-			if this.__wait == nil {
-				this.__wait = make(chan bool) }
 
 			/* XXX MULTI_CALLBACK multiple calls to callback...
 			// handle inserts/shifts done by higher level transforms...
@@ -214,10 +216,13 @@ func (this *LinesBuffer) _Transform(transformer Transformer) *LinesBuffer {
 					Populated: true,
 				}) }
 			//*/
+
 			this.Lines[to].Text = s
 			this.Lines[to].Populated = true
 			this.Lines[to].Transformed = level 
-			to++ } }
+			to++ 
+
+			this.didTransform() } }
 
 	// feed this.Lines to transformer(..)
 	go func(){
@@ -227,7 +232,7 @@ func (this *LinesBuffer) _Transform(transformer Transformer) *LinesBuffer {
 			row := &this.Lines[i]
 			// wait till a new value is available...
 			for row.Transformed < level-1 {
-				<-this.__wait }
+				this.waitForTransform() }
 			// mark row as read but not yet transformed...
 			row.Transformed = -level
 			transformer(row.Text, callback(i)) } 
