@@ -5,7 +5,7 @@ import (
 	"testing"
 	"strings"
 	// XXX MULTI_CALLBACK
-	//"slices"
+	"slices"
 	"time"
 	//"strconv"
 	"fmt"
@@ -146,16 +146,40 @@ func (this *LinesBuffer) _Transform(transformer Transformer) *LinesBuffer {
 
 	// NOTE: we do not care about callback(..) call order here -- sequencing 
 	//		callback(..) calls should be done by transformer(..)
+	i := 0
 	to := 0
 	seen := -1
 	length := this.Length
 	callback := func(from int) (func(string)){
 		return func(s string){
-			// XXX remove this restriction...
-			//		...handle inserts...
+
+			// handle inserts/shifts done by higher level transforms...
+			skip := func(){
+				for len(this.Lines) < to && 
+						this.Lines[to].Transformed == level {
+					// XXX should we also inc from???
+					i++
+					from++
+					to++ } }
+
+			// handle inserts...
 			if seen == from {
-				panic("multiple calls to callback(..) not supported.") }
-			seen = to
+				// something is inserting -- account for shifts if the 
+				// inserts were before our current position...
+				// XXX TEST...
+				this.__inserting.Lock()
+				skip()
+				this.Lines = slices.Insert(this.Lines, to, Row{
+					Transformed: -level,
+					Populated: false,
+				}) 
+				i++
+				this.Length++ 
+				this.__inserting.Unlock() 
+			// skip shifts...
+			} else {
+				skip() }
+			seen = from
 
 			// handle skips...
 			if from != to {
@@ -163,59 +187,6 @@ func (this *LinesBuffer) _Transform(transformer Transformer) *LinesBuffer {
 				// mark the skipped items as not printable...
 				for i := to+1; i <= from; i++ {
 					this.Lines[i].Populated = false } }
-
-			// XXX handle reset...
-			// XXX
-
-			/* XXX MULTI_CALLBACK multiple calls to callback...
-			// NOTE: we guard against inserts only as they can shift stuff 
-			//		around and mess up indexes...
-			inserting := false
-			if this.__inserting.TryLock() {
-				defer this.__inserting.Unlock()
-			} else {
-				inserting = true }
-			//*/
-
-
-			/* XXX MULTI_CALLBACK multiple calls to callback...
-			// handle inserts/shifts done by higher level transforms...
-			for len(this.Lines) < to && 
-					this.Lines[to].Transformed == level {
-				to++ }
-			// we outran the tail -> list truncated...
-			// XXX should this be a panic???
-			if len(this.Lines) < to {
-				panic("list truncated...") }
-			// append new elements...
-			if len(this.Lines) == to {
-				fmt.Println("!!! APPEND !!!")
-				this.Lines = append(this.Lines, 
-					Row{
-						Transformed: -level,
-						Populated: true,
-					}) }
-			// insert the new element...
-			if this.Lines[to].Transformed != -level {
-				fmt.Println("!!! INSERT !!!")
-				// wait for other inserts to finixh...
-				if inserting {
-					// NOTE: this is used to wait/block till other inserts 
-					//		are done only, thus the immediate unlock...
-					this.__inserting.Lock()
-					this.__inserting.Unlock() 
-					// NOTE: we can't trust indexes at this point so we need 
-					//		to do a clean retry... (XXX)
-					callback(s) 
-					return }
-				// NOTE: this can be needed if callback is called more than 
-				//		once per transformer(..) call growing the output...
-				// XXX ROWS
-				this.Lines = slices.Insert(this.Lines, to, Row{
-					Transformed: level-1,
-					Populated: true,
-				}) }
-			//*/
 
 			this.Lines[to].Text = s
 			this.Lines[to].Populated = true
@@ -226,7 +197,8 @@ func (this *LinesBuffer) _Transform(transformer Transformer) *LinesBuffer {
 
 	// feed this.Lines to transformer(..)
 	go func(){
-		for i := 0; i < len(this.Lines); i++ {
+		// NOTE: multiple calls to callback(..) will update i...
+		for ; i < len(this.Lines); i++ {
 			// XXX handle reset...
 			// XXX
 			row := &this.Lines[i]
@@ -237,17 +209,35 @@ func (this *LinesBuffer) _Transform(transformer Transformer) *LinesBuffer {
 			row.Transformed = -level
 			transformer(row.Text, callback(i)) } 
 		// reflect skips...
-		this.Length = length }()
+		this.Length = length 
+		// XXX
+		this.didTransform() }()
 
 	return this }
-func (this *LinesBuffer) _String() string {
-	rows := []string{}
-	for _, row := range this.Lines {
-		//if row.Transformed < len(this.Lines) {
-		//	continue }
-		rows = append(rows, row.Text) }
-	return strings.Join(rows, "\n") }
 
+
+func TestTransformLocks(t *testing.T){
+	buf := LinesBuffer{}
+
+	go func(){
+		buf.waitForTransform() 
+		fmt.Println("A") }()
+	go func(){
+		buf.waitForTransform()
+		fmt.Println("B") 
+		buf.waitForTransform()
+		fmt.Println("BB") }()
+
+	time.Sleep(time.Millisecond*100)
+
+	buf.didTransform()
+
+	time.Sleep(time.Millisecond*100)
+
+	buf.didTransform()
+
+	time.Sleep(time.Millisecond*100)
+}
 
 func TestTransform(t *testing.T){
 	buf := LinesBuffer{}
@@ -278,23 +268,24 @@ six`))
 		res(fmt.Sprint(s, " b"))
 	})
 
+	// XXX RACE there is a case where c and d transforms are not executed...
+	//		...this is likely to the last .didTransform() being called 
+	//		before a .waitForTransform() thus blocking a transformer...
+
 	// append " c" + append "new" after "two .."
 	buf._Transform(func(s string, res TransformerCallback) {
 		time.Sleep(time.Millisecond*500)
 		fmt.Println("   c:", s)
 		res(fmt.Sprint(s, " c"))
-		/* XXX 
 		// append new item after "two"
 		if strings.HasPrefix(s, "two") {
-			res("new") }
-		//*/
-	})
+			fmt.Println("   c:", "new")
+			res("new c") } })
 
-	/*/ append " d"
+	// append " d"
 	buf._Transform(func(s string, res TransformerCallback) {
 		res(fmt.Sprint(s, " d"))
 	})
-	//*/
 
 	//buf.transform()
 
