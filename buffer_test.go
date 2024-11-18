@@ -117,25 +117,23 @@ func TestBase(t *testing.T){
 
 
 func (this *LinesBuffer) waitForTransform() *LinesBuffer {
-	if this.__wait == nil {
-		this.__wait = make(chan bool) }
-	<-this.__wait
+	if this.__wait_transform == nil {
+		this.__wait_transform = make(chan bool) }
+	<-this.__wait_transform
 	return this }
 func (this *LinesBuffer) didTransform() *LinesBuffer {
-	if this.__wait != nil {
-		defer close(this.__wait) }
-	this.__wait = make(chan bool)
+	if this.__wait_transform != nil {
+		defer close(this.__wait_transform) }
+	this.__wait_transform = make(chan bool)
 	return this }
 
 
 // XXX move to .Transform(..)
-//		- start multiple handlers
+//		- start multiple handlers -- DONE
 //		- stop/restart
 //		- cleanup
-// XXX currently this supports skipping/filtering of input but will not 
-//		allow expansion (i.e. multiple calls to callback(..))
 // XXX TODO:
-//		- cleanup stage -- remove .Populated == false and trim to .Length...
+//		- .Trim() -- remove .Populated == false and trim to .Length
 //		- restartable on .Append(..)
 //		- resettable on .Write(..)
 func (this *LinesBuffer) _Transform(transformer Transformer) *LinesBuffer {
@@ -152,33 +150,25 @@ func (this *LinesBuffer) _Transform(transformer Transformer) *LinesBuffer {
 	length := this.Length
 	callback := func(from int) (func(string)){
 		return func(s string){
+			this.__transforming.Lock()
+			defer this.__transforming.Unlock() 
 
 			// handle inserts/shifts done by higher level transforms...
-			skip := func(){
-				for len(this.Lines) < to && 
-						this.Lines[to].Transformed == level {
-					// XXX should we also inc from???
-					i++
-					from++
-					to++ } }
+			for len(this.Lines) < to && 
+					this.Lines[to].Transformed == level {
+				// XXX should we also inc from???
+				i++
+				from++
+				to++ }
 
 			// handle inserts...
 			if seen == from {
-				// something is inserting -- account for shifts if the 
-				// inserts were before our current position...
-				// XXX TEST...
-				this.__inserting.Lock()
-				skip()
 				this.Lines = slices.Insert(this.Lines, to, Row{
 					Transformed: -level,
 					Populated: false,
 				}) 
 				i++
-				this.Length++ 
-				this.__inserting.Unlock() 
-			// skip shifts...
-			} else {
-				skip() }
+				this.Length++ }
 			seen = from
 
 			// handle skips...
@@ -188,6 +178,7 @@ func (this *LinesBuffer) _Transform(transformer Transformer) *LinesBuffer {
 				for i := to+1; i <= from; i++ {
 					this.Lines[i].Populated = false } }
 
+			// update the row...
 			this.Lines[to].Text = s
 			this.Lines[to].Populated = true
 			this.Lines[to].Transformed = level 
@@ -197,7 +188,6 @@ func (this *LinesBuffer) _Transform(transformer Transformer) *LinesBuffer {
 
 	// feed this.Lines to transformer(..)
 	go func(){
-		// NOTE: multiple calls to callback(..) will update i...
 		for ; i < len(this.Lines); i++ {
 			// XXX handle reset...
 			// XXX
@@ -207,15 +197,18 @@ func (this *LinesBuffer) _Transform(transformer Transformer) *LinesBuffer {
 				this.waitForTransform() }
 			// mark row as read but not yet transformed...
 			row.Transformed = -level
+			// NOTE: if transformer(..) calls callback(..) multiple times 
+			//		it will update i...
 			transformer(row.Text, callback(i)) } 
 		// reflect skips...
 		this.Length = length 
-		// XXX
+		// in case something is still waiting...
 		this.didTransform() }()
 
 	return this }
 
 
+// XXX make the tests programmatic...
 func TestTransformLocks(t *testing.T){
 	buf := LinesBuffer{}
 
@@ -239,6 +232,7 @@ func TestTransformLocks(t *testing.T){
 	time.Sleep(time.Millisecond*100)
 }
 
+// XXX make the tests programmatic...
 func TestTransform(t *testing.T){
 	buf := LinesBuffer{}
 
@@ -268,10 +262,6 @@ six`))
 		res(fmt.Sprint(s, " b"))
 	})
 
-	// XXX RACE there is a case where c and d transforms are not executed...
-	//		...this is likely to the last .didTransform() being called 
-	//		before a .waitForTransform() thus blocking a transformer...
-
 	// append " c" + append "new" after "two .."
 	buf._Transform(func(s string, res TransformerCallback) {
 		time.Sleep(time.Millisecond*500)
@@ -287,7 +277,12 @@ six`))
 		res(fmt.Sprint(s, " d"))
 	})
 
-	//buf.transform()
+	// XXX test shifts before an update...
+	// XXX
+
+	// XXX test shifts before an insert...
+	// XXX
+
 
 	fmt.Println("---\n"+ buf.String())
 

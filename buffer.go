@@ -92,11 +92,10 @@ type LinesBuffer struct {
 	Transformers []Transformer
 
 	__writing sync.Mutex
-	__transforming sync.Mutex
 
 	// XXX EXPERIMENTAL...
-	__wait chan bool
-	__inserting sync.Mutex
+	__transforming sync.Mutex
+	__wait_transform chan bool
 }
 
 // Editing...
@@ -120,6 +119,7 @@ func (this *LinesBuffer) String() string {
 func (this *LinesBuffer) Reset() *LinesBuffer {
 	this.Length = 0
 	return this }
+// XXX remove non .Populated elements...
 func (this *LinesBuffer) Trim() *LinesBuffer {
 	this.__writing.Lock()
 	this.Lines = this.Lines[:this.Length]
