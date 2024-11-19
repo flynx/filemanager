@@ -128,6 +128,12 @@ func (this *LinesBuffer) didTransform() *LinesBuffer {
 	return this }
 
 
+//
+//	.Transform(transformer[, mode])
+//
+//	mode:
+//		"clear"
+//
 // XXX move to .Transform(..)
 //		- start multiple handlers -- DONE
 //		- stop/restart
@@ -136,7 +142,7 @@ func (this *LinesBuffer) didTransform() *LinesBuffer {
 //		- .Trim() -- remove .Populated == false and trim to .Length
 //		- restartable on .Append(..)
 //		- resettable on .Write(..)
-func (this *LinesBuffer) _Transform(transformer Transformer) *LinesBuffer {
+func (this *LinesBuffer) _Transform(transformer Transformer, mode ...string) *LinesBuffer {
 
 	// XXX do we need this???
 	this.Transformers = append(this.Transformers, transformer)
@@ -188,6 +194,15 @@ func (this *LinesBuffer) _Transform(transformer Transformer) *LinesBuffer {
 
 	// feed this.Lines to transformer(..)
 	go func(){
+		/*/ XXX this is a bit too early...
+		// clear items before transform...
+		if len(mode) > 0 && 
+				mode[0] == "clear" {
+			for i := 0; i < len(this.Lines); i++ {
+				fmt.Println("   -")
+				this.Lines[i].Populated = false } }
+		//*/
+		// transform...
 		for ; i < len(this.Lines); i++ {
 			// XXX handle reset...
 			// XXX
@@ -197,6 +212,11 @@ func (this *LinesBuffer) _Transform(transformer Transformer) *LinesBuffer {
 				this.waitForTransform() }
 			// mark row as read but not yet transformed...
 			row.Transformed = -level
+			// clear items before transform...
+			// XXX this is only effective when we reach the end...
+			if len(mode) > 0 && 
+					mode[0] == "clear" {
+				this.Lines[i].Populated = false }
 			// NOTE: if transformer(..) calls callback(..) multiple times 
 			//		it will update i...
 			transformer(row.Text, callback(i)) } 
@@ -247,30 +267,31 @@ six`))
 	fmt.Println(buf.String())
 
 	// append " a"
-	buf._Transform(func(s string, res TransformerCallback) {
-		time.Sleep(time.Millisecond*100)
-		fmt.Println("   a:", s)
-		res(fmt.Sprint(s, " a"))
-	})
+	buf._Transform(
+		func(s string, res TransformerCallback) {
+			time.Sleep(time.Millisecond*100)
+			//fmt.Println("   a:", s)
+			res(fmt.Sprint(s, " a")) })
 
 	// skip "three" + append " b"
-	buf._Transform(func(s string, res TransformerCallback) {
-		// skip "three .."
-		fmt.Println("   b:", s)
-		if strings.HasPrefix(s, "three") {
-			return }
-		res(fmt.Sprint(s, " b"))
-	})
+	buf._Transform(
+		func(s string, res TransformerCallback) {
+			// skip "three .."
+			//fmt.Println("   b:", s)
+			if strings.HasPrefix(s, "three") {
+				return }
+			res(fmt.Sprint(s, " b")) })
 
 	// append " c" + append "new" after "two .."
-	buf._Transform(func(s string, res TransformerCallback) {
-		time.Sleep(time.Millisecond*500)
-		fmt.Println("   c:", s)
-		res(fmt.Sprint(s, " c"))
-		// append new item after "two"
-		if strings.HasPrefix(s, "two") {
-			fmt.Println("   c:", "new")
-			res("  new c") } })
+	buf._Transform(
+		func(s string, res TransformerCallback) {
+			time.Sleep(time.Millisecond*500)
+			//fmt.Println("   c:", s)
+			res(fmt.Sprint(s, " c"))
+			// append new item after "two"
+			if strings.HasPrefix(s, "two") {
+				fmt.Println("   c:", "new")
+				res("  new c") } })
 
 	// append " d" + skip everything after "five .."
 	// XXX BUG? .String(): does not detect end of list if not explicitly marked...
@@ -279,15 +300,21 @@ six`))
 	//		...if yes how do we distinguish it and "transform in progress"???
 	//			...feels like this is not possible...
 	skip := false
-	buf._Transform(func(s string, res TransformerCallback) {
-		if skip || strings.HasPrefix(s, "five") {
-			skip = true
-			return }
-		res(fmt.Sprint(s, " d")) })
+	buf._Transform(
+		func(s string, res TransformerCallback) {
+			if skip || strings.HasPrefix(s, "five") {
+				skip = true
+				return }
+			//fmt.Println("   d:", s)
+			res(fmt.Sprint(s, " d")) }, 
+		"clear")
 
 	// append " end"
-	buf._Transform(func(s string, res TransformerCallback) {
-		res(fmt.Sprint(s, " end")) })
+	buf._Transform(
+		func(s string, res TransformerCallback) {
+			//fmt.Println("   end:", s)
+			res(fmt.Sprint(s, " end")) })
+
 
 	// XXX test shifts before an update...
 	// XXX
