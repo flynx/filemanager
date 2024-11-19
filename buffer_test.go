@@ -270,12 +270,24 @@ six`))
 		// append new item after "two"
 		if strings.HasPrefix(s, "two") {
 			fmt.Println("   c:", "new")
-			res("new c") } })
+			res("  new c") } })
 
-	// append " d"
+	// append " d" + skip everything after "five .."
+	// XXX BUG? .String(): does not detect end of list if not explicitly marked...
+	//		...here everything after "five .." but not print...
+	//		is it possible to detect this condition?
+	//		...if yes how do we distinguish it and "transform in progress"???
+	//			...feels like this is not possible...
+	skip := false
 	buf._Transform(func(s string, res TransformerCallback) {
-		res(fmt.Sprint(s, " d"))
-	})
+		if skip || strings.HasPrefix(s, "five") {
+			skip = true
+			return }
+		res(fmt.Sprint(s, " d")) })
+
+	// append " end"
+	buf._Transform(func(s string, res TransformerCallback) {
+		res(fmt.Sprint(s, " end")) })
 
 	// XXX test shifts before an update...
 	// XXX
