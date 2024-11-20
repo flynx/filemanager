@@ -95,6 +95,7 @@ type LinesBuffer struct {
 
 	// XXX EXPERIMENTAL...
 	__transforming sync.Mutex
+	__changing_wait_transform sync.Mutex
 	__wait_transform chan bool
 }
 

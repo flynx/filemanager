@@ -122,9 +122,13 @@ func (this *LinesBuffer) waitForTransform() *LinesBuffer {
 	<-this.__wait_transform
 	return this }
 func (this *LinesBuffer) didTransform() *LinesBuffer {
+	this.__changing_wait_transform.Lock()
+	defer this.__changing_wait_transform.Unlock()
+
 	if this.__wait_transform != nil {
 		defer close(this.__wait_transform) }
 	this.__wait_transform = make(chan bool)
+
 	return this }
 
 
@@ -142,7 +146,7 @@ func (this *LinesBuffer) didTransform() *LinesBuffer {
 //		- .Trim() -- remove .Populated == false and trim to .Length
 //		- restartable on .Append(..)
 //		- resettable on .Write(..)
-func (this *LinesBuffer) _Transform(transformer Transformer, mode ...string) *LinesBuffer {
+func (this *LinesBuffer) Map(transformer Transformer, mode ...string) *LinesBuffer {
 
 	// XXX do we need this???
 	this.Transformers = append(this.Transformers, transformer)
@@ -153,6 +157,7 @@ func (this *LinesBuffer) _Transform(transformer Transformer, mode ...string) *Li
 	i := 0
 	to := 0
 	seen := -1
+	// NOTE: we update the actual length only when all the items are read...
 	length := this.Length
 	callback := func(from int) (func(string)){
 		return func(s string){
@@ -160,27 +165,24 @@ func (this *LinesBuffer) _Transform(transformer Transformer, mode ...string) *Li
 			defer this.__transforming.Unlock() 
 
 			// handle inserts/shifts done by higher level transforms...
-			for len(this.Lines) < to && 
-					this.Lines[to].Transformed == level {
-				// XXX should we also inc from???
+			for len(this.Lines) > to && 
+					this.Lines[to].Transformed >= level {
 				i++
 				from++
 				to++ }
 
 			// handle inserts...
+			// XXX do we handle appends separately???
 			if seen == from {
 				this.Lines = slices.Insert(this.Lines, to, Row{
 					Transformed: -level,
 					Populated: false,
 				}) 
-				i++
-				this.Length++ }
+				i++ }
 			seen = from
 
-			// handle skips...
+			// handle skips -- mark the skipped items as not printable...
 			if from != to {
-				length = len(this.Lines) - (from - to) 
-				// mark the skipped items as not printable...
 				for i := to+1; i <= from; i++ {
 					this.Lines[i].Populated = false } }
 
@@ -189,19 +191,12 @@ func (this *LinesBuffer) _Transform(transformer Transformer, mode ...string) *Li
 			this.Lines[to].Populated = true
 			this.Lines[to].Transformed = level 
 			to++ 
+			length = to
 
 			this.didTransform() } }
 
 	// feed this.Lines to transformer(..)
 	go func(){
-		/*/ XXX this is a bit too early...
-		// clear items before transform...
-		if len(mode) > 0 && 
-				mode[0] == "clear" {
-			for i := 0; i < len(this.Lines); i++ {
-				fmt.Println("   -")
-				this.Lines[i].Populated = false } }
-		//*/
 		// transform...
 		for ; i < len(this.Lines); i++ {
 			// XXX handle reset...
@@ -227,6 +222,10 @@ func (this *LinesBuffer) _Transform(transformer Transformer, mode ...string) *Li
 
 	return this }
 
+// Like .Map(..) but all Rows not processed yet are .Populated = false, 
+// i.e. will not be returned by ..String()...
+func (this *LinesBuffer) FMap(transformer Transformer, mode ...string) *LinesBuffer {
+	return this.Map(transformer, "clear") }
 
 // XXX make the tests programmatic...
 func TestTransformLocks(t *testing.T){
@@ -267,14 +266,14 @@ six`))
 	fmt.Println(buf.String())
 
 	// append " a"
-	buf._Transform(
+	buf.Map(
 		func(s string, res TransformerCallback) {
 			time.Sleep(time.Millisecond*100)
 			//fmt.Println("   a:", s)
 			res(fmt.Sprint(s, " a")) })
 
 	// skip "three" + append " b"
-	buf._Transform(
+	buf.Map(
 		func(s string, res TransformerCallback) {
 			// skip "three .."
 			//fmt.Println("   b:", s)
@@ -283,7 +282,7 @@ six`))
 			res(fmt.Sprint(s, " b")) })
 
 	// append " c" + append "new" after "two .."
-	buf._Transform(
+	buf.Map(
 		func(s string, res TransformerCallback) {
 			time.Sleep(time.Millisecond*500)
 			//fmt.Println("   c:", s)
@@ -294,33 +293,20 @@ six`))
 				res("  new c") } })
 
 	// append " d" + skip everything after "five .."
-	// XXX BUG? .String(): does not detect end of list if not explicitly marked...
-	//		...here everything after "five .." but not print...
-	//		is it possible to detect this condition?
-	//		...if yes how do we distinguish it and "transform in progress"???
-	//			...feels like this is not possible...
 	skip := false
-	buf._Transform(
+	buf.FMap(
 		func(s string, res TransformerCallback) {
 			if skip || strings.HasPrefix(s, "five") {
 				skip = true
 				return }
 			//fmt.Println("   d:", s)
-			res(fmt.Sprint(s, " d")) }, 
-		"clear")
+			res(fmt.Sprint(s, " d")) })
 
 	// append " end"
-	buf._Transform(
+	buf.Map(
 		func(s string, res TransformerCallback) {
 			//fmt.Println("   end:", s)
 			res(fmt.Sprint(s, " end")) })
-
-
-	// XXX test shifts before an update...
-	// XXX
-
-	// XXX test shifts before an insert...
-	// XXX
 
 
 	fmt.Println("---\n"+ buf.String())
@@ -337,6 +323,62 @@ six`))
 
 	fmt.Println("---\n"+ buf.String())
 }
+
+
+// XXX test shifts before an insert...
+// XXX
+
+
+// XXX test shifts before an update...
+func TestTransform2(t *testing.T){
+	buf := LinesBuffer{}
+
+	buf.Write([]byte(
+`one
+two
+three
+four
+five
+six`))
+
+	fmt.Println(buf.String())
+
+	// append " a"
+	buf.Map(
+		func(s string, res TransformerCallback) {
+			if strings.HasPrefix(s, "three") {
+				//fmt.Println("     SLEEP", s)
+				time.Sleep(time.Second) 
+				/*fmt.Println("     WAKE", s)*/ }
+			//fmt.Println("   a:", s)
+			res(fmt.Sprint(s, " a")) })
+
+	//* XXX this breaks things quite badly...
+	// XXX Problems:
+	//		- stage 1: "three a" overwrites "two a"
+	//			...either offsets not updated or insert not accounted for...
+	//		- stage 1 sees items added on stage 2...
+	//			...i.e. after WAKE stage 1 processes: "three", then "(two a)"
+	// append " b" + insert "  ---"
+	buf.Map(
+		func(s string, res TransformerCallback) {
+			//fmt.Println("   b:", s)
+			res(fmt.Sprint(s, " b"))
+			res(fmt.Sprint(" ("+ s +")")) })
+	//*/
+
+	// append " end"
+	buf.Map(
+		func(s string, res TransformerCallback) {
+			//fmt.Println("   end:", s)
+			res(fmt.Sprint(s, " end")) })
+
+	fmt.Println("---")
+	time.Sleep(time.Second * 2)
+
+	fmt.Println(buf.String())
+}
+
 
 
 // vim:set ts=4 sw=4 :
