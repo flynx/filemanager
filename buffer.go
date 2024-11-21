@@ -12,6 +12,48 @@ import (
 )
 
 
+// Event...
+//
+// XXX should this be a separate module???
+type EventHandler func()
+type Event struct {
+	__chan chan bool
+	__triggering sync.Mutex
+
+	__handlers []EventHandler
+}
+func (this *Event) Wait() *Event {
+	this.__triggering.Lock()
+	if this.__chan == nil {
+		this.__chan = make(chan bool) }
+	this.__triggering.Unlock()
+	<-this.__chan
+	return this }
+func (this *Event) Trigger() *Event {
+	this.__triggering.Lock()
+	if this.__chan != nil {
+		defer close(this.__chan) }
+	this.__chan = make(chan bool)
+	this.__triggering.Unlock()
+
+	for _, handler := range this.__handlers {
+		handler() }
+
+	return this }
+func (this *Event) On(handler EventHandler) *Event {
+	this.__handlers = append(this.__handlers, handler)
+	return this }
+func (this *Event) Clear() *Event {
+	this.__handlers = []EventHandler{}
+	return this }
+
+// XXX RENAME TriggerEvent -> events.Trigger, etc.
+func TriggerEvent(evt *Event) *Event {
+	return evt.Trigger() }
+func OnEvent(evt *Event, handler EventHandler) *Event {
+	return evt.On(handler) }
+
+
 
 // Togglers...
 //
@@ -86,12 +128,17 @@ type LinesBuffer struct {
 	sync.Mutex
 	Lines []Row
 	Index int
+
+	// XXX REMOVE: this is unneeded complexity...
 	Length int
 
 	// XXX
 	Transformers []Transformer
 
 	__writing sync.Mutex
+
+	Changed Event
+	Cleared Event
 
 	// XXX EXPERIMENTAL...
 	__transforming sync.Mutex
@@ -105,30 +152,48 @@ func (this *LinesBuffer) Clear() *LinesBuffer {
 	this.Lines = []Row{}
 	this.Index = 0
 	this.Length = 0
+	this.Cleared.Trigger()
 	return this }
 
 func (this *LinesBuffer) String() string {
 	lines := []string{}
-	for i, line := range this.Lines {
+	//for i, line := range this.Lines {
+	for _, line := range this.Lines {
 		if ! line.Populated {
 			continue }
-		if i >= this.Length {
-			break }
+		//if i >= this.Length {
+		//	break }
 		lines = append(lines, line.Text) }
 	return strings.Join(lines, "\n") }
 
-func (this *LinesBuffer) Reset() *LinesBuffer {
-	this.Length = 0
-	return this }
-// XXX remove non .Populated elements...
 func (this *LinesBuffer) Trim() *LinesBuffer {
 	this.__writing.Lock()
-	this.Lines = this.Lines[:this.Length]
-	this.__writing.Unlock()
+	defer this.__writing.Unlock()
+	defer this.Changed.Trigger()
+
+	to := 0
+	for from := 0; from < len(this.Lines); from++ {
+		populated := this.Lines[from].Populated
+		// skip...
+		if ! populated {
+			continue }
+		// shift...
+		if populated && 
+				to != from {
+			this.Lines[to] = this.Lines[from]
+			to++ 
+			continue }
+		// no change...
+		to++ }
+	// truncate...
+	this.Lines = this.Lines[:to]
+	this.Length = to
 	return this }
 
 func (this *LinesBuffer) Append(strs ...any) int {
 	this.__writing.Lock()
+	defer this.Changed.Trigger()
+
 	i := this.Length
 	l := 0
 	// normalize inputs + count lines if possible...

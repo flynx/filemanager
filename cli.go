@@ -1320,7 +1320,7 @@ func (this *UI) ReadFrom(reader io.Reader) chan bool {
 	this.__read_running = running
 	// prep the transform command if defined...
 	this.TransformCmd()
-	this.Lines.Reset()
+	this.Lines.Clear()
 	go func(){
 		defer this.__reading.Unlock()
 		defer close(running) 
