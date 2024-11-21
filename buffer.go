@@ -196,88 +196,48 @@ func (this *LinesBuffer) Trim() *LinesBuffer {
 func (this *LinesBuffer) Append(strs ...any) int {
 	this.__appending.Lock()
 	defer this.__appending.Unlock()
-	//this.__writing.Lock()
-	//defer this.__writing.Unlock()
-	defer this.Changed.Trigger()
 
-	i := len(this.Lines)
-	// get the write position...
-	for ; i > 0; i-- {
-		if this.Lines[i-1].Populated {
-			break } }
-
-	l := 0
-	// normalize inputs + count lines if possible...
+	// normalize inputs...
 	for i, in := range strs {
 		switch in.(type) {
 			// readers make things non-deterministic...
 			case io.Reader:
-				l = -1
-				//defer this.__writing.Unlock() 
 			case []byte:
 				lst := strings.Split(string(in.([]byte)), "\n")
 				strs[i] = lst
-				if l >= 0 {
-					l += len(lst) }
 			case string:
 				lst := strings.Split(in.(string), "\n")
 				strs[i] = lst
-				if l >= 0 {
-					l += len(lst) }
 			case []string:
-				if l >= 0 {
-					l += len(in.([]string)) }
 			// convert any to string...
 			default:
-				strs[i] = fmt.Sprint(in)
-				if l >= 0 {
-					l++ } } }
-	/* XXX do we need this???
-	// grow .Lines if needed...
-	if l >= 0 {
-		//this.Length += l 
-		//if this.Length > len(this.Lines) {
-		//	slices.Grow(this.Lines, this.Length - len(this.Lines)) }
-		this.__writing.Unlock() }
-	//*/
+				strs[i] = fmt.Sprint(in) } }
 
 	// append...
-	//
-	place := func(i int, s string) bool {
-		row := Row{
-			Text: s,
-			Populated: true,
-		}
-		if i < len(this.Lines) {
-			this.Lines[i] = row
-		// NOTE: since we are adding line-by-line there is not chance 
-		//		that we are more than 1 off, unless we .Trim() while we 
-		//		are running...
-		} else {
-			this.Lines = append(this.Lines, row) } 
-		return true }
+	n := 0
+	place := func(s string) {
+		this.__writing.Lock()
+		defer this.__writing.Unlock()
+		defer this.Changed.Trigger()
+		n++
+		this.Lines = append(this.Lines, 
+			Row{
+				Text: s,
+				Populated: true,
+			}) }
 	for _, in := range strs {
-		stop := false
 		switch in.(type) {
 			case io.Reader:
 				scanner := bufio.NewScanner(in.(io.Reader))
-				for ! stop && 
-						scanner.Scan() {
-					stop = ! place(i, scanner.Text()) 
-					i++ }
+				for scanner.Scan() {
+					place(scanner.Text()) }
 			case []string:
 				for _, in := range in.([]string) {
-					if stop = ! place(i, in) ; stop {
-						break } 
-					i++ } 
+					place(in) } 
 			case string:
-				if stop = ! place(i, in.(string)) ; stop {
-					break } 
-				i++ }
-		if stop {
-			break } }
+				place(in.(string)) } }
 
-	return i-1 }
+	return n }
 // XXX do we need .Write(..)
 // XXX HACK: no error handling...
 func (this *LinesBuffer) Write(b []byte) (int, error) {

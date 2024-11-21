@@ -19,7 +19,7 @@ func TestAppendTrim(t *testing.T){
 
 	i := buf.Append("a", "b", "c")
 
-	assert.Equal(t, i, 2, 
+	assert.Equal(t, 3, i, 
 		".Append(..): wrong length, got: %v expected: %v", i, 2)
 
 	buf.Append(4, 5, 6)
@@ -29,13 +29,13 @@ func TestAppendTrim(t *testing.T){
 
 	buf.Clear()
 
-	assert.Equal(t, buf.Len(), 0, 
+	assert.Equal(t, 0, buf.Len(),
 		".Clear(): length not 0: %v", buf.Len())
 
 	buf.Append("1\n2")
 	buf.Append(3)
 
-	assert.Equal(t, buf.Len(), 3, 
+	assert.Equal(t, 3, buf.Len(),
 		".Append(..): wrong length, got: %v", buf.Len())
 
 	buf.Trim()
@@ -58,7 +58,7 @@ func TestAppendTrim(t *testing.T){
 
 	wg.Wait()
 
-	assert.Equal(t, buf.Len(), lines, 
+	assert.Equal(t, lines, buf.Len(), 
 		".Append(..): async: wrong length, got: %v expected: %v", buf.Len(), lines)
 
 	//fmt.Println("---", buf.String())

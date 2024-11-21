@@ -1388,8 +1388,9 @@ func (this *UI) AppendDirect(str string) int {
 	this.__appending.Lock()
 	defer this.__appending.Unlock()
 
-	i := this.Lines.Append(str) 
+	this.Lines.Append(str) 
 
+	i := len(this.Lines.Lines)-1
 	row := &this.Lines.Lines[i]
 	txt := row.Text
 	if this.__selection != nil {
