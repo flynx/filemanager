@@ -127,7 +127,6 @@ func TestBase(t *testing.T){
 //		- start multiple handlers -- DONE
 //		- stop/restart
 //		- cleanup
-// XXX BUG: Event: we still sometimes stall on .Changed.Wait() -- RACE???
 // XXX TODO:
 //		- .Trim() -- remove .Populated == false and trim to .Length
 //		- restartable on .Append(..) -- DONE / XXX TEST
@@ -168,7 +167,7 @@ func (this *LinesBuffer) Map(transformer Transformer, mode ...string) *LinesBuff
 
 			// handle skips -- mark the skipped items as not printable...
 			if from != to {
-				for i := to+1; i <= from; i++ {
+				for i := to+1; i <= from && i < len(this.Lines); i++ {
 					this.Lines[i].Populated = false } }
 
 			// update the row...
@@ -189,20 +188,22 @@ func (this *LinesBuffer) Map(transformer Transformer, mode ...string) *LinesBuff
 		// transform (infinite loop)...
 		for ; true; i++ {
 			// handle trim...
-			// XXX revise / test...
 			if len(this.Lines) < i {
-				i = len(this.Lines) -i
+				i = len(this.Lines)-1
 				to = i
 				seen = i-1 }
 
 			// wait till a new value is available...
-			// NOTE: this handles appends...
 			for i >= len(this.Lines) ||
 					this.Lines[i].Transformed < level-1 {
 				//this.Changed.Trigger()
 				this.Changed.Wait() }
+			// handle shifted items...
+			if this.Lines[i].Transformed >= level {
+				continue }
 
 			row := &this.Lines[i]
+
 			// mark row as read but not yet transformed...
 			row.Transformed = -level
 			// clear items before transform...
@@ -254,6 +255,7 @@ func TestEvent(t *testing.T){
 	time.Sleep(time.Millisecond*100)
 	assert.Equal(t, "ABC", str, "")
 }
+
 
 // XXX make the tests programmatic...
 func TestTransform(t *testing.T){
@@ -334,9 +336,7 @@ six`))
 }
 
 
-// XXX test shifts before an insert...
-// XXX
-
+// XXX make the tests programmatic...
 func TestTransformBasic(t *testing.T){
 	buf := LinesBuffer{}
 
@@ -392,7 +392,12 @@ six`))
 	fmt.Println("---\n"+ buf.String())
 }
 
+// XXX test shifts before an insert...
+// XXX
 
+// XXX insert still buggy -- looks like we either overwrite values or 
+//		reaces on Event's .Wait() / .Trigger()...
+// XXX make the tests programmatic...
 // XXX test shifts before an update...
 func TestTransform2(t *testing.T){
 	buf := LinesBuffer{}

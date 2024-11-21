@@ -137,6 +137,7 @@ type LinesBuffer struct {
 
 	__writing sync.Mutex
 
+	// events...
 	Changed Event
 	Cleared Event
 
