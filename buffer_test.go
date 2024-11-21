@@ -4,8 +4,6 @@ package main
 import (
 	"testing"
 	"strings"
-	// XXX MULTI_CALLBACK
-	"slices"
 	"time"
 	//"strconv"
 	"fmt"
@@ -26,24 +24,24 @@ func TestAppendTrim(t *testing.T){
 
 	buf.Append(4, 5, 6)
 
-	assert.Equal(t, len(buf.Lines), buf.Length, 
+	assert.Equal(t, len(buf.Lines), buf.Len(), 
 		".Append(..): wrong length, got: %v", len(buf.Lines))
 
 	buf.Clear()
 
-	assert.Equal(t, buf.Length, 0, 
-		".Clear(): length not 0: %v", buf.Length)
+	assert.Equal(t, buf.Len(), 0, 
+		".Clear(): length not 0: %v", buf.Len())
 
 	buf.Append("1\n2")
 	buf.Append(3)
 
-	assert.Equal(t, buf.Length, 3, 
-		".Append(..): wrong length, got: %v", buf.Length)
+	assert.Equal(t, buf.Len(), 3, 
+		".Append(..): wrong length, got: %v", buf.Len())
 
 	buf.Trim()
 
-	assert.Equal(t, buf.Length, len(buf.Lines), 
-		".Trim(): wrong length, got: %v", buf.Length)
+	assert.Equal(t, buf.Len(), len(buf.Lines), 
+		".Trim(): wrong length, got: %v", buf.Len())
 
 	buf.Clear()
 
@@ -60,8 +58,8 @@ func TestAppendTrim(t *testing.T){
 
 	wg.Wait()
 
-	assert.Equal(t, buf.Length, lines, 
-		".Append(..): async: wrong length, got: %v expected: %v", buf.Length, lines)
+	assert.Equal(t, buf.Len(), lines, 
+		".Append(..): async: wrong length, got: %v expected: %v", buf.Len(), lines)
 
 	//fmt.Println("---", buf.String())
 }
@@ -114,117 +112,6 @@ func TestBase(t *testing.T){
 	})
 	//*/
 }
-
-
-
-//
-//	.Transform(transformer[, mode])
-//
-//	mode:
-//		"clear"
-//
-// XXX move to .Transform(..)
-//		- start multiple handlers -- DONE
-//		- stop/restart
-//		- cleanup
-// XXX TODO:
-//		- .Trim() -- remove .Populated == false and trim to .Length
-//		- restartable on .Append(..) -- DONE / XXX TEST
-//		- resettable on .Write(..) -- DONE / XXX TEST
-// NOTE: we do not care about callback(..) call order here -- sequencing 
-//		callback(..) calls should be done by transformer(..)
-func (this *LinesBuffer) Map(transformer Transformer, mode ...string) *LinesBuffer {
-
-	// XXX do we need this???
-	this.Transformers = append(this.Transformers, transformer)
-	level := len(this.Transformers)
-
-	i := 0
-	to := 0
-	seen := -1
-	callback := func(from int) (func(string)){
-		return func(s string){
-			this.__writing.Lock()
-			defer this.__writing.Unlock() 
-			defer this.Changed.Trigger() 
-
-			// handle inserts/shifts done by higher level transforms...
-			for len(this.Lines) > to && 
-					this.Lines[to].Transformed >= level {
-				i++
-				from++
-				to++ }
-
-			// handle inserts...
-			// XXX do we need to handle appends separately???
-			if seen == from {
-				this.Lines = slices.Insert(this.Lines, to, Row{
-					Transformed: -level,
-					Populated: false,
-				}) 
-				i++ }
-			seen = from
-
-			// handle skips -- mark the skipped items as not printable...
-			if from != to {
-				for i := to+1; i <= from && i < len(this.Lines); i++ {
-					this.Lines[i].Populated = false } }
-
-			// update the row...
-			this.Lines[to].Text = s
-			this.Lines[to].Populated = true
-			this.Lines[to].Transformed = level 
-			to++ } }
-
-	// restart...
-	this.Cleared.On(
-		func(){
-			i = 0
-			to = 0
-			seen = -1 })
-
-	// feed this.Lines to transformer(..)
-	go func(){
-		// transform (infinite loop)...
-		for ; true; i++ {
-			// handle trim...
-			if len(this.Lines) < i {
-				i = len(this.Lines)-1
-				to = i
-				seen = i-1 }
-
-			// wait till a new value is available...
-			for i >= len(this.Lines) ||
-					this.Lines[i].Transformed < level-1 {
-				//this.Changed.Trigger()
-				this.Changed.Wait() }
-			// handle shifted items...
-			if this.Lines[i].Transformed >= level {
-				continue }
-
-			row := &this.Lines[i]
-
-			// mark row as read but not yet transformed...
-			row.Transformed = -level
-			// clear items before transform...
-			if len(mode) > 0 && 
-					mode[0] == "clear" {
-				this.Lines[i].Populated = false }
-			// NOTE: if transformer(..) calls callback(..) multiple times 
-			//		it will update i...
-			transformer(row.Text, callback(i)) } }()
-
-	return this }
-// Like .Map(..) but all Rows not processed yet are .Populated = false, 
-// i.e. will not be returned by ..String()...
-func (this *LinesBuffer) FMap(transformer Transformer, mode ...string) *LinesBuffer {
-	return this.Map(transformer, "clear") }
-
-
-
-
-
-
 func TestEvent(t *testing.T){
 	evt := Event{}
 
@@ -413,7 +300,6 @@ six`))
 	fmt.Println(buf.String())
 
 	// append " a"
-	// XXX BUG: for some reason this sometimes gets applied for the second time...
 	buf.Map(
 		func(s string, res TransformerCallback) {
 			if strings.HasPrefix(s, "three") {
@@ -423,23 +309,14 @@ six`))
 			//fmt.Println("   a:", s)
 			res(fmt.Sprint(s, " a")) })
 
-	//* XXX this breaks things quite badly...
-	// XXX Problems:
-	//		- stage 1: "three a" overwrites "two a"
-	//			...either offsets not updated or insert not accounted for...
-	//		- stage 1 sees items added on stage 2...
-	//			...i.e. after WAKE stage 1 processes: "three", then "(two a)"
 	// append " b" + insert "  ---"
 	buf.Map(
 		func(s string, res TransformerCallback) {
 			//fmt.Println("   b:", s)
 			res(fmt.Sprint(s, " b"))
 			res(fmt.Sprint(" ("+ s +")")) })
-	//*/
 
 	// append " end"
-	// XXX BUG? for some reason this does not get called for "five .." and onwards...
-	// XXX BUG: sometimes the later handlers are called out of order...
 	buf.Map(
 		func(s string, res TransformerCallback) {
 			//fmt.Println("   end:", s)
@@ -457,6 +334,15 @@ six`))
 
 	fmt.Println("--- (APPEND)")
 	buf.Append("appended")
+
+	time.Sleep(time.Second * 2)
+
+	fmt.Println(buf.String())
+
+	fmt.Println("--- (CLEAR TRANSFORMS)")
+	buf.ClearTransforms()
+	// XXX BUG: this is written over the last item...
+	buf.Append("appended clear")
 
 	time.Sleep(time.Second * 2)
 

@@ -1507,7 +1507,7 @@ func (this *UI) TransformCmd(cmds ...string) *UI {
 				return false }
 			i := this.AppendDirect(str)
 			this.Refresh() 
-			if this.Lines.Length <= i {
+			if this.Lines.Len() <= i {
 				return false }
 			return true })
 	if err != nil {
