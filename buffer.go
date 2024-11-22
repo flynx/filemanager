@@ -258,20 +258,27 @@ func (this *LinesBuffer) Write(b []byte) (int, error) {
 //		trigger the event manually (i.e. call .Changed.Trigger())
 // NOTE: we do not care about callback(..) call order here -- sequencing 
 //		callback(..) calls should be done by transformer(..)
+// XXX is there a way to detect skipped callbacks without storing "from" 
+//		in a closure?
+//		...this is needed to set .Populated = false on skipped sources
+//		...it would also be nice if we could create a single callback for
+//		the whole map session...
+//		(see: cli.go: UI.MapCmd())
+// XXX would be nice to:
+//		- block read until output (in "clear" mode?)
+//			...this is a deadlock on skip -- the next input will not trigger...
+//		- position-free (ignore seen)
 func (this *LinesBuffer) Map(transformer Transformer, mode ...string) *LinesBuffer {
 	this.Transformers = append(this.Transformers, transformer)
 	level := len(this.Transformers)
 
-	// XXX is this a good idea???
-	__t := reflect.ValueOf(transformer).Pointer()
-	isRemoved := func() bool {
-		return ! slices.ContainsFunc(
-			this.Transformers, 
-			func(t Transformer) bool {
-				return reflect.ValueOf(t).Pointer() == __t }) }
-
 	i := 0
 	to := 0
+	//* XXX FROM avoid per-element state (from) in the callback...
+	//		...we do not care about the order of calls to callback(..)...
+	//		from is used to detect skipped items...
+	//		...without this we can not detect if a callback was skipped 
+	//		and thus can't hide the skipped input...
 	seen := -1
 	callback := func(from int) (func(string)){
 		return func(s string){
@@ -306,16 +313,56 @@ func (this *LinesBuffer) Map(transformer Transformer, mode ...string) *LinesBuff
 			this.Lines[to].Populated = true
 			this.Lines[to].Transformed = level 
 			to++ } }
+	/*/
+	callback := func(s string){
+		this.__writing.Lock()
+		defer this.__writing.Unlock() 
+		defer this.Changed.Trigger() 
+
+		// handle inserts/shifts done to the left of us -- by higher level transforms...
+		for to < len(this.Lines) && 
+				this.Lines[to].Transformed >= level {
+			i++
+			to++ }
+
+		// handle inserts...
+		if to >= len(this.Lines) ||
+				this.Lines[to].Transformed != -level {
+			this.Lines = slices.Insert(this.Lines, to, Row{
+				Transformed: -level,
+				Populated: false,
+			}) 
+			i++ }
+
+		// update the row...
+		this.Lines[to].Text = s
+		this.Lines[to].Populated = true
+		this.Lines[to].Transformed = level 
+		to++ }
+	//*/
 
 	// restart...
 	this.Cleared.On(
 		func(){
 			i = 0
+			//* XXX FROM
 			to = 0
 			seen = -1 })
+			/*/
+			to = 0 })
+			//*/
 
 	// feed this.Lines to transformer(..)
 	go func(){
+		// check if transformer removed...
+		// XXX is this a good idea???
+		__t := reflect.ValueOf(transformer).Pointer()
+		isRemoved := func() bool {
+			return ! slices.ContainsFunc(
+				this.Transformers, 
+				func(t Transformer) bool {
+					return reflect.ValueOf(t).Pointer() == __t }) }
+
 		// transform (infinite loop)...
 		for ; true; i++ {
 			if isRemoved() {
@@ -324,8 +371,12 @@ func (this *LinesBuffer) Map(transformer Transformer, mode ...string) *LinesBuff
 			// handle trim/reset...
 			if len(this.Lines) < i {
 				i = len(this.Lines)-1
+				//* XXX FROM
 				to = i
 				seen = i-1 }
+				/*/
+				to = i }
+				//*/
 
 			// wait till a new value is available...
 			for i >= len(this.Lines) ||
@@ -333,7 +384,6 @@ func (this *LinesBuffer) Map(transformer Transformer, mode ...string) *LinesBuff
 				this.Changed.Wait() 
 				if isRemoved() {
 					return } }
-
 
 			row := &this.Lines[i]
 
@@ -349,7 +399,11 @@ func (this *LinesBuffer) Map(transformer Transformer, mode ...string) *LinesBuff
 				row.Populated = false }
 			// NOTE: if transformer(..) calls callback(..) multiple times 
 			//		it will update i...
+			//* XXX FROM
 			transformer(row.Text, callback(i)) } }()
+			/*/
+			transformer(row.Text, callback) } }()
+			//*/
 
 	return this }
 // Like .Map(..) but all Rows not processed yet are .Populated = false, 

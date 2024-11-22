@@ -561,6 +561,13 @@ type UI struct {
 	TransformCommand string `short:"t" long:"transform" value-name:"CMD" env:"TRANSFORM" description:"Row transform command"`
 	Transformer *PipedCmd
 
+	// XXX need to either mix this with filter (.FMap(..)) or figure out 
+	//		a way to do the filtering in an obvious way...
+	MapCommands []string `short:"m" long:"map" value-name:"CMD" env:"MAP" description:"Row map command"`
+	// XXX
+	Transformers []*PipedCmd
+
+
 	// XXX like transform but use output for selection...
 	//SelectionCommand string `short:"e" long:"selection" value-name:"ACTION" env:"REJECT" description:"Command to filter selection from input"`
 
@@ -1320,6 +1327,7 @@ func (this *UI) ReadFrom(reader io.Reader) chan bool {
 	this.__read_running = running
 	// prep the transform command if defined...
 	this.TransformCmd()
+	this.MapCmd()
 	this.Lines.Clear()
 	go func(){
 		defer this.__reading.Unlock()
@@ -1515,6 +1523,31 @@ func (this *UI) TransformCmd(cmds ...string) *UI {
 		log.Fatal(err) }
 	this.Transformer = c
 	return this }
+
+
+// XXX 
+func (this *UI) MapCmd(cmds ...string) *UI {
+
+	for _, cmd := range this.MapCommands {
+		// initiate output -> call callback...
+		c, err := Pipe(cmd, 
+			func(s string) bool {
+
+				// XXX call callback (which one)...
+
+				return true })
+		// iniciates input -> write to pipe + pass callback...
+		this.Lines.Map(
+			func(s string, callback TransformerCallback){
+
+				// XXX need to somehow pass callback(..) to this...
+				c.Write(s)
+
+			}) 
+		}
+
+	return this }
+
 
 
 // XXX should this take Lines or Settings???

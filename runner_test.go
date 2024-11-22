@@ -48,9 +48,10 @@ func TestTeeBasic(t *testing.T) {
 	_, w2 := io.Pipe()
 
 	done := AsyncTeeCloser(r1, w2, 
-		func(s string){
+		func(s string) bool {
 			time.Sleep(time.Millisecond*5)
-			fmt.Println(">>>", s) })
+			fmt.Println(">>>", s) 
+			return true })
 
 	time.Sleep(time.Millisecond*10)
 	io.WriteString(w1, "A\n")
@@ -69,20 +70,23 @@ func TestTeeChain(t *testing.T) {
 	r4, w4 := io.Pipe()
 
 	go TeeCloser(r1, w2, 
-		func(s string){
+		func(s string) bool {
 			time.Sleep(time.Millisecond*5)
-			fmt.Println(">>>", s) })
+			fmt.Println(">>>", s) 
+			return true })
 
 	go TeeCloser(r2, w3, nil)
 
 	go TeeCloser(r3, w4, 
-		func(s string){
+		func(s string) bool {
 			time.Sleep(time.Millisecond*10)
-			fmt.Println(" >>", s) })
+			fmt.Println(" >>", s) 
+			return true })
 
 	done := AsyncTeeCloser(r4, nil, 
-		func(s string){
-			fmt.Println("  >", s) })
+		func(s string) bool {
+			fmt.Println("  >", s) 
+			return true })
 
 	time.Sleep(time.Millisecond*10)
 	io.WriteString(w1, "A\n")
@@ -107,9 +111,10 @@ func TestPipeManual(t *testing.T) {
 	// grep...
 	var grep *PipedCmd
 	grep, err = Pipe("grep '.go'", 
-		func(s string){
+		func(s string) bool {
 			fmt.Println("  grep:", s)
-			n++ })
+			n++ 
+			return true })
 	if err != nil {
 		t.Error(err) }
 
@@ -201,9 +206,10 @@ func TestPipeChainPassive(t *testing.T) {
 	// grep...
 	var grep *PipedCmd
 	grep, err = ls.PipeTo("grep '.go'", 
-		func(s string){
+		func(s string) bool {
 			fmt.Println("  grep:", s)
-			n++ })
+			n++ 
+			return true })
 
 	grep.Wait()
 
@@ -232,9 +238,10 @@ func TestPipeChainActive(t *testing.T) {
 	// grep...
 	var grep *PipedCmd
 	grep, err = ls.PipeTo("grep '.go'", 
-		func(s string){
+		func(s string) bool {
 			fmt.Println("  grep:", s)
-			n++ })
+			n++ 
+			return true })
 
 	grep.Wait()
 

@@ -145,7 +145,7 @@ func TestEvent(t *testing.T){
 
 
 // XXX make the tests programmatic...
-func TestTransform(t *testing.T){
+func TestTransform1(t *testing.T){
 	buf := LinesBuffer{}
 
 	buf.Write([]byte(
