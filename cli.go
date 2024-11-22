@@ -1537,10 +1537,8 @@ func (this *UI) MapCmd(cmds ...string) *UI {
 					var err error
 					c, err = Pipe(cmd, 
 						func(s string) bool {
-							// NOTE: we only call the first callback here...
 							// XXX can we resolve callback from each call??
 							callback(s)
-							//this.Refresh()
 							return true }) 
 					if err != nil {
 						log.Fatal(err) } }

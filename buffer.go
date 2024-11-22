@@ -271,7 +271,7 @@ func (this *LinesBuffer) Write(b []byte) (int, error) {
 //		- position-free (ignore seen)
 // XXX we could sync on transformer(..) return -- i.e. when it returned 
 //		then the input line is cleared (a-la from++)
-func (this *LinesBuffer) _Map(transformer Transformer, mode ...string) *LinesBuffer {
+func (this *LinesBuffer) Map(transformer Transformer, mode ...string) *LinesBuffer {
 	this.Transformers = append(this.Transformers, transformer)
 	level := len(this.Transformers)
 
@@ -420,7 +420,7 @@ func (this *LinesBuffer) _Map(transformer Transformer, mode ...string) *LinesBuf
 //			map can be block input till output is done + auto output on return
 //			...should we sync on channel (out) or on transformer(..) return??? (XXX SYNC_OUT)
 // XXX revise mode...
-func (this *LinesBuffer) Map(transformer Transformer, mode ...string) *LinesBuffer {
+func (this *LinesBuffer) _Map(transformer Transformer, mode ...string) *LinesBuffer {
 	this.Transformers = append(this.Transformers, transformer)
 	level := len(this.Transformers)
 
