@@ -253,6 +253,7 @@ func (this *LinesBuffer) Write(b []byte) (int, error) {
 //		"clear"		- set each item to .Populated = false before transforming.
 //
 
+
 // NOTE: removing a transformer from .Transformers will stop it from 
 //		running, it will exit after the next .Changed, to force this 
 //		trigger the event manually (i.e. call .Changed.Trigger())
@@ -268,7 +269,9 @@ func (this *LinesBuffer) Write(b []byte) (int, error) {
 //		- block read until output (in "clear" mode?)
 //			...this is a deadlock on skip -- the next input will not trigger...
 //		- position-free (ignore seen)
-func (this *LinesBuffer) Map(transformer Transformer, mode ...string) *LinesBuffer {
+// XXX we could sync on transformer(..) return -- i.e. when it returned 
+//		then the input line is cleared (a-la from++)
+func (this *LinesBuffer) _Map(transformer Transformer, mode ...string) *LinesBuffer {
 	this.Transformers = append(this.Transformers, transformer)
 	level := len(this.Transformers)
 
@@ -295,6 +298,8 @@ func (this *LinesBuffer) Map(transformer Transformer, mode ...string) *LinesBuff
 
 			// handle inserts...
 			// XXX do we need to handle appends separately???
+			//if to >= len(this.Lines) ||
+			//		this.Lines[to].Transformed != -level {
 			if seen == from {
 				this.Lines = slices.Insert(this.Lines, to, Row{
 					Transformed: -level,
@@ -406,6 +411,113 @@ func (this *LinesBuffer) Map(transformer Transformer, mode ...string) *LinesBuff
 			//*/
 
 	return this }
+
+// XXX generic map -- generic callback with no concept of position...
+//		...can we make this an option/mode???
+// XXX the problem with clear by default with async handlers is that we'll 
+//		clean the whole list before we get to see any updates...
+//		...is strictly separating filter and map the only way to fix this???
+//			map can be block input till output is done + auto output on return
+//			...should we sync on channel (out) or on transformer(..) return??? (XXX SYNC_OUT)
+// XXX revise mode...
+func (this *LinesBuffer) Map(transformer Transformer, mode ...string) *LinesBuffer {
+	this.Transformers = append(this.Transformers, transformer)
+	level := len(this.Transformers)
+
+	// mode default...
+	if len(mode) == 0 {
+		mode = append(mode, "clear") }
+
+	i := 0
+	to := 0
+	// XXX SYNC_OUT
+	out := make(chan bool)
+	callback := func(s string){
+		this.__writing.Lock()
+		defer this.__writing.Unlock() 
+		defer this.Changed.Trigger() 
+
+		// handle inserts/shifts done to the left of us -- by higher level transforms...
+		for to < len(this.Lines) && 
+				this.Lines[to].Transformed >= level {
+			i++
+			to++ }
+
+		// handle inserts...
+		if to >= len(this.Lines) ||
+				this.Lines[to].Transformed != -level {
+			this.Lines = slices.Insert(this.Lines, to, Row{
+				Transformed: -level,
+				Populated: false,
+			}) 
+			i++ }
+
+		// update the row...
+		this.Lines[to].Text = s
+		this.Lines[to].Populated = true
+		this.Lines[to].Transformed = level 
+		to++ 
+		// allow next input...
+		// XXX SYNC_OUT
+		out <- true }
+
+	// restart...
+	this.Cleared.On(
+		func(){
+			i = 0
+			to = 0 })
+
+	// feed this.Lines to transformer(..)
+	go func(){
+		// check if transformer removed...
+		// XXX is this a good idea???
+		__t := reflect.ValueOf(transformer).Pointer()
+		isRemoved := func() bool {
+			return ! slices.ContainsFunc(
+				this.Transformers, 
+				func(t Transformer) bool {
+					return reflect.ValueOf(t).Pointer() == __t }) }
+
+		// transform (infinite loop)...
+		for ; true; i++ {
+			if isRemoved() {
+				return }
+
+			// handle trim/reset...
+			if len(this.Lines) < i {
+				i = len(this.Lines)-1
+				to = i }
+
+			// wait till a new value is available...
+			for i >= len(this.Lines) ||
+					this.Lines[i].Transformed < level-1 {
+				this.Changed.Wait() 
+				if isRemoved() {
+					return } }
+
+			row := &this.Lines[i]
+
+			// skip shifted items...
+			if row.Transformed >= level {
+				continue }
+
+			// mark row as read but not yet transformed...
+			row.Transformed = -level
+			// clear items before transform...
+			if len(mode) > 0 && 
+					mode[0] == "clear" {
+				row.Populated = false }
+			// NOTE: if transformer(..) calls callback(..) multiple times 
+			//		it will update i...
+			transformer(row.Text, callback) 
+
+			// wait for output...
+			// XXX SYNC_OUT
+			<-out } }()
+
+	return this }
+
+
 // Like .Map(..) but all Rows not processed yet are .Populated = false, 
 // i.e. will not be returned by ..String()...
 func (this *LinesBuffer) FMap(transformer Transformer, mode ...string) *LinesBuffer {

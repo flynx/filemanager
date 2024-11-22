@@ -1525,27 +1525,28 @@ func (this *UI) TransformCmd(cmds ...string) *UI {
 	return this }
 
 
-// XXX 
+// XXX filtering (a-la grep) will not work correctly...
+// XXX this is wrong...
+//		...this will work with the non-positional version of .Map(..)
 func (this *UI) MapCmd(cmds ...string) *UI {
-
 	for _, cmd := range this.MapCommands {
-		// initiate output -> call callback...
-		c, err := Pipe(cmd, 
-			func(s string) bool {
-
-				// XXX call callback (which one)...
-
-				return true })
-		// iniciates input -> write to pipe + pass callback...
+		var c *PipedCmd
 		this.Lines.Map(
 			func(s string, callback TransformerCallback){
+				if c == nil {
+					var err error
+					c, err = Pipe(cmd, 
+						func(s string) bool {
+							// NOTE: we only call the first callback here...
+							// XXX can we resolve callback from each call??
+							callback(s)
+							//this.Refresh()
+							return true }) 
+					if err != nil {
+						log.Fatal(err) } }
 
-				// XXX need to somehow pass callback(..) to this...
-				c.Write(s)
-
-			}) 
-		}
-
+				c.Writeln(s) },
+			"clear") }
 	return this }
 
 
