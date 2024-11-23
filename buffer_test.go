@@ -2,6 +2,7 @@
 package main
 
 import (
+	"reflect"
 	"testing"
 	"strings"
 	"time"
@@ -11,6 +12,13 @@ import (
 
 	"github.com/stretchr/testify/assert"
 )
+
+
+func call(o any, m string, args... any) {
+    inputs := make([]reflect.Value, len(args))
+    for i, _ := range args {
+        inputs[i] = reflect.ValueOf(args[i]) }
+    reflect.ValueOf(o).MethodByName(m).Call(inputs) }
 
 
 
@@ -148,6 +156,8 @@ func TestEvent(t *testing.T){
 func TestTransform1(t *testing.T){
 	buf := LinesBuffer{}
 
+	m := buf.PositionalMap
+
 	buf.Write([]byte(
 `one
 two
@@ -158,15 +168,16 @@ six`))
 
 	fmt.Println(buf.String())
 
+
 	// append " a"
-	buf.Map(
+	m(
 		func(s string, res TransformerCallback) {
 			time.Sleep(time.Millisecond*100)
 			//fmt.Println("   a:", s)
 			res(fmt.Sprint(s, " a")) })
 
 	// skip "three" + append " b"
-	buf.Map(
+	m(
 		func(s string, res TransformerCallback) {
 			// skip "three .."
 			//fmt.Println("   b:", s)
@@ -175,7 +186,7 @@ six`))
 			res(fmt.Sprint(s, " b")) })
 
 	// append " c" + append "new" after "two .."
-	buf.Map(
+	m(
 		func(s string, res TransformerCallback) {
 			time.Sleep(time.Millisecond*500)
 			//fmt.Println("   c:", s)
@@ -187,7 +198,7 @@ six`))
 
 	// append " d" + skip everything after "five .."
 	skip := false
-	buf.FMap(
+	buf.FilterMap(
 		func(s string, res TransformerCallback) {
 			if skip || strings.HasPrefix(s, "five") {
 				skip = true
@@ -196,7 +207,7 @@ six`))
 			res(fmt.Sprint(s, " d")) })
 
 	// append " end"
-	buf.Map(
+	m(
 		func(s string, res TransformerCallback) {
 			//fmt.Println("   end:", s)
 			res(fmt.Sprint(s, " end")) })
@@ -224,7 +235,7 @@ six`))
 
 
 // XXX make the tests programmatic...
-func TestTransformBasic(t *testing.T){
+func _TestTransformBasic(m string, t *testing.T){
 	buf := LinesBuffer{}
 
 	buf.Write([]byte(
@@ -238,19 +249,19 @@ six`))
 	fmt.Println(buf.String())
 
 	// append " a"
-	buf.Map(
+	call(&buf, m,
 		func(s string, res TransformerCallback) {
 			//fmt.Println("   a:", s)
 			res(fmt.Sprint(s, " a")) })
-	// append " b"
-	buf.Map(
+	// append " b" pausing at "tree .."
+	call(&buf, m,
 		func(s string, res TransformerCallback) {
 			if strings.HasPrefix(s, "three") {
 				time.Sleep(time.Millisecond * 1500) }
 			//fmt.Println("   b:", s)
 			res(fmt.Sprint(s, " b")) })
 	// append " end"
-	buf.Map(
+	call(&buf, m,
 		func(s string, res TransformerCallback) {
 			//fmt.Println("   end:", s)
 			res(fmt.Sprint(s, " end")) })
@@ -279,6 +290,13 @@ six`))
 	fmt.Println("---\n"+ buf.String())
 }
 
+func TestTransformBasicA(t *testing.T){
+	_TestTransformBasic("PositionalMap", t) }
+func TestTransformBasicB(t *testing.T){
+	// XXX this hangs...
+	_TestTransformBasic("SimpleMap", t) }
+
+
 // XXX test shifts before an insert...
 // XXX
 
@@ -288,6 +306,8 @@ six`))
 // XXX test shifts before an update...
 func TestTransform2(t *testing.T){
 	buf := LinesBuffer{}
+
+	m := buf.PositionalMap
 
 	buf.Write([]byte(
 `one
@@ -300,7 +320,7 @@ six`))
 	fmt.Println(buf.String())
 
 	// append " a"
-	buf.Map(
+	m(
 		func(s string, res TransformerCallback) {
 			if strings.HasPrefix(s, "three") {
 				//fmt.Println("     SLEEP", s)
@@ -310,14 +330,14 @@ six`))
 			res(fmt.Sprint(s, " a")) })
 
 	// append " b" + insert "  ---"
-	buf.Map(
+	m(
 		func(s string, res TransformerCallback) {
 			//fmt.Println("   b:", s)
 			res(fmt.Sprint(s, " b"))
 			res(fmt.Sprint(" ("+ s +")")) })
 
 	// append " end"
-	buf.Map(
+	m(
 		func(s string, res TransformerCallback) {
 			//fmt.Println("   end:", s)
 			res(fmt.Sprint(s, " end")) })

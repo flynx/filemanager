@@ -521,8 +521,9 @@ func (this *LinesBuffer) SimpleMap(transformer Transformer, mode ...string) *Lin
 
 // Like .Map(..) but all Rows not processed yet are .Populated = false, 
 // i.e. will not be returned by ..String()...
-func (this *LinesBuffer) FMap(transformer Transformer, mode ...string) *LinesBuffer {
-	return this.Map(transformer, "clear") }
+// XXX which map to use???
+func (this *LinesBuffer) FilterMap(transformer Transformer, mode ...string) *LinesBuffer {
+	return this.SimpleMap(transformer, "clear") }
 func (this *LinesBuffer) ClearTransforms(t ...bool) *LinesBuffer {
 	this.Transformers = []Transformer{}
 	// force the transformers to self-remove...
