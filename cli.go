@@ -1531,14 +1531,17 @@ func (this *UI) TransformCmd(cmds ...string) *UI {
 func (this *UI) MapCmd(cmds ...string) *UI {
 	for _, cmd := range this.MapCommands {
 		var c *PipedCmd
-		this.Lines.Map(
+		//this.Lines.Map(
+		this.Lines.SimpleMap(
 			func(s string, callback TransformerCallback){
 				if c == nil {
 					var err error
 					c, err = Pipe(cmd, 
 						func(s string) bool {
+							time.Sleep(time.Millisecond*100)
 							// XXX can we resolve callback from each call??
 							callback(s)
+							this.Refresh()
 							return true }) 
 					if err != nil {
 						log.Fatal(err) } }

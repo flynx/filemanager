@@ -271,7 +271,7 @@ func (this *LinesBuffer) Write(b []byte) (int, error) {
 //		- position-free (ignore seen)
 // XXX we could sync on transformer(..) return -- i.e. when it returned 
 //		then the input line is cleared (a-la from++)
-func (this *LinesBuffer) Map(transformer Transformer, mode ...string) *LinesBuffer {
+func (this *LinesBuffer) PositionalMap(transformer Transformer, mode ...string) *LinesBuffer {
 	this.Transformers = append(this.Transformers, transformer)
 	level := len(this.Transformers)
 
@@ -419,8 +419,9 @@ func (this *LinesBuffer) Map(transformer Transformer, mode ...string) *LinesBuff
 //		...is strictly separating filter and map the only way to fix this???
 //			map can be block input till output is done + auto output on return
 //			...should we sync on channel (out) or on transformer(..) return??? (XXX SYNC_OUT)
+// XXX dis does not pass all the tests...
 // XXX revise mode...
-func (this *LinesBuffer) _Map(transformer Transformer, mode ...string) *LinesBuffer {
+func (this *LinesBuffer) SimpleMap(transformer Transformer, mode ...string) *LinesBuffer {
 	this.Transformers = append(this.Transformers, transformer)
 	level := len(this.Transformers)
 
