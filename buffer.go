@@ -412,6 +412,7 @@ func (this *LinesBuffer) PositionalMap(transformer Transformer, mode ...string) 
 
 	return this }
 
+// XXX SYNC_OUT do we need this???
 // XXX SYNC_OUT deadlock on unbuffered channel -- needs revision, is this
 //		a solution??
 //		(see: make(...) inside)
@@ -438,7 +439,7 @@ func (this *LinesBuffer) SimpleMap(transformer Transformer, mode ...string) *Lin
 	// XXX an unbuffered channel here will block things on .Append(..)...
 	//		...is adding a buffer a solution or is this simply shifting 
 	//		the problem?
-	out := make(chan bool, 8)
+	//out := make(chan bool, 8)
 	callback := func(s string){
 		this.__writing.Lock()
 		defer this.__writing.Unlock() 
@@ -466,7 +467,8 @@ func (this *LinesBuffer) SimpleMap(transformer Transformer, mode ...string) *Lin
 		to++ 
 		// allow next input...
 		// XXX SYNC_OUT
-		out <- true }
+		//out <- true 
+	}
 
 	// restart...
 	this.Cleared.On(
@@ -520,7 +522,8 @@ func (this *LinesBuffer) SimpleMap(transformer Transformer, mode ...string) *Lin
 
 			// wait for output...
 			// XXX SYNC_OUT
-			<-out } }()
+			//<-out 
+		} }()
 
 	return this }
 

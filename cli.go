@@ -1528,17 +1528,30 @@ func (this *UI) TransformCmd(cmds ...string) *UI {
 // XXX filtering (a-la grep) will not work correctly...
 // XXX this is wrong...
 //		...this will work with the non-positional version of .Map(..)
+// XXX BUG: for some reason grep here does not catch all the results:
+//			ls \
+//				| go run lines \
+//					-m "grep '.*go'" \
+//					-m "sed 's/$/| <match>/'"
+//		...also we are not clearing the rest of the list...
+//		...are we blocking???
 func (this *UI) MapCmd(cmds ...string) *UI {
 	for _, cmd := range this.MapCommands {
 		var c *PipedCmd
-		//this.Lines.Map(
+		//this.Lines.PositionalMap(
 		this.Lines.SimpleMap(
 			func(s string, callback TransformerCallback){
+				// XXX we block up it would appear on first non-outptu...
+				log.Println(">>>", cmd, "-", s)
 				if c == nil {
 					var err error
 					c, err = Pipe(cmd, 
 						func(s string) bool {
-							time.Sleep(time.Millisecond*100)
+							// XXX for the grep above this only prints the first 
+							//		...can it be blocking if the command returns false??? 
+							//		(nope, grep does not return)
+							//log.Println("<<<", cmd, "-", s)
+							//time.Sleep(time.Millisecond*100)
 							// XXX can we resolve callback from each call??
 							callback(s)
 							this.Refresh()
