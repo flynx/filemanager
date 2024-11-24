@@ -267,33 +267,34 @@ six`))
 			res(fmt.Sprint(s, " end")) })
 
 	time.Sleep(time.Second)
-	fmt.Println("---\n"+ buf.String())
+	fmt.Println("--- (PARTIAL)\n"+ buf.String())
 
 	time.Sleep(time.Second)
-	fmt.Println("---\n"+ buf.String())
+	fmt.Println("--- (FULL)\n"+ buf.String())
 
 	buf.Append("appended")
 
 	time.Sleep(time.Second)
-	fmt.Println("---\n"+ buf.String())
+	fmt.Println("--- (APPEND)\n"+ buf.String())
 
 	buf.Clear()
 
 	time.Sleep(time.Second)
-	fmt.Println("---\n"+ buf.String())
+	fmt.Println("--- (CLEAR)\n"+ buf.String())
 
 	buf.Append("one")
 	buf.Append("more")
 	buf.Append("line")
 
 	time.Sleep(time.Second)
-	fmt.Println("---\n"+ buf.String())
+	fmt.Println("--- (APPEND)\n"+ buf.String())
 }
 
 func TestTransformBasicA(t *testing.T){
 	_TestTransformBasic("PositionalMap", t) }
 func TestTransformBasicB(t *testing.T){
-	// XXX this hangs...
+	// XXX for some reason only one append is done...
+	// XXX this hangs on .Append(..) -- deadlock??
 	_TestTransformBasic("SimpleMap", t) }
 
 

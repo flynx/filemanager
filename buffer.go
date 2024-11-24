@@ -412,6 +412,9 @@ func (this *LinesBuffer) PositionalMap(transformer Transformer, mode ...string) 
 
 	return this }
 
+// XXX SYNC_OUT deadlock on unbuffered channel -- needs revision, is this
+//		a solution??
+//		(see: make(...) inside)
 // XXX generic map -- generic callback with no concept of position...
 //		...can we make this an option/mode???
 // XXX the problem with clear by default with async handlers is that we'll 
@@ -432,7 +435,10 @@ func (this *LinesBuffer) SimpleMap(transformer Transformer, mode ...string) *Lin
 	i := 0
 	to := 0
 	// XXX SYNC_OUT
-	out := make(chan bool)
+	// XXX an unbuffered channel here will block things on .Append(..)...
+	//		...is adding a buffer a solution or is this simply shifting 
+	//		the problem?
+	out := make(chan bool, 8)
 	callback := func(s string){
 		this.__writing.Lock()
 		defer this.__writing.Unlock() 
