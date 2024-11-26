@@ -280,7 +280,7 @@ func (this *LinesBuffer) Iter(modes... int) (func(func(Row) bool)) {
 //	.Range(<from>, <to>, <modes>...)
 //		-> <iter>
 //
-// XXX add support for negative <to> to count from the back...
+// XXX add support for negative <to> to count from the back... (???)
 //		can this be done in a live manner??
 func (this *LinesBuffer) Range(args... int) (func(func(Row) bool)) {
 	from := 0
@@ -301,7 +301,8 @@ func (this *LinesBuffer) Range(args... int) (func(func(Row) bool)) {
 			if i < from {
 				continue }
 			// drop tail...
-			if i >= to {
+			if to >= 0 && 
+					i >= to {
 				return }
 			if !yield(row) {
 				return } } } }
