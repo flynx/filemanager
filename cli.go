@@ -1541,26 +1541,24 @@ func (this *UI) MapCmd(cmds ...string) *UI {
 		//this.Lines.PositionalMap(
 		this.Lines.SimpleMap(
 			func(s string, callback TransformerCallback){
-				// XXX we block up it would appear on first non-outptu...
-				log.Println(">>>", cmd, "-", s)
 				if c == nil {
 					var err error
 					c, err = Pipe(cmd, 
 						func(s string) bool {
-							// XXX for the grep above this only prints the first 
-							//		...can it be blocking if the command returns false??? 
-							//		(nope, grep does not return)
-							//log.Println("<<<", cmd, "-", s)
-							//time.Sleep(time.Millisecond*100)
+							time.Sleep(time.Millisecond*100)
 							// XXX can we resolve callback from each call??
 							callback(s)
+							// XXX this flickers (tmux)...
+							//		...this should only be done if a line is on screen...
 							this.Refresh()
 							return true }) 
 					if err != nil {
 						log.Fatal(err) } }
 
 				c.Writeln(s) },
-			"clear") }
+			// XXX this makes the whole thing sync...
+			//"clear") }
+			"none") }
 	return this }
 
 

@@ -1160,6 +1160,10 @@ func (this *Lines) Draw() *Lines {
 		r := i + this.RowOffset
 		text := ""
 		var line Row
+		// skip unpopulated lines...
+		for r < len(this.Lines) && 
+				!this.Lines[r].Populated {
+			r++ }
 		// get line...
 		if r < len(this.Lines) {
 			line = this.Lines[r]
