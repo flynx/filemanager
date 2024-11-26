@@ -321,19 +321,17 @@ six`))
 
 	fmt.Println("---")
 
-	next := IterStepper(buf.Iter())
+	c := IterStepper(buf.Iter())
 
-	fmt.Println(next().Text)	
-	fmt.Println(next().Text)	
-	fmt.Println(next().Text)	
-	fmt.Println(next().Text)	
-	fmt.Println(next().Text)	
-	fmt.Println(next().Text)	
+	fmt.Println((<-c).Text)	
+	fmt.Println((<-c).Text)	
+	fmt.Println((<-c).Text)	
+	fmt.Println((<-c).Text)	
+	fmt.Println((<-c).Text)	
+	fmt.Println((<-c).Text)	
 
-	// XXX need a way to detect iteration stop...
-	fmt.Println(next().Text)	
-	fmt.Println(next())	
-
+	v, ok := <-c
+	fmt.Println(v, ok)	
 }
 
 // XXX test shifts before an insert...

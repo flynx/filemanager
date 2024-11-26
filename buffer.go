@@ -307,22 +307,15 @@ func (this *LinesBuffer) Range(args... int) (func(func(Row) bool)) {
 				return } } } }
 
 
-func IterStepper[T any](iter func(func(T)bool)) (func()T) {
+// XXX this is quite generic -- move to a better module...
+func IterStepper[T any](iter func(func(T)bool)) (<-chan T) {
 	c := make(chan T)
 	go func(){
 		iter(func(e T)bool{
 			c <- e
 			return true })
 		close(c) }()
-	return func() T {
-		/* XXX need a way to indicate that iteration stopped... 
-		v, ok := <-c
-		if ! ok {
-			return nil }
-		return v } }
-		/*/
-		return <-c } }
-		//*/
+	return c }
 
 
 // Transforms / Map...
