@@ -561,11 +561,16 @@ type UI struct {
 	TransformCommand string `short:"t" long:"transform" value-name:"CMD" env:"TRANSFORM" description:"Row transform command"`
 	Transformer *PipedCmd
 
+	// NOTE: this does not support filtering commands like grep, use sed/awk 
+	//		returning empty lines insted with the "???" flag (XXX)
 	// XXX need to either mix this with filter (.FMap(..)) or figure out 
 	//		a way to do the filtering in an obvious way...
 	MapCommands []string `short:"m" long:"map" value-name:"CMD" env:"MAP" description:"Row map command"`
-	// XXX
+	// NOTE: we need this to kill/close things out...
 	Transformers []*PipedCmd
+
+	// XXX should this be default???
+	IgnoreEmpty bool `short:"i" long:"ignore-empty" description:"hide empty lines as output of -m .."`
 
 
 	// XXX like transform but use output for selection...
@@ -1310,11 +1315,20 @@ func (this *UI) Loop() Result {
 //		...this is not clean yet...
 // XXX rename...
 func (this *UI) KillRunning() {
+	for _, t := range this.Transformers {
+		// XXX do we need thid???
+		t.Close()
+		t.Kill() }
+	this.Transformers = this.Transformers[:0] 
+	// XXX is this the right place to do this???
+	this.Lines.Transformers = this.Lines.Transformers[:0]
+
 	if this.Transformer != nil {
 		// XXX do we need thid???
 		this.Transformer.Close()
 		this.Transformer.Kill()
 		this.Transformer = nil } 
+
 	if this.Cmd != nil {
 		this.Cmd.Kill()
 		this.Cmd = nil } }
@@ -1528,19 +1542,18 @@ func (this *UI) TransformCmd(cmds ...string) *UI {
 // XXX filtering (a-la grep) will not work correctly...
 // XXX this is wrong...
 //		...this will work with the non-positional version of .Map(..)
-// XXX BUG: for some reason grep here does not catch all the results:
-//			ls \
-//				| go run lines \
-//					-m "grep '.*go'" \
-//					-m "sed 's/$/| <match>/'"
-//		...also we are not clearing the rest of the list...
-//		...are we blocking???
+// XXX do we need to populate .Transformers here??
+//		...we do have .Lines.Transformers...
+//		.....yes, to stop/kill stuff...
 func (this *UI) MapCmd(cmds ...string) *UI {
 	for _, cmd := range this.MapCommands {
 		var c *PipedCmd
 		//this.Lines.PositionalMap(
 		this.Lines.SimpleMap(
 			func(s string, callback TransformerCallback){
+				// XXX IGNORE_EMPTY
+				//if len(s) == 0 {
+				//	return }
 				if c == nil {
 					var err error
 					c, err = Pipe(cmd, 
@@ -1553,7 +1566,8 @@ func (this *UI) MapCmd(cmds ...string) *UI {
 							this.Refresh()
 							return true }) 
 					if err != nil {
-						log.Fatal(err) } }
+						log.Fatal(err) } 
+					this.Transformers = append(this.Transformers, c) }
 
 				c.Writeln(s) },
 			// XXX this makes the whole thing sync...

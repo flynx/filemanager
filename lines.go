@@ -820,13 +820,35 @@ func (this *Lines) makeSectionChrome(str, span string, width int, rest ...string
 			sections[i] = string(s[:len(s)-1]) } } 
 	return append([]string{ border_l }, sections...) }
 
+// XXX IGNORE_EMPTY
+// XXX revise...
+// XXX move...
+func (this *Lines) Len() int {
+	l := 0
+	for _, r := range this.Lines {
+		if r.Populated &&
+				len(r.Text) > 0 {
+			l++ } }
+	return l }
+func (this *Lines) PopulatedIndex(index int) int {
+	for i, r := range this.Lines {
+		if !r.Populated ||
+				len(r.Text) == 0 {
+			continue }
+		if index == 0 {
+			return i }
+		index-- } 
+	return -1 }
+
 func (this *Lines) MakeEnv() Env {
 	fill := " "
 	if this.Filler != 0 {
 		fill = string(this.Filler) }
 	// positioning...
 	l := len(this.Lines)
+	// XXX IGNORE_EMPTY
 	i := this.Index
+	//i := this.PopulatedIndex(this.Index)
 	//i := this.RowOffset + this.Index
 	// test and friends...
 	var text, text_left, text_right string
@@ -1156,21 +1178,32 @@ func (this *Lines) Draw() *Lines {
 			scroller_offset = int(float64(this.RowOffset + 1) * r) } }
 	// lines...
 	sections := []string{}
+	skip := 0
+	// XXX IGNORE_EMPTY
+	//index := this.PopulatedIndex(this.Index)
 	for i := 0; i < rows; i++ {
-		r := i + this.RowOffset
+		r := i + this.RowOffset + skip
 		text := ""
-		var line Row
 		// skip unpopulated lines...
 		for r < len(this.Lines) && 
+				//* XXX IGNORE_EMPTY skip empty lines???
 				!this.Lines[r].Populated {
+				/*/
+				(!this.Lines[r].Populated || 
+					len(this.Lines[r].Text) == 0) {
+				//*/
+			skip++
 			r++ }
+		var line Row
 		// get line...
 		if r < len(this.Lines) {
 			line = this.Lines[r]
 			text = string([]rune(line.Text)[this.ColOffset:]) 
 			// pre-style -- strip ansi escape codes from selected/current lines...
 			if line.Selected ||
+					// XXX IGNORE_EMPTY
 					row == this.Index - this.RowOffset + top_line {
+					//row == index - this.RowOffset + top_line {
 				text = string(StripANSIEscSeq([]rune(text))) }
 		// no lines left -- generate template for empty lines...
 		} else if ! this.SpanNoExtend {
@@ -1220,7 +1253,9 @@ func (this *Lines) Draw() *Lines {
 				this.SpanSeparator, border_l, border_r) }
 		// style...
 		style := "normal"
+		// XXX IGNORE_EMPTY
 		if row == this.Index - this.RowOffset + top_line {
+		//if row == index - this.RowOffset + top_line {
 			style = "current" } 
 		if line.Selected {
 			if style == "current" {

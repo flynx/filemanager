@@ -223,7 +223,9 @@ func (this *LinesBuffer) Append(strs ...any) int {
 		this.Lines = append(this.Lines, 
 			Row{
 				Text: s,
+				// XXX IGNORE_EMPTY...
 				Populated: true,
+				//Populated: len(s) != 0,
 			}) }
 	for _, in := range strs {
 		switch in.(type) {
