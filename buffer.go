@@ -247,6 +247,84 @@ func (this *LinesBuffer) Write(b []byte) (int, error) {
 	this.Append(string(b))
 	return len(b), nil }
 
+
+const (
+	IterVisible = 0
+	IterUnpopulated = 1 << iota
+	IterBlank
+) 
+// XXX should this be live or clone the list???
+//		...since we can modify the row.Text, doing a slice would require 
+//		a deep copy...
+func (this *LinesBuffer) Iter(modes... int) (func(func(Row) bool)) {
+	mode := IterVisible
+	for _, m := range modes {
+		mode += m }
+	populated := mode & IterUnpopulated != 0
+	blank := mode & IterBlank != 0
+	return func(yield func(Row) bool) {
+		for _, row := range this.Lines {
+			// skip stuff...
+			if (!populated && 
+						!row.Populated) || 
+					(!blank && 
+						len(row.Text) == 0) {
+				continue }
+			if !yield(row) {
+				return } } } }
+
+//
+//	.Range()
+//	.Range(<from>)
+//	.Range(<from>, <to>)
+//	.Range(<from>, <to>, <modes>...)
+//		-> <iter>
+//
+// XXX add support for negative <to> to count from the back...
+//		can this be done in a live manner??
+func (this *LinesBuffer) Range(args... int) (func(func(Row) bool)) {
+	from := 0
+	to := -1
+	modes := []int{}
+	if len(args) > 0 {
+		from = args[0] }
+	if len(args) > 1 {
+		to = args[1] }
+	if len(args) > 2 {
+		modes = args[2:] }
+
+	return func(yield func(Row) bool) {
+		i := -1
+		for row := range this.Iter(modes...) {
+			i++
+			// skip head...
+			if i < from {
+				continue }
+			// drop tail...
+			if i >= to {
+				return }
+			if !yield(row) {
+				return } } } }
+
+
+func IterStepper[T any](iter func(func(T)bool)) (func()T) {
+	c := make(chan T)
+	go func(){
+		iter(func(e T)bool{
+			c <- e
+			return true })
+		close(c) }()
+	return func() T {
+		/* XXX need a way to indicate that iteration stopped... 
+		v, ok := <-c
+		if ! ok {
+			return nil }
+		return v } }
+		/*/
+		return <-c } }
+		//*/
+
+
 // Transforms / Map...
 //
 //	.Transform(transformer[, mode])
@@ -254,7 +332,6 @@ func (this *LinesBuffer) Write(b []byte) (int, error) {
 //	mode:
 //		"clear"		- set each item to .Populated = false before transforming.
 //
-
 
 // NOTE: removing a transformer from .Transformers will stop it from 
 //		running, it will exit after the next .Changed, to force this 
@@ -397,6 +474,12 @@ func (this *LinesBuffer) PositionalMap(transformer Transformer, mode ...string) 
 			// skip shifted items...
 			if row.Transformed >= level {
 				continue }
+			/*/ skip empty and unpopulated lines...
+			// XXX IGNORE_EMPTY
+			if !row.Populated ||
+					len(row.Text) == 0 {
+				continue }
+			//*/
 
 			// mark row as read but not yet transformed...
 			row.Transformed = -level
@@ -414,6 +497,7 @@ func (this *LinesBuffer) PositionalMap(transformer Transformer, mode ...string) 
 
 	return this }
 
+// XXX IGNORE_EMPTY might be a good idea to mark filtered out lines by returning ""...
 // XXX SYNC_OUT do we need this???
 // XXX SYNC_OUT deadlock on unbuffered channel -- needs revision, is this
 //		a solution??
@@ -511,6 +595,12 @@ func (this *LinesBuffer) SimpleMap(transformer Transformer, mode ...string) *Lin
 			// skip shifted items...
 			if row.Transformed >= level {
 				continue }
+			/*/ skip empty and unpopulated lines...
+			// XXX IGNORE_EMPTY
+			if !row.Populated ||
+					len(row.Text) == 0 {
+				continue }
+			//*/
 
 			// mark row as read but not yet transformed...
 			row.Transformed = -level

@@ -298,6 +298,44 @@ func TestTransformBasicB(t *testing.T){
 	_TestTransformBasic("SimpleMap", t) }
 
 
+func TestIter(t *testing.T){
+	buf := LinesBuffer{}
+
+	buf.Write([]byte(
+`one
+
+two
+three
+four
+
+five
+six`))
+
+	for r := range buf.Iter() {
+		fmt.Println(r.Text) }
+
+	fmt.Println("---")
+
+	for r := range buf.Iter(IterBlank) {
+		fmt.Println(r.Text) }
+
+	fmt.Println("---")
+
+	next := IterStepper(buf.Iter())
+
+	fmt.Println(next().Text)	
+	fmt.Println(next().Text)	
+	fmt.Println(next().Text)	
+	fmt.Println(next().Text)	
+	fmt.Println(next().Text)	
+	fmt.Println(next().Text)	
+
+	// XXX need a way to detect iteration stop...
+	fmt.Println(next().Text)	
+	fmt.Println(next())	
+
+}
+
 // XXX test shifts before an insert...
 // XXX
 
