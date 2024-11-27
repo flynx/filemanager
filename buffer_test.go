@@ -321,6 +321,16 @@ six`))
 
 	fmt.Println("---")
 
+	for r := range buf.Range(2) {
+		fmt.Println(r.Text) }
+
+	fmt.Println("---")
+
+	for r := range buf.Range(2, 4) {
+		fmt.Println(r.Text) }
+
+	fmt.Println("---")
+
 	c := IterStepper(buf.Iter())
 
 	fmt.Println((<-c).Text)	
@@ -333,15 +343,6 @@ six`))
 	v, ok := <-c
 	fmt.Println(v, ok)	
 
-	fmt.Println("---")
-
-	for r := range buf.Range(2) {
-		fmt.Println(r.Text) }
-
-	fmt.Println("---")
-
-	for r := range buf.Range(2, 4) {
-		fmt.Println(r.Text) }
 }
 
 // XXX test shifts before an insert...

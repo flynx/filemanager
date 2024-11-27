@@ -1115,6 +1115,7 @@ func (this *Lines) drawLine(col, row int, sections []string, style string) *Line
 	return this }
 
 // NOTE: this adds $F to the env containing the current fill character.
+// XXX move to .Lines.Iter()
 func (this *Lines) Draw() *Lines {
 	if this.Width <= 0 || this.Height <= 0 {
 		return this }
