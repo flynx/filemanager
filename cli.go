@@ -297,14 +297,15 @@ func (this *Actions) Up() Result {
 func (this *Actions) Down() Result {
 	this.Action()
 	rows := this.Lines.Rows()
+	l := this.Lines.Len()
 	// within the text buffer...
-	if this.Lines.Index < len(this.Lines.Lines)-1 && 
+	if this.Lines.Index < l-1 && 
 			// within screen...
 			this.Lines.Index - this.Lines.RowOffset < rows-1 && 
 			// buffer smaller than screen...
-			(rows >= len(this.Lines.Lines) ||
+			(rows >= l ||
 				// screen at end of buffer...
-				this.Lines.RowOffset + rows == len(this.Lines.Lines) ||
+				this.Lines.RowOffset + rows == l ||
 				// at scroll threshold (bottom)...
 				this.Lines.Index - this.Lines.RowOffset < rows - this.ScrollThreshold - 1) {
 		this.Lines.Index++ 
@@ -325,9 +326,10 @@ func (this *Actions) ScrollUp() Result {
 func (this *Actions) ScrollDown() Result {
 	this.Action()
 	rows := this.Lines.Rows()
-	if this.Lines.RowOffset + rows < len(this.Lines.Lines) {
+	l := this.Lines.Len()
+	if this.Lines.RowOffset + rows < l {
 		this.Lines.RowOffset++ } 
-	if this.Lines.Index < len(this.Lines.Lines)-1 {
+	if this.Lines.Index < l-1 {
 		this.Lines.Index++ }
 	return OK }
 
@@ -345,9 +347,10 @@ func (this *Actions) PageUp() Result {
 func (this *Actions) PageDown() Result {
 	this.Action()
 	rows := this.Lines.Rows()
-	if this.Lines.RowOffset < len(this.Lines.Lines) - rows {
+	l := this.Lines.Len()
+	if this.Lines.RowOffset < l - rows {
 		this.Lines.Index += rows 
-		if this.Lines.Index >= len(this.Lines.Lines) {
+		if this.Lines.Index >= l {
 			this.Bottom() }
 	} else {
 		this.Bottom() }
@@ -359,7 +362,7 @@ func (this *Actions) Top() Result {
 	return OK }
 func (this *Actions) Bottom() Result {
 	this.Action()
-	this.Lines.Index = len(this.Lines.Lines) - 1
+	this.Lines.Index = this.Lines.Len() - 1
 	return OK }
 
 /*// XXX Horizontal navigation...
@@ -431,7 +434,7 @@ func (this *Actions) SelectNone() Result {
 func (this *Actions) SelectInverse() Result {
 	this.Action()
 	rows := []int{}
-	for i := 0 ; i < len(this.Lines.Lines) ; i++ {
+	for i := 0 ; i < this.Lines.Len() ; i++ {
 		rows = append(rows, i) }
 	return this.SelectToggle(rows...) }
 
@@ -788,18 +791,19 @@ func (this *UI) handleScrollLimits() *UI {
 		bottom_threshold = rows - top_threshold }
 	
 	// buffer smaller than screen -- keep at top...
-	if rows > len(this.Lines.Lines) {
+	l := this.Lines.Len()
+	if rows > l {
 		this.Lines.RowOffset = 0
 		// normalize index...
-		if this.Lines.Index > len(this.Lines.Lines) {
-			this.Lines.Index = len(this.Lines.Lines)-1 }
+		if this.Lines.Index > l {
+			this.Lines.Index = l-1 }
 		if this.Lines.Index < 0 {
 			this.Lines.Index = 0 }
 		return this }
 
 	// keep from scrolling past the bottom of the screen...
-	if this.Lines.RowOffset + rows > len(this.Lines.Lines) {
-		delta = this.Lines.RowOffset - (len(this.Lines.Lines) - rows)
+	if this.Lines.RowOffset + rows > l {
+		delta = this.Lines.RowOffset - (l - rows)
 	// scroll to top threshold...
 	} else if screen_focus_offset < top_threshold && 
 			this.Lines.RowOffset > 0 {
@@ -811,8 +815,8 @@ func (this *UI) handleScrollLimits() *UI {
 			screen_focus_offset > top_threshold {
 		delta = bottom_threshold - screen_focus_offset
 		// saturate delta...
-		if delta < (this.Lines.RowOffset + rows) - len(this.Lines.Lines) {
-			delta = (this.Lines.RowOffset + rows) - len(this.Lines.Lines) } } 
+		if delta < (this.Lines.RowOffset + rows) - l {
+			delta = (this.Lines.RowOffset + rows) - l } } 
 
 	// do the update...
 	if delta != 0 {
@@ -1091,6 +1095,7 @@ func (this *UI) HandleKey(key string) Result {
 // XXX add zone key handling...
 func (this *UI) HandleMouse(col, row int, pressed []string) Result {
 	button := pressed[len(pressed)-1]
+	l := this.Lines.Len()
 	switch button {
 		case "MouseLeft", "MouseRight", "MouseMiddle":
 			// ignore clicks outside the list...
@@ -1132,7 +1137,7 @@ func (this *UI) HandleMouse(col, row int, pressed []string) Result {
 					int(
 						(float64(row - this.Lines.Top - top_offset) / 
 							float64(this.Lines.Rows() - 1)) * 
-						float64(len(this.Lines.Lines) - this.Lines.Rows()))
+						float64(l - this.Lines.Rows()))
 				i := this.Lines.RowOffset + int(float64(this.Lines.Rows() - 1) / 2)
 				if i < 0 {
 					i = 0 }
@@ -1151,10 +1156,10 @@ func (this *UI) HandleMouse(col, row int, pressed []string) Result {
 					this.MouseRow-- }
 
 				// empty space below rows...
-				if this.MouseRow >= len(this.Lines.Lines) {
+				if this.MouseRow >= l {
 					if this.EmptySpace == "select-last" {
 						//log.Println("    EMPTY SPACE")
-						this.Lines.Index = len(this.Lines.Lines) - 1 }
+						this.Lines.Index = l - 1 }
 					return Skip }
 
 				defer this.handleScrollLimits()

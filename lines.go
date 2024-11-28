@@ -422,11 +422,13 @@ func (this *Lines) Cols() int {
 		w -= 2
 	// no borders + scrollbar...
 	} else if ! this.ScrollbarDisabled && 
-			this.Rows() < len(this.Lines) {
+			//this.Rows() < len(this.Lines) {
+			this.Rows() < this.Len() {
 		w-- }
 	return w }
 func (this *Lines) Scrollable() bool {
-	return len(this.Lines) > this.Rows() }
+	//return len(this.Lines) > this.Rows() }
+	return this.Len() > this.Rows() }
 
 func (this *Lines) GetStyle(style string) (string, Style) {
 	theme := this.Theme
@@ -823,6 +825,7 @@ func (this *Lines) makeSectionChrome(str, span string, width int, rest ...string
 // XXX IGNORE_EMPTY
 // XXX revise...
 // XXX move...
+// XXX cache...
 func (this *Lines) Len() int {
 	l := 0
 	for _, r := range this.Lines {
@@ -845,7 +848,7 @@ func (this *Lines) MakeEnv() Env {
 	if this.Filler != 0 {
 		fill = string(this.Filler) }
 	// positioning...
-	l := len(this.Lines)
+	l := this.Len()
 	// XXX IGNORE_EMPTY
 	i := this.Index
 	//i := this.PopulatedIndex(this.Index)
@@ -853,7 +856,8 @@ func (this *Lines) MakeEnv() Env {
 	// test and friends...
 	var text, text_left, text_right string
 	if i < l {
-		text = this.Lines[i].Text
+		//text = this.Lines[i].Text
+		text = this.At(i).Text
 		sections := this.splitSections(text, this.SpanMode != "none")
 		text_left = sections[0]
 		if len(sections) > 1 {
@@ -1172,39 +1176,30 @@ func (this *Lines) Draw() *Lines {
 		if this.Scrollbar != "" {
 			scrollbar_fg = string([]rune(this.Scrollbar)[0])
 			scrollbar_bg = string([]rune(this.Scrollbar)[1]) }
-		if len(this.Lines) > rows {
+		l := this.Len()
+		//if len(this.Lines) > rows {
+		if l > rows {
 			scrollbar = true 
-			r := float64(rows) / float64(len(this.Lines))
+			//r := float64(rows) / float64(len(this.Lines))
+			r := float64(rows) / float64(l)
 			scroller_size = 1 + int(float64(rows - 1) * r)
 			scroller_offset = int(float64(this.RowOffset + 1) * r) } }
 	// lines...
 	sections := []string{}
-	skip := 0
-	// XXX IGNORE_EMPTY
-	//index := this.PopulatedIndex(this.Index)
+	// XXX ITER
+	// XXX add option to show empty...
+	lines := IterStepper(this.Range(this.RowOffset))
 	for i := 0; i < rows; i++ {
-		r := i + this.RowOffset + skip
 		text := ""
-		// skip unpopulated lines...
-		for r < len(this.Lines) && 
-				//* XXX IGNORE_EMPTY skip empty lines???
-				!this.Lines[r].Populated {
-				/*/
-				(!this.Lines[r].Populated || 
-					len(this.Lines[r].Text) == 0) {
-				//*/
-			skip++
-			r++ }
-		var line Row
 		// get line...
-		if r < len(this.Lines) {
-			line = this.Lines[r]
+		selected := false
+		line, ok := <-lines
+		if ok {
+			selected = line.Selected == true
 			text = string([]rune(line.Text)[this.ColOffset:]) 
 			// pre-style -- strip ansi escape codes from selected/current lines...
-			if line.Selected ||
-					// XXX IGNORE_EMPTY
+			if selected ||
 					row == this.Index - this.RowOffset + top_line {
-					//row == index - this.RowOffset + top_line {
 				text = string(StripANSIEscSeq([]rune(text))) }
 		// no lines left -- generate template for empty lines...
 		} else if ! this.SpanNoExtend {
@@ -1254,11 +1249,9 @@ func (this *Lines) Draw() *Lines {
 				this.SpanSeparator, border_l, border_r) }
 		// style...
 		style := "normal"
-		// XXX IGNORE_EMPTY
 		if row == this.Index - this.RowOffset + top_line {
-		//if row == index - this.RowOffset + top_line {
 			style = "current" } 
-		if line.Selected {
+		if selected {
 			if style == "current" {
 				style = "current-selected"
 			} else {

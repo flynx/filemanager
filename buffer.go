@@ -256,14 +256,15 @@ const (
 // XXX should this be live or clone the list???
 //		...since we can modify the row.Text, doing a slice would require 
 //		a deep copy...
-func (this *LinesBuffer) Iter(modes... int) (func(func(Row) bool)) {
+func (this *LinesBuffer) Iter(modes... int) (func(func(*Row) bool)) {
 	mode := IterVisible
 	for _, m := range modes {
 		mode += m }
 	populated := mode & IterUnpopulated != 0
 	blank := mode & IterBlank != 0
-	return func(yield func(Row) bool) {
-		for _, row := range this.Lines {
+	return func(yield func(*Row) bool) {
+		for i, _ := range this.Lines {
+			row := &this.Lines[i]
 			// skip stuff...
 			if (!populated && 
 						!row.Populated) || 
@@ -282,7 +283,7 @@ func (this *LinesBuffer) Iter(modes... int) (func(func(Row) bool)) {
 //
 // XXX add support for negative <to> to count from the back... (???)
 //		can this be done in a live manner??
-func (this *LinesBuffer) Range(args... int) (func(func(Row) bool)) {
+func (this *LinesBuffer) Range(args... int) (func(func(*Row) bool)) {
 	from := 0
 	to := -1
 	modes := []int{}
@@ -293,7 +294,7 @@ func (this *LinesBuffer) Range(args... int) (func(func(Row) bool)) {
 	if len(args) > 2 {
 		modes = args[2:] }
 
-	return func(yield func(Row) bool) {
+	return func(yield func(*Row) bool) {
 		i := -1
 		for row := range this.Iter(modes...) {
 			i++
@@ -317,6 +318,11 @@ func IterStepper[T any](iter func(func(T)bool)) (<-chan T) {
 			return true })
 		close(c) }()
 	return c }
+
+
+// XXX is this a good idea???
+func (this *LinesBuffer) At(index int) *Row {
+	return <-IterStepper(this.Range(index)) }
 
 
 // Transforms / Map...
@@ -344,6 +350,7 @@ func IterStepper[T any](iter func(func(T)bool)) (<-chan T) {
 //		- position-free (ignore seen)
 // XXX we could sync on transformer(..) return -- i.e. when it returned 
 //		then the input line is cleared (a-la from++)
+// XXX handle empty...
 func (this *LinesBuffer) PositionalMap(transformer Transformer, mode ...string) *LinesBuffer {
 	this.Transformers = append(this.Transformers, transformer)
 	level := len(this.Transformers)
@@ -505,6 +512,7 @@ func (this *LinesBuffer) PositionalMap(transformer Transformer, mode ...string) 
 //			...should we sync on channel (out) or on transformer(..) return??? (XXX SYNC_OUT)
 // XXX dis does not pass all the tests...
 // XXX revise mode...
+// XXX handle empty...
 func (this *LinesBuffer) SimpleMap(transformer Transformer, mode ...string) *LinesBuffer {
 	this.Transformers = append(this.Transformers, transformer)
 	level := len(this.Transformers)
@@ -567,6 +575,8 @@ func (this *LinesBuffer) SimpleMap(transformer Transformer, mode ...string) *Lin
 				func(t Transformer) bool {
 					return reflect.ValueOf(t).Pointer() == __t }) }
 
+		//lines := IterStepper(this.Iter())
+
 		// transform (infinite loop)...
 		for ; true; i++ {
 			if isRemoved() {
@@ -585,6 +595,7 @@ func (this *LinesBuffer) SimpleMap(transformer Transformer, mode ...string) *Lin
 					return } }
 
 			row := &this.Lines[i]
+			//row := <-lines
 
 			// skip shifted items...
 			if row.Transformed >= level {
@@ -632,7 +643,8 @@ func (this *LinesBuffer) ClearTransforms(t ...bool) *LinesBuffer {
 func (this *LinesBuffer) Current() string {
 	if len(this.Lines) == 0 {
 		return "" }
-	return this.Lines[this.Index].Text }
+	//return this.Lines[this.Index].Text }
+	return this.At(this.Index).Text }
 func (this *LinesBuffer) SelectedRows() []Row {
 	res := []Row{}
 	for _, row := range this.Lines {
@@ -698,7 +710,8 @@ func (this *LinesBuffer) ActiveRows() []Row {
 	sel := this.SelectedRows()
 	if len(sel) == 0 &&
 			len(this.Lines) > 0 {
-		sel = []Row{ this.Lines[this.Index] } }
+		//sel = []Row{ this.Lines[this.Index] } }
+		sel = []Row{ *this.At(this.Index) } }
 	return sel }
 func (this *LinesBuffer) Active() []string {
 	sel := this.Selected()

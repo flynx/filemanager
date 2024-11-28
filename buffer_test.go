@@ -327,6 +327,7 @@ six`))
 	fmt.Println("---")
 
 	for r := range buf.Range(2, 4) {
+		r.Text += " range"
 		fmt.Println(r.Text) }
 
 	fmt.Println("---")
