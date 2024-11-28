@@ -142,10 +142,12 @@ type LinesBuffer struct {
 }
 
 
+// XXX add mode support...
 func (this *LinesBuffer) Len() int {
 	l := 0
 	for _, row := range this.Lines {
-		if row.Populated {
+		if row.Populated && 
+				len(row.Text) > 0 {
 			l++ } }
 	return l }
 
