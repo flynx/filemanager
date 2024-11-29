@@ -315,6 +315,7 @@ func (this *Tcell) drawCells(col, row int, str string, style_name string, style 
 func (this *Tcell) Fill(style Style) {
 	this.Screen.Fill(' ', this.style2TcellStyle("background", style)) }
 func (this *Tcell) Refresh() {
+	// XXX sometimes we segfault here on start -- on very high CPU loads...
 	this.Screen.Sync()
 	this.Screen.Show() }
 
