@@ -487,6 +487,7 @@ func (this *LinesBuffer) PositionalMap(transformer Transformer, mode ...string) 
 //			map can be block input till output is done + auto output on return
 //			...should we sync on channel (out) or on transformer(..) return???
 // XXX this does not pass all the tests...
+// XXX sometimes this does not overwrite lines... (race???)
 // XXX revise mode...
 func (this *LinesBuffer) SimpleMap(transformer Transformer, mode ...string) *LinesBuffer {
 	this.Transformers = append(this.Transformers, transformer)

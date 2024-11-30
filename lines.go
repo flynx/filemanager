@@ -68,8 +68,11 @@ type Spinner struct {
 	running int
 	starting sync.Mutex
 	tick sync.Mutex
+	auto int
 
 	interval time.Time
+
+	stop_handlers []func()
 }
 func (this *Spinner) String() string {
 	this.tick.Lock()
@@ -106,7 +109,11 @@ func (this *Spinner) StopAll() *Spinner {
 	if this.running > 0 {
 		this.running = 0
 		//ACTIONS.Refresh() 
-	}
+		for _, f := range this.stop_handlers {
+			f() } }
+	return this }
+func (this *Spinner) onStop(f func()) *Spinner {
+	this.stop_handlers = append(this.stop_handlers, f)
 	return this }
 // XXX should this draw the whole screen???
 //		...might be nice to be able to only update the chrome (title/status)
@@ -127,6 +134,28 @@ func (this *Spinner) Step() string {
 func (this *Spinner) Done() *Spinner {
 	this.StopAll()
 	return this }
+
+// XXX problem: soemtimes does not start on first call or gets hidden 
+//		mid-run -- race??
+//		is this a problem with .Auto(), how the spinner is rendered or 
+//		how .Refresh() works???
+//		(see: cli.go: .MapCmd(..))
+func (this *Spinner) Auto() *Spinner {
+	//this.starting.Lock()
+	start := this.auto == 0
+	this.auto++
+	//this.starting.Unlock()
+
+	if start {
+		this.Start()
+		go func(){
+			for this.auto > 1 {
+				this.auto = 1
+				time.Sleep(time.Millisecond * 200) }
+			this.Stop() 
+			this.auto = 0 }() } 
+	return this }
+
 
 
 

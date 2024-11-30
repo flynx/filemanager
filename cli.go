@@ -1184,6 +1184,10 @@ func (this *UI) Setup(lines Lines, drawer Renderer) *UI {
 
 	this.Actions = NewActions(this)
 
+	this.Lines.Spinner.
+		onStop(func(){
+			this.Refresh() })
+
 	return this }
 // XXX might be a good idea to move handlers to methods of specific structs...
 func (this *UI) HandleArgs() Result {
@@ -1550,16 +1554,13 @@ func (this *UI) TransformCmd(cmds ...string) *UI {
 // XXX do we need to populate .Transformers here??
 //		...we do have .Lines.Transformers...
 //		.....yes, to stop/kill stuff...
-// XXX this needs progress...
+// XXX this needs progress indication...
 func (this *UI) MapCmd(cmds ...string) *UI {
 	for _, cmd := range this.MapCommands {
 		var c *PipedCmd
 		//this.Lines.PositionalMap(
 		this.Lines.SimpleMap(
 			func(s string, callback TransformerCallback){
-				// XXX IGNORE_EMPTY
-				//if len(s) == 0 {
-				//	return }
 				if c == nil {
 					var err error
 					c, err = Pipe(cmd, 
@@ -1569,6 +1570,7 @@ func (this *UI) MapCmd(cmds ...string) *UI {
 							callback(s)
 							// XXX this flickers (tmux)...
 							//		...this should only be done if a line is on screen...
+							this.Lines.Spinner.Auto()
 							this.Refresh()
 							return true }) 
 					if err != nil {
@@ -1576,8 +1578,6 @@ func (this *UI) MapCmd(cmds ...string) *UI {
 					this.Transformers = append(this.Transformers, c) }
 
 				c.Writeln(s) },
-			// XXX this makes the whole thing sync...
-			//"clear") }
 			"none") }
 	return this }
 
