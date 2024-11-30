@@ -1554,11 +1554,12 @@ func (this *UI) TransformCmd(cmds ...string) *UI {
 // XXX do we need to populate .Transformers here??
 //		...we do have .Lines.Transformers...
 //		.....yes, to stop/kill stuff...
-// XXX this needs progress indication...
+// XXX for some reason .Spinner works only if more than one command is present... 
 func (this *UI) MapCmd(cmds ...string) *UI {
 	for _, cmd := range this.MapCommands {
-		var c *PipedCmd
+		// XXX BUG??? seems that we are getting a new spinner on each call... why???
 		this.Lines.Spinner.Auto()
+		var c *PipedCmd
 		//this.Lines.PositionalMap(
 		this.Lines.SimpleMap(
 			func(s string, callback TransformerCallback){

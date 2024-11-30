@@ -487,8 +487,14 @@ func (this *LinesBuffer) PositionalMap(transformer Transformer, mode ...string) 
 //			map can be block input till output is done + auto output on return
 //			...should we sync on channel (out) or on transformer(..) return???
 // XXX sometimes this does not overwrite lines... (race???)
+//		to reproduce:
+//			ls ~/Pictures/Instagram \
+//				| go run lines -m "sed s/$/| moo /"
+//		at first everything works but at some point lines start getting 
+//		inserted instead of being replaced...
 // XXX can we implement .PositionalMap(..) using this???
 // XXX revise mode...
+// XXX should this be .Map(..) ???
 func (this *LinesBuffer) SimpleMap(transformer Transformer, mode ...string) *LinesBuffer {
 	this.Transformers = append(this.Transformers, transformer)
 	level := len(this.Transformers)

@@ -84,10 +84,12 @@ func (this *Spinner) String() string {
 		frames = SPINNER_THEME[SPINNER_DEFAULT] }
 	return string([]rune(frames)[this.State]) }
 func (this *Spinner) Auto() *Spinner {
-	this.auto++
-	if this.auto == 1 {
+	if this.auto < 2 {
+		this.auto++ }
+	if this.auto <= 1 {
 		this.Start()
 		go func(){
+			time.Sleep(time.Millisecond * 200)
 			for this.auto > 1 {
 				this.auto = 1
 				time.Sleep(time.Millisecond * 200) }
@@ -1137,6 +1139,7 @@ func (this *Lines) drawLine(col, row int, sections []string, style string) *Line
 	return this }
 
 // NOTE: this adds $F to the env containing the current fill character.
+// XXX BUG: sometimes 
 // XXX move to .Lines.Iter()
 func (this *Lines) Draw() *Lines {
 	if this.Width <= 0 || this.Height <= 0 {
@@ -1229,7 +1232,8 @@ func (this *Lines) Draw() *Lines {
 			// XXX EMPTY_LINE_TPL in fit-right this should be the 
 			// 		same as the last printed line -- now it's default...
 			//		...not sure if the fix should be here or deeper...
-			} else if this.SpanMode == "fit-right" {
+			} else if this.SpanMode == "fit-right" || 
+					this.SpanMode == "" {
 				s := []string{""}
 				for i:=3; i < len(sections); i+=2 {
 					s = append(s, strings.Repeat(" ", len([]rune(sections[i])))) }
