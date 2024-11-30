@@ -1558,6 +1558,7 @@ func (this *UI) TransformCmd(cmds ...string) *UI {
 func (this *UI) MapCmd(cmds ...string) *UI {
 	for _, cmd := range this.MapCommands {
 		var c *PipedCmd
+		this.Lines.Spinner.Auto()
 		//this.Lines.PositionalMap(
 		this.Lines.SimpleMap(
 			func(s string, callback TransformerCallback){

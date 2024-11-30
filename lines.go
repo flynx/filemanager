@@ -83,6 +83,17 @@ func (this *Spinner) String() string {
 	if frames == "" {
 		frames = SPINNER_THEME[SPINNER_DEFAULT] }
 	return string([]rune(frames)[this.State]) }
+func (this *Spinner) Auto() *Spinner {
+	this.auto++
+	if this.auto == 1 {
+		this.Start()
+		go func(){
+			for this.auto > 1 {
+				this.auto = 1
+				time.Sleep(time.Millisecond * 200) }
+			this.Stop() 
+			this.auto = 0 }() } 
+	return this }
 func (this *Spinner) Start() {
 	this.starting.Lock()
 	defer this.starting.Unlock()
@@ -134,28 +145,6 @@ func (this *Spinner) Step() string {
 func (this *Spinner) Done() *Spinner {
 	this.StopAll()
 	return this }
-
-// XXX problem: soemtimes does not start on first call or gets hidden 
-//		mid-run -- race??
-//		is this a problem with .Auto(), how the spinner is rendered or 
-//		how .Refresh() works???
-//		(see: cli.go: .MapCmd(..))
-func (this *Spinner) Auto() *Spinner {
-	//this.starting.Lock()
-	start := this.auto == 0
-	this.auto++
-	//this.starting.Unlock()
-
-	if start {
-		this.Start()
-		go func(){
-			for this.auto > 1 {
-				this.auto = 1
-				time.Sleep(time.Millisecond * 200) }
-			this.Stop() 
-			this.auto = 0 }() } 
-	return this }
-
 
 
 
