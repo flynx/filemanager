@@ -1567,6 +1567,7 @@ func (this *UI) MapCmd(cmds ...string) *UI {
 					var err error
 					c, err = Pipe(cmd, 
 						func(s string) bool {
+							// XXX REMOVE BEFORE FLIGHT...
 							time.Sleep(time.Millisecond*100)
 							// XXX can we resolve callback from each call??
 							callback(s)
