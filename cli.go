@@ -1549,18 +1549,11 @@ func (this *UI) TransformCmd(cmds ...string) *UI {
 
 
 // XXX filtering (a-la grep) will not work correctly...
-// XXX this is wrong...
-//		...this will work with the non-positional version of .Map(..)
-// XXX do we need to populate .Transformers here??
-//		...we do have .Lines.Transformers...
-//		.....yes, to stop/kill stuff...
-// XXX for some reason .Spinner works only if more than one command is present... 
 func (this *UI) MapCmd(cmds ...string) *UI {
 	for _, cmd := range this.MapCommands {
 		// XXX BUG??? seems that we are getting a new spinner on each call... why???
 		this.Lines.Spinner.Auto()
 		var c *PipedCmd
-		//this.Lines.PositionalMap(
 		this.Lines.SimpleMap(
 			func(s string, callback TransformerCallback){
 				if c == nil {
