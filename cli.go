@@ -1549,6 +1549,7 @@ func (this *UI) TransformCmd(cmds ...string) *UI {
 
 
 // XXX filtering (a-la grep) will not work correctly...
+//		...return empty lines for filtered out items instead...
 func (this *UI) MapCmd(cmds ...string) *UI {
 	for _, cmd := range this.MapCommands {
 		// XXX BUG??? seems that we are getting a new spinner on each call... why???
@@ -1564,9 +1565,9 @@ func (this *UI) MapCmd(cmds ...string) *UI {
 							time.Sleep(time.Millisecond*100)
 							// XXX can we resolve callback from each call??
 							callback(s)
+							this.Lines.Spinner.Auto()
 							// XXX this flickers (tmux)...
 							//		...this should only be done if a line is on screen...
-							this.Lines.Spinner.Auto()
 							this.Refresh()
 							return true }) 
 					if err != nil {

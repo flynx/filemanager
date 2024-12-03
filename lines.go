@@ -61,16 +61,21 @@ func StripANSIEscSeq(runes []rune) []rune {
 
 // Spinner...
 //
+// Uses:
+//	SPINNER_TIMEPUT
+//	SPINNER_DEFAULT
+//	SPINNER_THEME
 type Spinner struct {
 	Frames string `long:"spinner" value-name:"THEME|STR" default:"><" env:"SPINNER" description:"Spinner frames"`
 	State int
 
+	// count .Start() nesting -- call .StopAll() when 0...
 	running int
-	starting sync.Mutex
-	tick sync.Mutex
+	// count .Auto() call nesting -- call .Stop() when 0...
 	auto int
 
-	interval time.Time
+	starting sync.Mutex
+	tick sync.Mutex
 
 	stop_handlers []func()
 }
@@ -83,19 +88,6 @@ func (this *Spinner) String() string {
 	if frames == "" {
 		frames = SPINNER_THEME[SPINNER_DEFAULT] }
 	return string([]rune(frames)[this.State]) }
-func (this *Spinner) Auto() *Spinner {
-	if this.auto < 2 {
-		this.auto++ }
-	if this.auto <= 1 {
-		this.Start()
-		go func(){
-			time.Sleep(time.Millisecond * 200)
-			for this.auto > 1 {
-				this.auto = 1
-				time.Sleep(time.Millisecond * 200) }
-			this.Stop() 
-			this.auto = 0 }() } 
-	return this }
 func (this *Spinner) Start() {
 	this.starting.Lock()
 	defer this.starting.Unlock()
@@ -146,6 +138,20 @@ func (this *Spinner) Step() string {
 	return this.String() }
 func (this *Spinner) Done() *Spinner {
 	this.StopAll()
+	return this }
+// Step a spinner once starting if needed and stopping on timeout...
+func (this *Spinner) Auto() *Spinner {
+	if this.auto < 2 {
+		this.auto++ }
+	if this.auto <= 1 {
+		this.Start()
+		go func(){
+			time.Sleep(SPINNER_TIMEOUT)
+			for this.auto > 1 {
+				this.auto = 1
+				time.Sleep(SPINNER_TIMEOUT) }
+			this.Stop() 
+			this.auto = 0 }() } 
 	return this }
 
 
@@ -295,6 +301,7 @@ var BORDER_THEME = map[string]string {
 	"ascii": "|+-+|+-+",
 }
 
+var SPINNER_TIMEOUT = time.Millisecond * 200
 var SPINNER_DEFAULT = "><"
 var SPINNER_THEME = map[string]string {
 	"><": "><",
