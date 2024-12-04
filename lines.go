@@ -61,10 +61,34 @@ func StripANSIEscSeq(runes []rune) []rune {
 
 // Spinner...
 //
-// Uses:
-//	SPINNER_TIMEPUT
-//	SPINNER_DEFAULT
-//	SPINNER_THEME
+
+var SPINNER_TIMEOUT = time.Millisecond * 200
+
+var SPINNER_DEFAULT = "><"
+
+var SPINNER_THEME = map[string]string {
+	"><": "><",
+	"rotating-v": "v<^>",
+	// NOTE: can't use "|" (span marker), thus this uses a unicode analogue...
+	"rotating-line": "-\\❘/",
+	"dots-spin": "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏",
+	"dot-jump": "⠁⠂⠄⡀⢀⠠⠐⠈",
+	"bin-counter": "⡀⡁⡂⡃⡄⡅⡆⡇⡈⡉⡊⡋⡌⡍⡎⡏⡐⡑⡒⡓⡔⡕⡖⡗⡘⡙⡚⡛⡜⡝⡞⡟⡠⡡⡢⡣⡤⡥⡦⡧⡨⡩⡪⡫⡬⡭⡮⡯⡰⡱⡲⡳⡴⡵⡶⡷⡸⡹⡺⡻⡼⡽⡾⡿⢀⢁⢂⢃⢄⢅⢆⢇⢈⢉⢊⢋⢌⢍⢎⢏⢐⢑⢒⢓⢔⢕⢖⢗⢘⢙⢚⢛⢜⢝⢞⢟⢠⢡⢢⢣⢤⢥⢦⢧⢨⢩⢪⢫⢬⢭⢮⢯⢰⢱⢲⢳⢴⢵⢶⢷⢸⢹⢺⢻⢼⢽⢾⢿⣀⣁⣂⣃⣄⣅⣆⣇⣈⣉⣊⣋⣌⣍⣎⣏⣐⣑⣒⣓⣔⣕⣖⣗⣘⣙⣚⣛⣜⣝⣞⣟⣠⣡⣢⣣⣤⣥⣦⣧⣨⣩⣪⣫⣬⣭⣮⣯⣰⣱⣲⣳⣴⣵⣶⣷⣸⣹⣺⣻⣼⣽⣾⣿",
+	"dots": "⣾⣽⣻⢿⡿⣟⣯⣷",
+	"dots-eight": "⠋⠙⠚⠒⠂⠂⠒⠲⠴⠦⠖⠒⠐⠐⠒⠓⠋",
+	"dots-jump": "⢄⢂⢁⡁⡈⡐⡠",
+	"lines": "☱☲☴☲",
+	"blink-rombus": "◇◈◆",
+	"blink-square": "■□▪▫",
+	"squares": "◰◳◲◱",
+	"circle-half": "◐◓◑◒",
+	"circle-quarter": "◴◷◶◵",
+	"block-spin": "▌▀▐▄",
+	"blocks-turn": "▖▘▝▗",
+	"line-flip": "┤┘┴└├┌┬┐",
+}
+
+
 type Spinner struct {
 	Frames string `long:"spinner" value-name:"THEME|STR" default:"><" env:"SPINNER" description:"Spinner frames"`
 	State int
@@ -301,34 +325,6 @@ var BORDER_THEME = map[string]string {
 	"ascii": "|+-+|+-+",
 }
 
-var SPINNER_TIMEOUT = time.Millisecond * 200
-var SPINNER_DEFAULT = "><"
-var SPINNER_THEME = map[string]string {
-	"><": "><",
-	"rotating-v": "v<^>",
-	// NOTE: can't use "|" (span marker), thus this uses a unicode analogue...
-	"rotating-line": "-\\❘/",
-	"dots-spin": "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏",
-	"dot-jump": "⠁⠂⠄⡀⢀⠠⠐⠈",
-	"bin-counter": "⡀⡁⡂⡃⡄⡅⡆⡇⡈⡉⡊⡋⡌⡍⡎⡏⡐⡑⡒⡓⡔⡕⡖⡗⡘⡙⡚⡛⡜⡝⡞⡟⡠⡡⡢⡣⡤⡥⡦⡧⡨⡩⡪⡫⡬⡭⡮⡯⡰⡱⡲⡳⡴⡵⡶⡷⡸⡹⡺⡻⡼⡽⡾⡿⢀⢁⢂⢃⢄⢅⢆⢇⢈⢉⢊⢋⢌⢍⢎⢏⢐⢑⢒⢓⢔⢕⢖⢗⢘⢙⢚⢛⢜⢝⢞⢟⢠⢡⢢⢣⢤⢥⢦⢧⢨⢩⢪⢫⢬⢭⢮⢯⢰⢱⢲⢳⢴⢵⢶⢷⢸⢹⢺⢻⢼⢽⢾⢿⣀⣁⣂⣃⣄⣅⣆⣇⣈⣉⣊⣋⣌⣍⣎⣏⣐⣑⣒⣓⣔⣕⣖⣗⣘⣙⣚⣛⣜⣝⣞⣟⣠⣡⣢⣣⣤⣥⣦⣧⣨⣩⣪⣫⣬⣭⣮⣯⣰⣱⣲⣳⣴⣵⣶⣷⣸⣹⣺⣻⣼⣽⣾⣿",
-	"dots": "⣾⣽⣻⢿⡿⣟⣯⣷",
-	"dots-eight": "⠋⠙⠚⠒⠂⠂⠒⠲⠴⠦⠖⠒⠐⠐⠒⠓⠋",
-	"dots-jump": "⢄⢂⢁⡁⡈⡐⡠",
-	"lines": "☱☲☴☲",
-	"blink-rombus": "◇◈◆",
-	"blink-square": "■□▪▫",
-	"squares": "◰◳◲◱",
-	"circle-half": "◐◓◑◒",
-	"circle-quarter": "◴◷◶◵",
-	"block-spin": "▌▀▐▄",
-	"blocks-turn": "▖▘▝▗",
-	"line-flip": "┤┘┴└├┌┬┐",
-}
-
-
-
-type Env map[string]string
-
 
 
 // CellsDrawer
@@ -356,6 +352,10 @@ var SPAN_MIN_SIZE = 3
 
 //var SCROLLBAR = "█░"
 var SCROLLBAR = "┃│"
+
+
+type Env map[string]string
+
 
 // XXX should this be Reader/Writer???
 type Lines struct {
