@@ -3,6 +3,9 @@
 #APP=${APP:-go run .}
 APP=${APP:-go run old/lines.go}
 
+#SPAN="|"
+SPAN="%SPAN"
+
 DIR=${1:-`pwd`}
 
 #PAGER=${PAGER:-"less"}
@@ -23,12 +26,12 @@ PAGER="$PAGER" \
 				--group-directories-first \
 				--dereference-command-line-symlink-to-dir \
 				"$DIR" ' \
-		-t 'sed -e "s/$/%SPAN/"' \
-		-p 'sed -e "s/%SPAN$//" \
+		-t 'sed -e "s/$/'$SPAN'/"' \
+		-p 'sed -e "s/'$SPAN'$//" \
 			| xargs -i bash -c "\
 				[ -d \"${DIR}/{}\" ] \
-					&& printf -- \"{}/%%SPAN%8s\" \"<dir> \" \
-					|| printf -- \"{}%%SPAN%8s\" \"\$(\
+					&& printf -- \"{}/'${SPAN//\%/%%}'%8s\" \"<dir> \" \
+					|| printf -- \"{}'${SPAN//\%/%%}'%8s\" \"\$(\
 						ls -lh \"${DIR}/{}\" \
 							| cut -d\" \" -f5 \
 							| sed -e \"s/\\([0-9]$\\)/\\1 /\" \
@@ -55,6 +58,6 @@ PAGER="$PAGER" \
 		-s 'DownDir' \
 		--span="-8" \
 		--span-separator="│" \
-		--title ' $DIR %SPAN%SPINNER' \
+		--title ' $DIR '$SPAN'%SPINNER' \
 		-b
 

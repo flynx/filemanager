@@ -566,6 +566,7 @@ type UI struct {
 
 	// NOTE: this does not support filtering commands like grep, use sed/awk 
 	//		returning empty lines insted with the "???" flag (XXX)
+	// XXX Q: how do we pass a list through the env???
 	// XXX need to either mix this with filter (.FMap(..)) or figure out 
 	//		a way to do the filtering in an obvious way...
 	MapCommands []string `short:"m" long:"map" value-name:"CMD" env:"MAP" description:"Row map command"`
@@ -1550,8 +1551,15 @@ func (this *UI) TransformCmd(cmds ...string) *UI {
 
 // XXX filtering (a-la grep) will not work correctly...
 //		...return empty lines for filtered out items instead...
+// XXX we can't reuse a pipe AND update the env in it -- need to rethink this...
+//		...can't make the pipe see the new env but we can parse the 
+//		input/outout before/after it goes through, allowing the pipe to 
+//		use vars in the output...
+//			Q: input, output or both??? (XXX)
 func (this *UI) MapCmd(cmds ...string) *UI {
 	for _, cmd := range this.MapCommands {
+		//cmd = this.Lines.expandTemplate(cmd, env)
+		//log.Printf("CMD: %v -> %v\n", cmd, this.Lines.expandTemplate(cmd, env))
 		// XXX BUG??? seems that we are getting a new spinner on each call... why???
 		this.Lines.Spinner.Auto()
 		var c *PipedCmd

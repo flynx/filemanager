@@ -870,7 +870,7 @@ func (this *Lines) PopulatedIndex(index int) int {
 		index-- } 
 	return -1 }
 
-func (this *Lines) MakeEnv() Env {
+func (this *Lines) MakeEnv(index ...int) Env {
 	fill := " "
 	if this.Filler != 0 {
 		fill = string(this.Filler) }
@@ -878,6 +878,8 @@ func (this *Lines) MakeEnv() Env {
 	l := this.Len()
 	// XXX IGNORE_EMPTY
 	i := this.Index
+	if len(index) > 0 {
+		i = index[0] }
 	//i := this.PopulatedIndex(this.Index)
 	//i := this.RowOffset + this.Index
 	// test and friends...
