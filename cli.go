@@ -1556,6 +1556,7 @@ func (this *UI) TransformCmd(cmds ...string) *UI {
 //		input/outout before/after it goes through, allowing the pipe to 
 //		use vars in the output...
 //			Q: input, output or both??? (XXX)
+// XXX need to pass env down to the command...
 func (this *UI) MapCmd(cmds ...string) *UI {
 	for _, cmd := range this.MapCommands {
 		//cmd = this.Lines.expandTemplate(cmd, env)

@@ -336,15 +336,29 @@ func (this *PipedCmd) Close() {
 //		...this prevents us from reusing the code from Run...
 //		.....printing the argument shows func(string)bool which is the 
 //		same as LineHandler... BUG???
-func Pipe(code string, handler ...LineHandler) (*PipedCmd, error) {
+//func Pipe(code string, handler ...LineHandler) (*PipedCmd, error) {
+func Pipe(code string, rest ...any) (*PipedCmd, error) {
 	this := PipedCmd{}
 	// XXX can't set this declaratively via Cmd{ Code: .. } for some reason...
 	this.Code = code
-	if len(handler) > 0 {
-		this.Handler = handler[0] }
+	// XXX should this deafult to process env???
+	env := []string{}
+	for _, r := range rest {
+		switch r.(type) {
+			// XXX why does this not work???
+			case LineHandler:
+				this.Handler = r.(LineHandler)
+			case (func(string) bool):
+				this.Handler = r.(func(string)bool)
+			case []string:
+				env = r.([]string)
+			// XXX handle error...
+			//default:
+			//	log.Println("Error")
+		} }
 	r, w := io.Pipe()
 	this.Stdin = w
-	if err := this.Run(r); err != nil {
+	if err := this.Run(r, env); err != nil {
 		return &this, err }
 	go func(){
 		this.Wait()
