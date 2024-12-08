@@ -134,9 +134,16 @@ func (this *Cmd) Init(args ...any) error {
 	// parse args...
 	var env []string
 	for i, e := range args {
+		if v, ok := e.(Env); ok {
+			env = []string{}
+			for k, v := range v {
+				env = append(env, k +"="+ v) }
+			args = slices.Delete(args, i, i+1) 
+			break }
 		if v, ok := e.([]string); ok {
 			env = v
-			args = slices.Delete(args, i, i+1) } }
+			args = slices.Delete(args, i, i+1) 
+			break } }
 	var stdin io.Reader
 	if len(args) >= 1 && 
 			args[0] != nil {
@@ -286,6 +293,7 @@ func (this *Cmd) PipeTo(code string, handler ...LineHandler) (*PipedCmd, error) 
 //	Run(<code>[, <io.Reader>][, <env>][, <LineHandler>])
 //		-> *Cmd, error
 //
+// XXX simply passe rest onto .Run(..)
 func Run(code string, rest ...any) (*Cmd, error) {
 	var stdin io.Reader
 	var env []string
@@ -298,6 +306,9 @@ func Run(code string, rest ...any) (*Cmd, error) {
 				this.Handler = r.(LineHandler)
 			case io.Reader:
 				stdin = r.(io.Reader) 
+			case Env:
+				for k, v := range r.(Env) {
+					env = append(env, k +"="+ v) }
 			case []string:
 				env = r.([]string)
 			// XXX handle error...
@@ -336,7 +347,7 @@ func (this *PipedCmd) Close() {
 //		...this prevents us from reusing the code from Run...
 //		.....printing the argument shows func(string)bool which is the 
 //		same as LineHandler... BUG???
-//func Pipe(code string, handler ...LineHandler) (*PipedCmd, error) {
+// XXX simply passe rest onto .Run(..)
 func Pipe(code string, rest ...any) (*PipedCmd, error) {
 	this := PipedCmd{}
 	// XXX can't set this declaratively via Cmd{ Code: .. } for some reason...
@@ -345,11 +356,12 @@ func Pipe(code string, rest ...any) (*PipedCmd, error) {
 	env := []string{}
 	for _, r := range rest {
 		switch r.(type) {
-			// XXX why does this not work???
-			case LineHandler:
-				this.Handler = r.(LineHandler)
+			// XXX why does this not work, while the next case does???
+			//		...does this work in .Run(..)???
+			//case LineHandler:
+			//	this.Handler = r.(LineHandler)
 			case (func(string) bool):
-				this.Handler = r.(func(string)bool)
+				this.Handler = r.(func(string) bool)
 			case []string:
 				env = r.([]string)
 			// XXX handle error...
