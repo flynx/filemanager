@@ -302,6 +302,7 @@ func Run(code string, rest ...any) (*Cmd, error) {
 	this.Code = code
 	for _, r := range rest {
 		switch r.(type) {
+			// XXX does this work??? (see notes in Pipe(..) below)
 			case LineHandler:
 				this.Handler = r.(LineHandler)
 			case io.Reader:
