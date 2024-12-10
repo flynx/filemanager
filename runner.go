@@ -293,7 +293,7 @@ func (this *Cmd) PipeTo(code string, handler ...LineHandler) (*PipedCmd, error) 
 //	Run(<code>[, <io.Reader>][, <env>][, <LineHandler>])
 //		-> *Cmd, error
 //
-// XXX simply passe rest onto .Run(..)
+// XXX simply pass rest onto .Run(..)
 func Run(code string, rest ...any) (*Cmd, error) {
 	var stdin io.Reader
 	var env []string
