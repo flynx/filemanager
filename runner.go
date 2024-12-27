@@ -348,7 +348,7 @@ func (this *PipedCmd) Close() {
 //		...this prevents us from reusing the code from Run...
 //		.....printing the argument shows func(string)bool which is the 
 //		same as LineHandler... BUG???
-// XXX simply passe rest onto .Run(..)
+// XXX simply pass rest onto .Run(..)
 func Pipe(code string, rest ...any) (*PipedCmd, error) {
 	this := PipedCmd{}
 	// XXX can't set this declaratively via Cmd{ Code: .. } for some reason...
