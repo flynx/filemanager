@@ -365,7 +365,7 @@ func Pipe(code string, rest ...any) (*PipedCmd, error) {
 				this.Handler = r.(func(string) bool)
 			case []string:
 				env = r.([]string)
-			// XXX handle errors!!!
+			// XXX handle errors...
 			//default:
 			//	log.Println("Error")
 		} }
